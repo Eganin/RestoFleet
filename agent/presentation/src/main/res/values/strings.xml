@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="lab_run_all">Запустить всё</string>
+    <string name="lab_export">Экспорт</string>
+    <string name="lab_exporting">Экспорт…</string>
+    <string name="lab_to_mqtt">В MQTT</string>
+    <string name="lab_settings_notifications">Уведомления</string>
+    <string name="lab_settings_usage_access">Доступ к статистике</string>
+    <string name="lab_settings_battery_optimization">Батарея</string>
+    <string name="lab_message_exported">Отчёт сохранён: %1$s</string>
+    <string name="lab_message_published">%1$s отправлен в MQTT</string>
+    <string name="lab_message_error">Ошибка: %1$s</string>
+    <string name="lab_message_mqtt_not_configured">MQTT не настроен</string>
+    <string name="lab_message_no_result">Результата нет: сначала запустите проверку</string>
+</resources>

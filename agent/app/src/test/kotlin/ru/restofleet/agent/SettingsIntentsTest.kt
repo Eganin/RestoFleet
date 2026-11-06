@@ -5,6 +5,7 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import ru.restofleet.agent.presentation.lab.viewmodel.model.SettingsTarget
 
 @RunWith(RobolectricTestRunner::class)
 class SettingsIntentsTest {
@@ -36,5 +37,15 @@ class SettingsIntentsTest {
         listOf(intents.notifications(), intents.usageAccess(), intents.batteryOptimization()).forEach {
             assertThat(it.flags and android.content.Intent.FLAG_ACTIVITY_NEW_TASK).isNotEqualTo(0)
         }
+    }
+
+    @Test
+    fun forTargetPicksTheMatchingIntent() {
+        assertThat(intents.forTarget(SettingsTarget.NOTIFICATIONS).action)
+            .isEqualTo(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+        assertThat(intents.forTarget(SettingsTarget.USAGE_ACCESS).action)
+            .isEqualTo(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+        assertThat(intents.forTarget(SettingsTarget.BATTERY_OPTIMIZATION).action)
+            .isEqualTo(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
     }
 }

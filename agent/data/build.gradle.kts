@@ -3,6 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 // AGP 9: Kotlin встроен — плагин org.jetbrains.kotlin.android не применяется.
 plugins {
     alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.kover)
     alias(libs.plugins.detekt)
 }
@@ -31,6 +32,7 @@ dependencies {
     implementation(projects.agent.domain)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
     implementation(platform(libs.koin.bom))
     implementation(libs.koin.android)

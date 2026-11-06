@@ -24,4 +24,4 @@ enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 rootProject.name = "restofleet"
 
-include(":shared:kernel", ":shared:protocol", ":console:core:mvi", ":agent:domain", ":agent:data", ":agent:app", ":konsist-tests")
+include(":shared:kernel", ":shared:protocol", ":console:core:mvi", ":agent:domain", ":agent:data", ":agent:presentation", ":agent:app", ":konsist-tests")

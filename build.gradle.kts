@@ -21,6 +21,7 @@ dependencies {
     kover(projects.console.core.mvi)
     kover(projects.agent.domain)
     kover(projects.agent.data)
+    kover(projects.agent.presentation)
     kover(projects.agent.app)
 }
 
