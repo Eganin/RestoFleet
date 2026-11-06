@@ -95,10 +95,28 @@ class SensorCollectorsTest {
     }
 
     @Test
-    fun collectionWithoutSensorsCompletesCleanly() = runTest {
+    fun listenersAreRemovedAfterCancel() = runTest {
+        addSensor(Sensor.TYPE_ACCELEROMETER)
         MotionCollector(appContext, FreeFallDetector()).motionEvents().test {
-            expectNoEvents()
+            assertThat(shadow.listeners).hasSize(1)
             cancelAndIgnoreRemainingEvents()
         }
+        assertThat(shadow.listeners).isEmpty()
+    }
+
+    @Test
+    fun lightListenerIsRemovedAfterTimeout() = runTest {
+        addSensor(Sensor.TYPE_LIGHT)
+        LightSensorCollector(appContext, 3_000L).read()
+        assertThat(shadow.listeners).isEmpty()
+    }
+
+    @Test
+    fun lightCollectorDoesNotThrowOnPlatformFailure() = runTest {
+        val broken = object : android.content.ContextWrapper(appContext) {
+            override fun getSystemService(name: String): Any = throw IllegalStateException("sensor service down")
+        }
+        assertThat(LightSensorCollector(broken).read())
+            .isEqualTo(Reading.Unavailable(UnavailableReason.Failed("sensor service down")))
     }
 }

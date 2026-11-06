@@ -21,17 +21,22 @@ class NetworkChangeObserver(
     fun changes(): Flow<NetworkState> = callbackFlow {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val callback = object : ConnectivityManager.NetworkCallback() {
+            @Suppress("TooGenericExceptionCaught") // колбэк на потоке connectivity: сбой не должен ронять процесс
             override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
-                trySend(
-                    NetworkReader.state(caps, apiLevel.current()) {
-                        (context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager)
-                            .connectionInfo.rssi
-                    },
-                )
+                try {
+                    trySend(
+                        NetworkReader.state(caps, apiLevel.current()) {
+                            (context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager)
+                                .connectionInfo.rssi
+                        },
+                    )
+                } catch (e: Exception) {
+                    close(e)
+                }
             }
 
             override fun onLost(network: Network) {
-                trySend(NetworkReader.NONE)
+                trySend(NetworkReader.NONE) // trySend не бросает: закрытый канал даёт failed-результат
             }
         }
         cm.registerDefaultNetworkCallback(callback)

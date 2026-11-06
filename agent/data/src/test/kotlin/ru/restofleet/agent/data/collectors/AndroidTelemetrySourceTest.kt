@@ -1,6 +1,7 @@
 package ru.restofleet.agent.data.collectors
 
 import android.content.Context
+import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
@@ -9,7 +10,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import ru.restofleet.agent.data.platform.ApiLevel
-import ru.restofleet.agent.domain.model.BatteryState
+import ru.restofleet.agent.domain.model.ThermalStatus
+import ru.restofleet.agent.domain.model.UnavailableReason
+import ru.restofleet.agent.domain.model.AppVersion
 import ru.restofleet.agent.domain.model.Reading
 import ru.restofleet.shared.kernel.Clock
 
@@ -29,7 +32,7 @@ class AndroidTelemetrySourceTest {
 
     @Test
     fun missingPackageGivesEmptyList() = runTest {
-        assertThat(source.apps(listOf("com.missing"))).isEqualTo(Reading.Available(emptyList<Any>()))
+        assertThat(source.apps(listOf("com.missing"))).isEqualTo(Reading.Available(emptyList<AppVersion>()))
     }
 
     @Test
@@ -41,21 +44,43 @@ class AndroidTelemetrySourceTest {
     }
 
     @Test
-    fun batteryAndResourcesAreAvailable() = runTest {
-        assertThat(source.battery()).isInstanceOf(Reading::class.java)
-        val resources = source.resources()
-        assertThat(resources).isInstanceOf(Reading.Available::class.java)
-        assertThat(BatteryState::class.simpleName).isNotNull()
+    fun batteryDelegatesToCollector() = runTest {
+        context.sendStickyBroadcast(
+            Intent(Intent.ACTION_BATTERY_CHANGED).putExtra("level", 40).putExtra("scale", 100),
+        )
+        val value = (source.battery() as Reading.Available).value
+        assertThat(value.levelPct).isEqualTo(40)
+    }
+
+    @Test
+    fun resourcesDelegateToCollector() = runTest {
+        assertThat((source.resources() as Reading.Available).value.apiLevel).isEqualTo(30)
     }
 
     @Test
     fun networkWithoutActiveNetworkIsNone() = runTest {
-        assertThat(source.network()).isInstanceOf(Reading::class.java)
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        org.robolectric.Shadows.shadowOf(cm).setActiveNetworkInfo(null)
+        assertThat(source.network()).isEqualTo(Reading.Available(NetworkReader.NONE))
     }
 
     @Test
-    fun thermalAndForegroundDelegate() = runTest {
-        assertThat(source.thermal()).isInstanceOf(Reading::class.java)
-        assertThat(source.foregroundApp()).isInstanceOf(Reading::class.java)
+    fun thermalDelegatesToCollector() = runTest {
+        // отпечаток "release-keys" — не эмулятор, статус читается как есть
+        val value = (source.thermal() as Reading.Available).value
+        assertThat(value.status).isEqualTo(ThermalStatus.NONE)
+    }
+
+    @Test
+    fun foregroundWithoutUsageAccessIsMissing() = runTest {
+        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+        org.robolectric.Shadows.shadowOf(appOps).setMode(
+            android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+            android.os.Process.myUid(),
+            context.packageName,
+            android.app.AppOpsManager.MODE_ERRORED,
+        )
+        assertThat(source.foregroundApp())
+            .isEqualTo(Reading.Unavailable(UnavailableReason.PermissionMissing("PACKAGE_USAGE_STATS")))
     }
 }

@@ -23,14 +23,10 @@ class ForegroundAppCollectorTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val collector = ForegroundAppCollector(context, Clock { 10_000L }) { 30 }
 
-    private companion object {
-        const val OP_GET_USAGE_STATS = 43
-    }
-
     private fun setMode(mode: Int) {
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
         shadowOf(appOps).setMode(
-            OP_GET_USAGE_STATS,
+            AppOpsManager.OPSTR_GET_USAGE_STATS,
             Process.myUid(),
             context.packageName,
             mode,
@@ -58,5 +54,22 @@ class ForegroundAppCollectorTest {
         val reading = collector.read()
         assertThat(reading).isInstanceOf(Reading.Unavailable::class.java)
         assertThat((reading as Reading.Unavailable).reason).isInstanceOf(UnavailableReason.Failed::class.java)
+    }
+
+    @Test
+    @Config(sdk = [26])
+    fun legacyCheckOpPathOnApi26() {
+        val legacy = ForegroundAppCollector(context, Clock { 10_000L }) { 26 }
+        setMode(AppOpsManager.MODE_ERRORED)
+        assertThat(legacy.read())
+            .isEqualTo(Reading.Unavailable(UnavailableReason.PermissionMissing("PACKAGE_USAGE_STATS")))
+    }
+
+    @Test
+    fun defaultModeFallsBackToManifestPermission() {
+        setMode(AppOpsManager.MODE_DEFAULT)
+        val reading = collector.read() as Reading.Unavailable
+        // разрешение не выдано -> PermissionMissing, выданное -> дальше без событий Failed
+        assertThat(reading.reason).isEqualTo(UnavailableReason.PermissionMissing("PACKAGE_USAGE_STATS"))
     }
 }

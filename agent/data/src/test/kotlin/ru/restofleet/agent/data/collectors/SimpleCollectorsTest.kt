@@ -21,8 +21,8 @@ import ru.restofleet.agent.domain.model.UnavailableReason
 class SimpleCollectorsTest {
     @Test
     fun batteryWithoutBroadcastIsFailed() {
-        val reading = BatteryCollector(appContext).read()
-        assertThat(reading).isInstanceOf(Reading::class.java)
+        assertThat(BatteryCollector(appContext).read())
+            .isEqualTo(Reading.Unavailable(UnavailableReason.Failed("no battery broadcast")))
     }
 
     @Test
@@ -46,26 +46,34 @@ class SimpleCollectorsTest {
     }
 
     @Test
-    fun ssidReadingDoesNotThrow() {
-        assertThat(SsidCollector(appContext).read()).isInstanceOf(Reading::class.java)
+    fun ssidWithoutLocationPermissionIsMissing() {
+        // Robolectric без выданной геолокации отдаёт <unknown ssid>
+        assertThat(SsidCollector(appContext).read())
+            .isEqualTo(Reading.Unavailable(UnavailableReason.PermissionMissing("ACCESS_FINE_LOCATION")))
     }
 
     @Test
-    fun networkCollectorReadsActiveNetwork() {
-        val reading = NetworkCollector(appContext) { 30 }.read()
-        assertThat(reading).isInstanceOf(Reading.Available::class.java)
+    fun networkCollectorWithoutActiveNetworkIsNone() {
+        val cm = appContext.getSystemService(android.content.Context.CONNECTIVITY_SERVICE)
+            as android.net.ConnectivityManager
+        shadowOf(cm).setActiveNetworkInfo(null)
+        assertThat(NetworkCollector(appContext) { 30 }.read()).isEqualTo(Reading.Available(NetworkReader.NONE))
     }
 
     @Test
-    fun securityExceptionBecomesPermissionMissing() {
-        val reading = guarded<Int> { throw SecurityException("no perm") }
-        assertThat(reading).isEqualTo(Reading.Unavailable(UnavailableReason.PermissionMissing("no perm")))
+    fun securityExceptionNamesPermissionFromMessage() {
+        val reading = guarded<Int> {
+            throw SecurityException("Neither user 10 nor current process has android.permission.READ_LOGS.")
+        }
+        assertThat(reading).isEqualTo(Reading.Unavailable(UnavailableReason.PermissionMissing("READ_LOGS")))
     }
 
     @Test
-    fun securityExceptionWithoutMessageIsUnknown() {
-        val reading = guarded<Int> { throw SecurityException() }
-        assertThat(reading).isEqualTo(Reading.Unavailable(UnavailableReason.PermissionMissing("unknown")))
+    fun securityExceptionWithoutPermissionNameUsesTypeName() {
+        assertThat(guarded<Int> { throw SecurityException("denied by policy") })
+            .isEqualTo(Reading.Unavailable(UnavailableReason.PermissionMissing("SecurityException")))
+        assertThat(guarded<Int> { throw SecurityException() })
+            .isEqualTo(Reading.Unavailable(UnavailableReason.PermissionMissing("SecurityException")))
     }
 
     @Test

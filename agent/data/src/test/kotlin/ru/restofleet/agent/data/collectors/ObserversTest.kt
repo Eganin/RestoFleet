@@ -24,11 +24,13 @@ class ObserversTest {
 
     @Test
     fun changeOfMapsActions() {
-        val c = PackageChange.Change.values()
-        assertThat(PackageEventsObserver.changeOf(Intent.ACTION_PACKAGE_REPLACED, true)).isEqualTo(c[1])
+        assertThat(PackageEventsObserver.changeOf(Intent.ACTION_PACKAGE_REPLACED, true))
+            .isEqualTo(PackageChange.Change.REPLACED)
         assertThat(PackageEventsObserver.changeOf(Intent.ACTION_PACKAGE_ADDED, true)).isNull()
-        assertThat(PackageEventsObserver.changeOf(Intent.ACTION_PACKAGE_ADDED, false)).isEqualTo(c[0])
-        assertThat(PackageEventsObserver.changeOf(Intent.ACTION_PACKAGE_REMOVED, false)).isEqualTo(c[2])
+        assertThat(PackageEventsObserver.changeOf(Intent.ACTION_PACKAGE_ADDED, false))
+            .isEqualTo(PackageChange.Change.ADDED)
+        assertThat(PackageEventsObserver.changeOf(Intent.ACTION_PACKAGE_REMOVED, false))
+            .isEqualTo(PackageChange.Change.REMOVED)
         assertThat(PackageEventsObserver.changeOf("other", false)).isNull()
         assertThat(PackageEventsObserver.changeOf(null, false)).isNull()
     }
@@ -67,6 +69,63 @@ class ObserversTest {
             callbacks.forEach { it.onLost(network) }
             assertThat(awaitItem()).isEqualTo(NetworkReader.NONE)
             cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun replacedEventCarriesVersionCode() = runTest {
+        PackageEventsObserver(appContext).events(setOf(appContext.packageName)).test {
+            appContext.sendBroadcast(pkgIntent(Intent.ACTION_PACKAGE_REPLACED, appContext.packageName))
+            shadowOf(Looper.getMainLooper()).idle()
+            val change = awaitItem()
+            assertThat(change.change).isEqualTo(PackageChange.Change.REPLACED)
+            assertThat(change.versionCode as Any?).isNotNull()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun receiverIsUnregisteredAfterCancel() = runTest {
+        val probe = pkgIntent(Intent.ACTION_PACKAGE_ADDED, "com.watched")
+        val app = org.robolectric.RuntimeEnvironment.getApplication()
+        PackageEventsObserver(appContext).events(setOf("com.watched")).test {
+            assertThat(shadowOf(app).hasReceiverForIntent(probe)).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertThat(shadowOf(app).hasReceiverForIntent(probe)).isFalse()
+    }
+
+    @Test
+    fun receiverFailureClosesFlowInsteadOfCrashing() = runTest {
+        val exploding = object : Set<String> by emptySet() {
+            override fun contains(element: String): Boolean = throw IllegalStateException("boom")
+        }
+        PackageEventsObserver(appContext).events(exploding).test {
+            appContext.sendBroadcast(pkgIntent(Intent.ACTION_PACKAGE_ADDED, "com.any"))
+            shadowOf(Looper.getMainLooper()).idle()
+            assertThat(awaitError()).hasMessageThat().isEqualTo("boom")
+        }
+    }
+
+    @Test
+    fun networkCallbackIsUnregisteredAfterCancel() = runTest {
+        val cm = appContext.getSystemService(android.content.Context.CONNECTIVITY_SERVICE)
+            as android.net.ConnectivityManager
+        NetworkChangeObserver(appContext) { 30 }.changes().test {
+            assertThat(shadowOf(cm).networkCallbacks).hasSize(1)
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertThat(shadowOf(cm).networkCallbacks).isEmpty()
+    }
+
+    @Test
+    fun networkCallbackFailureClosesFlow() = runTest {
+        val cm = appContext.getSystemService(android.content.Context.CONNECTIVITY_SERVICE)
+            as android.net.ConnectivityManager
+        val caps = ShadowNetworkCapabilities.newInstance()
+        NetworkChangeObserver(appContext) { error("api failed") }.changes().test {
+            shadowOf(cm).networkCallbacks.forEach { it.onCapabilitiesChanged(ShadowNetwork.newInstance(1), caps) }
+            assertThat(awaitError()).hasMessageThat().isEqualTo("api failed")
         }
     }
 }

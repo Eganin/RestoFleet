@@ -17,6 +17,7 @@ class ThermalCollector(
     private val context: Context,
     private val apiLevel: ApiLevel = ApiLevel.Device,
     private val fingerprint: String = Build.FINGERPRINT,
+    private val hardware: String = Build.HARDWARE,
 ) {
     @SuppressLint("NewApi") // API проверяется через apiLevel
     fun read(): Reading<ThermalState> = guarded {
@@ -27,7 +28,7 @@ class ThermalCollector(
         val headroom = headroom()
         val status = ThermalMapping.status(powerManager().currentThermalStatus) // null — неизвестный код платформы
         // Эмулятор не имеет термодатчиков: статус есть, а запас всегда NaN или 0
-        if (isEmulator(fingerprint) && (headroom == null || headroom == 0.0)) {
+        if (isEmulator(hardware, fingerprint) && (headroom == null || headroom == 0.0)) {
             Reading.Unavailable(UnavailableReason.EmulatorStub)
         } else {
             Reading.Available(ThermalState(status, headroom))
