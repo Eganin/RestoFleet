@@ -1,7 +1,9 @@
 package ru.restofleet.agent.data.probes
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import kotlin.coroutines.cancellation.CancellationException
 import ru.restofleet.agent.domain.capability.CheckId
@@ -124,6 +126,24 @@ class ProbeChecksFactoryTest {
     @Test(expected = CancellationException::class)
     fun p1PropagatesCancellation() {
         run(CheckId.P1, ProbeExecutor { throw CancellationException("cancelled") })
+    }
+
+    @Test
+    fun p1ProbesTargetsConcurrentlyAndKeepsOrder() = runTest {
+        // Чем раньше в списке цель, тем дольше она отвечает: порядок завершения обратный порядку целей.
+        val delays = ProbeChecksFactory.P1_CASES.mapIndexed { i, c -> c.target.id to (6 - i) * 1_000L }.toMap()
+        val ideal = executor()
+        val slow = ProbeExecutor { target ->
+            delay(delays.getValue(target.id))
+            ideal.probe(target)
+        }
+        val p1 = ProbeChecksFactory(Clock { TS }, slow) { gatewayResult(null) }.create().first { it.id == CheckId.P1 }
+        val r = p1.run()
+        assertThat(testScheduler.currentTime).isEqualTo(6_000L)
+        assertThat(r.status).isEqualTo(CheckStatus.OK)
+        assertThat(r.raw.keys).containsExactly(
+            "google_204", "nonexistent", "blackhole", "refused", "expired_badssl", "httpbin_503",
+        ).inOrder()
     }
 
     @Test

@@ -1,5 +1,8 @@
 package ru.restofleet.agent.data.probes
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import ru.restofleet.agent.data.collectors.ReadingCheck
 import ru.restofleet.agent.domain.capability.CapabilityCheck
 import ru.restofleet.agent.domain.capability.CheckId
@@ -35,9 +38,10 @@ class ProbeChecksFactory(
     )
 
     /**
-     * P1: каждая цель должна дать свой класс ошибки. `raw` заполняется всегда (ожидание, факт, статус, время по каждой
-     * цели); при расхождении — LIMITED и перечень расхождений в `note`. Поэтому не [ReadingCheck]: он теряет `raw`
-     * у Unavailable.
+     * P1: каждая цель должна дать свой класс ошибки. Цели опрашиваются конкурентно: последовательно худший случай
+     * (5 × 5 с + 3 с) не уложился бы в 10 с на проверку. `raw` заполняется всегда (ожидание, факт, статус, время по
+     * каждой цели); при расхождении — LIMITED и перечень расхождений в `note`.
+     * Поэтому не [ReadingCheck]: он теряет `raw` у Unavailable.
      */
     private inner class P1Check : CapabilityCheck {
         override val id = CheckId.P1
@@ -45,7 +49,7 @@ class ProbeChecksFactory(
         @Suppress("TooGenericExceptionCaught") // проба не должна ронять прогон Lab
         override suspend fun run(): CheckResult {
             val results = try {
-                P1_CASES.map { executor.probe(it.target) }
+                coroutineScope { P1_CASES.map { async { executor.probe(it.target) } }.awaitAll() }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
