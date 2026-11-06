@@ -9,7 +9,7 @@ cp .env.example .env && sed -i '' "s|change-me|$(openssl rand -base64 32 | tr -d
 ./certs/make-ca.sh                                        # CA (один раз) + серверный сертификат; LAN-IP — аргументом
 docker compose --profile init run --rm dynsec-init        # один раз: создаёт admin в dynamic-security.json
 docker compose up -d --wait                               # брокер, ждёт healthy
-./test-stand.sh                                           # smoke: TLS, отказ анонимам и чужому паролю, нет 1883, persistence
+./test-stand.sh                                           # smoke: TLS, отказ анонимам и чужому паролю, нет 1883, нет ca.key и пароля в контейнере, persistence
 ```
 
 Проверка скрипта сертификатов: `./certs/test-make-ca.sh`.
@@ -20,7 +20,8 @@ docker compose up -d --wait                               # брокер, ждё
 |---|---|---|
 | `certs/make-ca.sh` | CA стенда (EC P-256, 10 лет, не перевыпускается) и серверный сертификат (825 дней, перевыпускается при каждом запуске) | да |
 | `certs/out/ca.key` | **ключ CA**, права 600 | **нет** |
-| `certs/out/server.{key,crt}` | сертификат брокера; ключ 644, чтобы его читал пользователь `mosquitto` (uid 1883) в контейнере | нет |
+| `certs/out/server.{key,crt}` | сертификат брокера; ключ — права 600 | нет |
+| `certs/out/broker/` | **единственное, что монтируется в брокер**: `ca.crt`, `server.crt`, `server.key`. Ключа CA там нет; при старте контейнер копирует ключ себе с владельцем `mosquitto` и правами 600 | нет |
 | `certs/out/public/ca.crt` | единственный файл для клиентов: агент (assets), MQTT Explorer, `mosquitto_*` | нет |
 | `mosquitto/mosquitto.conf` | конфигурация брокера | да |
 | `mosquitto/init-dynsec.sh` | однократная инициализация DynSec | да |
@@ -35,7 +36,7 @@ docker compose exec mosquitto mosquitto_sub -h localhost -p 8883 --cafile /mosqu
   -u admin -P "$DYNSEC_ADMIN_PASSWORD" -t '$SYS/broker/version' -C 1
 ```
 
-`admin` администрирует только DynSec (`$CONTROL/dynamic-security/#`) и читает `$SYS`; роли `device` и `operator-dev` и учётки устройств создаёт `mosquitto/dynsec-dev.sh` (задача 3.1).
+**`admin` после `dynsec init` имеет полный доступ**: управляет DynSec (`$CONTROL/dynamic-security/#`) и может читать все топики (`subscribePattern #`). Поэтому его пароль хранится только в `deploy/.env` и передаётся лишь одноразовому `dynsec-init` — у брокера его нет ни в окружении, ни в healthcheck (healthcheck проверяет, что анонимный клиент получает CONNACK «not authorised»). Роли `device` и `operator-dev` и учётки устройств создаёт `mosquitto/dynsec-dev.sh` (задача 3.1).
 
 ## Сброс стенда
 

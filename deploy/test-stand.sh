@@ -25,6 +25,18 @@ sub -u admin -P "$DYNSEC_ADMIN_PASSWORD" -t '$SYS/broker/version' -C 1 -W 5 | gr
 
 if nc -z -w 2 localhost 1883 2>/dev/null; then fail "plain MQTT port 1883 is open"; fi
 
+# Ключ CA не попадает в контейнер брокера; ключ сервера доступен только пользователю mosquitto
+cid="$(docker compose ps -q mosquitto)"
+if docker compose exec -T mosquitto sh -c 'find / \( -path /proc -o -path /sys \) -prune -o -name "ca.key" -print 2>/dev/null | grep -q .'; then
+  fail "ca.key is visible inside the broker container"
+fi
+[ "$(docker compose exec -T mosquitto stat -c '%a %U' /mosquitto/certs/server.key | tr -d '\r')" = "600 mosquitto" ] \
+  || fail "server.key inside the container is not 600 mosquitto"
+# Пароль админа DynSec не нужен брокеру: его нет ни в окружении, ни в healthcheck
+if docker inspect -f '{{json .Config.Env}} {{json .Config.Healthcheck}}' "$cid" | grep -q 'DYNSEC_ADMIN_PASSWORD'; then
+  fail "DYNSEC_ADMIN_PASSWORD is exposed in the broker container env/healthcheck"
+fi
+
 docker compose restart mosquitto >/dev/null
 for _ in $(seq 1 30); do
   [ "$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q mosquitto)")" = "healthy" ] && break

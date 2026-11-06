@@ -34,3 +34,12 @@
 | 19 | Версии GitHub Actions (06.11.2026) | checkout@v7, setup-java@v6, gradle/actions/setup-gradle@v6, upload-artifact@v7 | — | первый прогон — после пуша на GitHub |
 | 20 | Ключ сервера Mosquitto в контейнере читает uid 1883 | `server.key` с правами 644 в `deploy/certs/out` (вне git); ключ CA — 600 | chown на uid 1883 на хосте (требует sudo) | локальный стенд; в Д (VPS) — секреты через docker secrets |
 | 21 | Smoke-тест стенда | `deploy/test-stand.sh` проверяет отказ CONNACK «not authorised», а не отсутствие сообщений | проверка таймаутом подписки | мутация `allow_anonymous true` ловится |
+
+## 2026-11-06 · Исправления по итоговому ревью M0
+
+| # | Контекст | Решение | Альтернативы | Последствия |
+|---|---|---|---|---|
+| 22 | `jvmTarget = 17` из toml не применялся: байткод был Java 21 (major 65) — Android-модули не смогли бы инлайнить `Outcome.map` | `compilerOptions.jvmTarget` из каталога для `android` и `jvm` таргетов; тест `BytecodeTargetTest` проверяет major 61 | перейти на 21 везде | каждый новый модуль обязан задать `jvmTarget` из toml |
+| 23 | `DeviceId` жил в `shared:protocol` (слой data) — domain работал бы с сырой строкой | `DeviceId` перенесён в `shared:kernel`; `shared:protocol` зависит от kernel через `api` | оставить в протоколе | `BrokerSettings.deviceId: DeviceId` (план, задача 3.5) |
+| 24 | Konsist-правила: домен по зашитому списку путей, пустой набор проходил, протокол не запрещён в домене, Koin и presentation проверялись слишком узко | слой определяется путём модуля (regex), проверка непустого domain-набора, в домене запрещены `shared.protocol` и `.data.`, вне composition root запрещён любой `org.koin.*` и наследование `KoinComponent`; `tools/dev/konsist-violations.sh` — набор нарушений для проверки правил | проверки в Gradle по графу модулей | правила проверены: старые пропускали 4 нарушения, новые ловят все |
+| 25 | В брокер монтировался весь `certs/out`, включая `ca.key`; пароль admin (полный доступ ко всем топикам) был в окружении брокера и в healthcheck. **Заменяет решение 20** | брокеру монтируется только `certs/out/broker/` (без ключа CA), ключ сервера копируется внутрь с владельцем `mosquitto` и правами 600 (на хосте тоже 600); healthcheck — анонимный CONNACK «not authorised»; пароль admin — только у одноразового `dynsec-init` | отдельный health-клиент DynSec | `test-stand.sh` проверяет отсутствие `ca.key` и пароля в контейнере |

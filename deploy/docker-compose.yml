@@ -8,18 +8,27 @@ services:
     restart: unless-stopped
     ports:
       - "8883:8883"
-    environment:
-      DYNSEC_ADMIN_PASSWORD: ${DYNSEC_ADMIN_PASSWORD:?set it in deploy/.env}
+    # Брокеру монтируется только certs/out/broker (без ключа CA). Ключ сервера копируется внутрь
+    # с владельцем mosquitto и правами 600, затем запускается штатный entrypoint образа.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        install -d -o mosquitto -g mosquitto -m 700 /mosquitto/certs &&
+        install -o mosquitto -g mosquitto -m 644 /certs-src/ca.crt /certs-src/server.crt /mosquitto/certs/ &&
+        install -o mosquitto -g mosquitto -m 600 /certs-src/server.key /mosquitto/certs/ &&
+        exec /docker-entrypoint.sh /usr/sbin/mosquitto -c /mosquitto/config/mosquitto.conf
     volumes:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - ./certs/out:/mosquitto/certs:ro
+      - ./certs/out/broker:/certs-src:ro
       - mosquitto-data:/mosquitto/data
+    # Брокер жив, если по TLS отвечает CONNACK «not authorised» анонимному клиенту: пароль админа не нужен
     healthcheck:
       test:
         - CMD-SHELL
         - >-
-          mosquitto_sub -h localhost -p 8883 --cafile /mosquitto/certs/ca.crt
-          -u admin -P "$$DYNSEC_ADMIN_PASSWORD" -t '$$SYS/broker/version' -C 1 -W 3
+          mosquitto_sub -h localhost -p 8883 --cafile /mosquitto/certs/ca.crt -t health -C 1 -W 3 2>&1
+          | grep -q 'not authorised'
       interval: 10s
       timeout: 5s
       retries: 6
