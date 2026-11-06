@@ -6,8 +6,8 @@
 
 - **Этап:** MVP-A (эмуляторы) · **ветка:** `stage/0-mvp`
 - **План:** `docs/superpowers/plans/2026-11-05-mvp-a.md`
-- **Последняя завершённая задача:** 0.2 shared:kernel (Outcome, DomainError, Clock, IdGenerator)
-- **Следующая задача:** 0.3 shared:protocol — DeviceId, Topics, RfJson
+- **Последняя завершённая задача:** 0.3 shared:protocol — DeviceId, Topics, RfJson
+- **Следующая задача:** 0.4 shared:protocol — DTO, golden-фикстуры, round-trip
 - **Блокеры:** Docker Desktop должен быть запущен к задаче 0.7; GitHub-remote не настроен (CI заработает после пуша).
 - **Как поднять стенд:** будет описано в `deploy/README.md` (задача 0.7).
 - **Исполнение:** M0 — в основной сессии; M1–M4 — субагенты (исполнитель + ревьюер на задачу).
@@ -19,3 +19,4 @@
 | 2026-11-06 | План MVP-A согласован | — | решения — `docs/reports/0-mvp/decisions.md` |
 | 2026-11-06 | 0.1 git, wrapper 9.8.2, version catalog, root build | см. `git log` | `./gradlew help` зелёный, все плагины резолвятся |
 | 2026-11-06 | 0.2 shared:kernel (Outcome, DomainError, Clock, IdGenerator) | см. `git log` | 12 тестов, покрытие 100 %; нужен `local.properties` с `sdk.dir` (AGP сам ставит платформу 37) |
+| 2026-11-06 | 0.3 shared:protocol — DeviceId, Topics, RfJson | см. `git log` | 6 тестов; небезопасные deviceId (/ + # пробел, >64, не ASCII) отклоняются |
