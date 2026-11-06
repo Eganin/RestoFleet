@@ -52,14 +52,17 @@ kover {
     }
     reports {
         variant("ci") {
-            // Как в корневом агрегаторе: composable и preview исключены, остальное — Reducer, маппер, ViewModel
+            // Composable и preview исключены, остальное — Reducer, маппер, ViewModel, чистые функции выбора строк.
+            // annotatedBy фильтрует и функции с аннотацией; по имени исключаются только синтетические лямбды
+            // composable (у них собственной аннотации нет). Имена перечислены поимённо и только для файлов, где нет
+            // ничего, кроме composable/preview и их лямбд; логика (выбор @StringRes и аргументов) вынесена
+            // в mapper/StringSpec.kt и покрыта тестами.
             filters {
                 excludes {
                     annotatedBy("androidx.compose.runtime.Composable", "androidx.compose.ui.tooling.preview.Preview")
-                    // Kover фильтрует по аннотации только классы, а @Composable стоит на функциях файловых фасадов:
-                    // фасады Compose-UI исключаются по имени (в них только composable, превью и их мелкие помощники)
                     classes(
-                        "*.lab.LabScreenKt*", "*.lab.LabContainerKt*", "*.lab.view.section.*",
+                        "*.lab.LabScreenKt*", "*.lab.LabContainerKt*", "*.lab.view.section.CheckRowKt*",
+                        "*.lab.view.section.FilterTabsKt*", "*.lab.view.section.LabActionsKt*",
                         "*.common.ObserveEffectsKt*", "*ComposableSingletons*",
                     )
                 }

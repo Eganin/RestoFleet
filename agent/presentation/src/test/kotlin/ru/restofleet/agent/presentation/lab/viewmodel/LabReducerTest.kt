@@ -6,6 +6,7 @@ import ru.restofleet.agent.presentation.lab.viewmodel.LabAction.DeviceLoaded
 import ru.restofleet.agent.presentation.lab.viewmodel.LabAction.ExportingChanged
 import ru.restofleet.agent.presentation.lab.viewmodel.LabAction.FilterSelected
 import ru.restofleet.agent.presentation.lab.viewmodel.LabAction.ResultsArrived
+import ru.restofleet.agent.presentation.lab.viewmodel.LabAction.RunFinished
 import ru.restofleet.agent.presentation.lab.viewmodel.LabAction.RunStarted
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabFilter
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabSession
@@ -68,6 +69,20 @@ class LabReducerTest {
 
         assertThat(afterFirst.isRunningAll).isTrue()
         assertThat(afterSecond.isRunningAll).isFalse()
+    }
+
+    @Test
+    fun runFinishedDropsIdsFromRunningWithoutResultsAndEndsRunAll() {
+        val prev = LabSession(running = setOf(CheckId.R1, CheckId.R2), isRunningAll = true)
+
+        val partial = reducer.reduce(RunFinished(setOf(CheckId.R1)), prev)
+        val done = reducer.reduce(RunFinished(setOf(CheckId.R2)), partial)
+
+        assertThat(partial.running).containsExactly(CheckId.R2)
+        assertThat(partial.isRunningAll).isTrue()
+        assertThat(done.running).isEmpty()
+        assertThat(done.isRunningAll).isFalse()
+        assertThat(done.results).isEmpty()
     }
 
     @Test

@@ -31,7 +31,7 @@ import ru.restofleet.agent.presentation.R
 import ru.restofleet.agent.presentation.lab.viewmodel.Badge
 import ru.restofleet.agent.presentation.lab.viewmodel.CheckRowUi
 import ru.restofleet.agent.presentation.lab.viewmodel.LabIntent
-import ru.restofleet.agent.presentation.lab.viewmodel.model.SettingsTarget
+import ru.restofleet.agent.presentation.lab.viewmodel.mapper.labelRes
 
 private val OkColor = Color(0xFF2E7D32)
 private val WarnColor = Color(0xFFB26A00)
@@ -106,12 +106,6 @@ private fun Badge.style(): Pair<String, Color> = when (this) {
     Badge.FAIL -> "✕" to MaterialTheme.colorScheme.error
     Badge.NA -> "—" to MaterialTheme.colorScheme.outline
     Badge.PENDING -> "○" to MaterialTheme.colorScheme.outline
-}
-
-private fun SettingsTarget.labelRes(): Int = when (this) {
-    SettingsTarget.NOTIFICATIONS -> R.string.lab_settings_notifications
-    SettingsTarget.USAGE_ACCESS -> R.string.lab_settings_usage_access
-    SettingsTarget.BATTERY_OPTIMIZATION -> R.string.lab_settings_battery_optimization
 }
 
 private const val SUMMARY_MAX_LINES = 3

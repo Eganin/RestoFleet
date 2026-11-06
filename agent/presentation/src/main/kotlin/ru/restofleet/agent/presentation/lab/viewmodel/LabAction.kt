@@ -11,6 +11,9 @@ sealed interface LabAction : MviAction {
 
     /** [isAll] — запущены все проверки («Запустить всё»), а не одна строка. */
     data class RunStarted(val ids: Set<CheckId>, val isAll: Boolean = false) : LabAction
+
+    /** Запуск [ids] завершился без результата (сбой use case или отмена): строки перестают «крутиться». */
+    data class RunFinished(val ids: Set<CheckId>) : LabAction
     data class ResultsArrived(val results: List<CheckResult>) : LabAction
     data class FilterSelected(val filter: LabFilter) : LabAction
     data class ExportingChanged(val isExporting: Boolean) : LabAction

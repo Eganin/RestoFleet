@@ -30,16 +30,18 @@ class JsonCapabilityReportWriter(
 
     override suspend fun write(report: CapabilityReport): Outcome<String, DomainError> = withContext(io) {
         val dir = directory() ?: return@withContext Outcome.Failure(ReportWriteFailed("external files dir unavailable"))
+        val name = "capability-report-api${report.device.apiLevel}-${report.device.mode.name.lowercase()}.json"
+        val target = File(dir, name)
+        val tmp = File(dir, "$name.tmp")
         try {
             Files.createDirectories(dir.toPath())
-            val name = "capability-report-api${report.device.apiLevel}-${report.device.mode.name.lowercase()}.json"
-            val target = File(dir, name)
-            val tmp = File(dir, "$name.tmp")
             tmp.writeText(JSON.encodeToString(ReportDto.serializer(), report.toDto()))
             Files.move(tmp.toPath(), target.toPath(), ATOMIC_MOVE, REPLACE_EXISTING)
             Outcome.Success(target.path)
         } catch (e: IOException) {
             Outcome.Failure(ReportWriteFailed(e.message ?: e::class.simpleName.orEmpty()))
+        } finally {
+            tmp.delete() // при любом сбое (и при ошибке записи, и при отказе rename) временный файл не остаётся
         }
     }
 

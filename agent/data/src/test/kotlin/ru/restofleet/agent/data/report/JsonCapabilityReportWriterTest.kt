@@ -128,4 +128,17 @@ class JsonCapabilityReportWriterTest {
         val error = (outcome as Outcome.Failure).error
         assertThat(error.code).isEqualTo("report_write_failed")
     }
+
+    @Test
+    fun targetNameOccupiedByDirectoryFailsAndLeavesNoTempFile() = runTest {
+        val dir = folder.newFolder("reports")
+        val target = File(dir, "capability-report-api36-normal.json")
+        target.mkdirs()
+        File(target, "child").writeText("x")
+
+        val outcome = writer { dir }.write(report())
+
+        assertThat(outcome).isInstanceOf(Outcome.Failure::class.java)
+        assertThat(File(dir, "capability-report-api36-normal.json.tmp").exists()).isFalse()
+    }
 }

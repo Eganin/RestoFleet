@@ -3,8 +3,11 @@ package ru.restofleet.agent.presentation.lab.viewmodel
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -43,12 +46,14 @@ class LabViewModelTest {
         override val id: CheckId,
         private val status: CheckStatus,
         private val gate: CompletableDeferred<Unit>? = null,
+        private val failure: Throwable? = null,
     ) : CapabilityCheck {
         var runs = 0
 
         override suspend fun run(): CheckResult {
             runs++
             gate?.await()
+            failure?.let { throw it }
             return CheckResult(id, status, mapOf("k" to "v"), null, 1L)
         }
     }
@@ -62,11 +67,12 @@ class LabViewModelTest {
         private val writerOutcome: () -> Outcome<String, DomainError> = { Outcome.Success("/files/report.json") },
         private val publisherOutcome: () -> Outcome<Unit, DomainError> = { Outcome.Failure(MqttNotConfigured) },
         private val writerGate: CompletableDeferred<Unit>? = null,
+        runClock: Clock = clock,
     ) {
         var writes = 0
         val published = mutableListOf<CheckResult>()
         private val dispatcher = StandardTestDispatcher(scope.testScheduler)
-        private val run = RunCapabilityChecks(checks, clock)
+        private val run = RunCapabilityChecks(checks, runClock)
         private val writer = CapabilityReportWriter {
             writes++
             writerGate?.await()
@@ -274,5 +280,165 @@ class LabViewModelTest {
         f.vm.onIntent(User.OpenSettings(SettingsTarget.USAGE_ACCESS))
 
         f.vm.effect.test { assertThat(awaitItem()).isEqualTo(OpenSystemSettings(SettingsTarget.USAGE_ACCESS)) }
+    }
+
+    /** Часы, ломающие первый вызов: use case бросает исключение там, где сам его не перехватывает. */
+    private fun clockFailingOnce(failure: Throwable): Clock {
+        var calls = 0
+        return Clock { if (++calls == 1) throw failure else 1L }
+    }
+
+    @Test
+    fun throwingExportResetsProgressAndShowsError() = runTest {
+        val f = Fixture(this, writerOutcome = { throw SecurityException("denied") })
+
+        f.vm.onIntent(User.Export)
+        advanceUntilIdle()
+
+        assertThat(f.vm.uiState.value.isExporting).isFalse()
+        f.vm.effect.test { assertThat(awaitItem()).isEqualTo(ShowMessage(LabMessage.Error("denied"))) }
+    }
+
+    @Test
+    fun strayCancellationInExportResetsProgressAndShowsError() = runTest {
+        val f = Fixture(this, writerOutcome = { throw CancellationException("stray") })
+
+        f.vm.onIntent(User.Export)
+        advanceUntilIdle()
+
+        assertThat(f.vm.uiState.value.isExporting).isFalse()
+        f.vm.effect.test { assertThat(awaitItem()).isEqualTo(ShowMessage(LabMessage.Error("stray"))) }
+    }
+
+    @Test
+    fun exceptionWithoutMessageIsShownByClassName() = runTest {
+        val f = Fixture(this, writerOutcome = { throw IllegalStateException() })
+
+        f.vm.onIntent(User.Export)
+        advanceUntilIdle()
+
+        f.vm.effect.test {
+            assertThat(awaitItem()).isEqualTo(ShowMessage(LabMessage.Error("IllegalStateException")))
+        }
+    }
+
+    @Test
+    fun destroyedViewModelDuringExportStaysQuiet() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val f = Fixture(this, writerGate = gate)
+        f.vm.onIntent(User.Export)
+        runCurrent()
+
+        f.vm.onDestroy()
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        f.vm.effect.test { expectNoEvents() }
+    }
+
+    @Test
+    fun strayCancellationInRunAllDoesNotLeaveRunAllStuck() = runTest {
+        val checks = listOf(
+            FakeCheck(CheckId.R1, CheckStatus.OK, failure = CancellationException("stray")),
+            FakeCheck(CheckId.R2, CheckStatus.OK),
+        )
+        val f = Fixture(this, checks = checks)
+
+        f.vm.onIntent(User.RunAll)
+        advanceUntilIdle()
+
+        val state = f.vm.uiState.value
+        assertThat(state.isRunningAll).isFalse()
+        assertThat(state.rows.none { it.isRunning }).isTrue()
+        assertThat(state.rows.first { it.id == "R1" }.badge).isEqualTo(Badge.FAIL)
+        assertThat(state.rows.first { it.id == "R2" }.badge).isEqualTo(Badge.OK)
+    }
+
+    @Test
+    fun useCaseFailureInRunAllResetsFlagsKeepsGoingAndReportsOnce() = runTest {
+        val checks = listOf(
+            FakeCheck(CheckId.R1, CheckStatus.OK, failure = IllegalStateException("boom")),
+            FakeCheck(CheckId.R2, CheckStatus.OK),
+        )
+        val f = Fixture(this, checks = checks, runClock = clockFailingOnce(IllegalStateException("clock")))
+
+        f.vm.onIntent(User.RunAll)
+        advanceUntilIdle()
+
+        val state = f.vm.uiState.value
+        assertThat(state.isRunningAll).isFalse()
+        assertThat(state.rows.none { it.isRunning }).isTrue()
+        // сломались часы на первом id каталога (там нет проверки, нужен synthetic-результат): строка без результата
+        assertThat(state.rows.first { it.id == CheckId.entries.first().name }.badge).isEqualTo(Badge.PENDING)
+        assertThat(state.rows.first { it.id == "R2" }.badge).isEqualTo(Badge.OK)
+        f.vm.effect.test {
+            assertThat(awaitItem()).isEqualTo(ShowMessage(LabMessage.Error("clock")))
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun strayCancellationFromUseCaseInRunAllIsAFailureNotAnAbort() = runTest {
+        val checks = listOf(
+            FakeCheck(CheckId.R1, CheckStatus.OK, failure = IllegalStateException("boom")),
+            FakeCheck(CheckId.R2, CheckStatus.OK),
+        )
+        val f = Fixture(this, checks = checks, runClock = clockFailingOnce(CancellationException("stray")))
+
+        f.vm.onIntent(User.RunAll)
+        advanceUntilIdle()
+
+        assertThat(f.vm.uiState.value.isRunningAll).isFalse()
+        assertThat(f.vm.uiState.value.rows.first { it.id == "R2" }.badge).isEqualTo(Badge.OK)
+    }
+
+    @Test
+    fun useCaseFailureInRunOneClearsRunningAndShowsError() = runTest {
+        val checks = listOf(FakeCheck(CheckId.R1, CheckStatus.OK, failure = IllegalStateException("boom")))
+        val f = Fixture(this, checks = checks, runClock = clockFailingOnce(IllegalStateException("clock")))
+
+        f.vm.onIntent(User.RunOne(CheckId.R1))
+        advanceUntilIdle()
+
+        assertThat(f.vm.uiState.value.rows.first { it.id == "R1" }.isRunning).isFalse()
+        f.vm.effect.test { assertThat(awaitItem()).isEqualTo(ShowMessage(LabMessage.Error("clock"))) }
+    }
+
+    @Test
+    fun throwingPublisherShowsErrorInsteadOfCrashing() = runTest {
+        val f = Fixture(this, publisherOutcome = { throw IllegalStateException("mqtt down") })
+        f.vm.onIntent(User.RunOne(CheckId.R1))
+        advanceUntilIdle()
+
+        f.vm.onIntent(User.SendToMqtt(CheckId.R1))
+        advanceUntilIdle()
+
+        f.vm.effect.test { assertThat(awaitItem()).isEqualTo(ShowMessage(LabMessage.Error("mqtt down"))) }
+    }
+
+    @Test
+    fun exportIsIgnoredWhileRunAllIsInProgress() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val checks = listOf(FakeCheck(CheckId.R1, CheckStatus.OK, gate))
+        val f = Fixture(this, checks = checks)
+        f.vm.onIntent(User.RunAll)
+        runCurrent()
+
+        f.vm.onIntent(User.Export)
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertThat(f.writes).isEqualTo(0)
+        assertThat(f.vm.uiState.value.isExporting).isFalse()
+    }
+
+    @Test
+    fun unhandledExceptionHandlerLogsInsteadOfCrashing() = runTest {
+        val logged = mutableListOf<Throwable>()
+        val scope = CoroutineScope(SupervisorJob() + labExceptionHandler { logged += it })
+
+        scope.launch(Dispatchers.Unconfined) { throw IllegalStateException("late") }.join()
+
+        assertThat(logged.single()).hasMessageThat().isEqualTo("late")
     }
 }

@@ -4,6 +4,7 @@ import ru.restofleet.agent.presentation.lab.viewmodel.LabAction.DeviceLoaded
 import ru.restofleet.agent.presentation.lab.viewmodel.LabAction.ExportingChanged
 import ru.restofleet.agent.presentation.lab.viewmodel.LabAction.FilterSelected
 import ru.restofleet.agent.presentation.lab.viewmodel.LabAction.ResultsArrived
+import ru.restofleet.agent.presentation.lab.viewmodel.LabAction.RunFinished
 import ru.restofleet.agent.presentation.lab.viewmodel.LabAction.RunStarted
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabSession
 import ru.restofleet.console.core.mvi.Reducer
@@ -16,6 +17,10 @@ class LabReducer : Reducer<LabAction, LabSession> {
             running = state.running + action.ids,
             isRunningAll = state.isRunningAll || action.isAll,
         )
+        is RunFinished -> {
+            val running = state.running - action.ids
+            state.copy(running = running, isRunningAll = state.isRunningAll && running.isNotEmpty())
+        }
         is ResultsArrived -> {
             val running = state.running - action.results.map { it.id }.toSet()
             state.copy(
