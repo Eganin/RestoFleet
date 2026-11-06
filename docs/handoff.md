@@ -6,8 +6,8 @@
 
 - **Этап:** MVP-A (эмуляторы) · **ветка:** `stage/0-mvp`
 - **План:** `docs/superpowers/plans/2026-11-05-mvp-a.md`
-- **Последняя завершённая задача:** Итоговое ревью M0: 6 Important исправлены (решения 22–25), 10 Minor отложены
-- **Следующая задача:** 1.1 console:core:mvi (M1 — субагенты: исполнитель + ревьюер на задачу)
+- **Последняя завершённая задача:** 1.1 console:core:mvi: MviStore, Reducer, BaseMviViewModel (10 тестов)
+- **Следующая задача:** 1.2 следующая задача M1 по плану
 - **Блокеры:** GitHub-remote не настроен (CI заработает после пуша)
 - **Как поднять стенд:** `deploy/README.md` (4 команды + `./test-stand.sh`); нужен `local.properties` с `sdk.dir` для сборки.
 - **Исполнение:** M0 — в основной сессии; M1–M4 — субагенты (исполнитель + ревьюер на задачу).
@@ -26,3 +26,4 @@
 | 2026-11-06 | 0.7 стенд — CA (make-ca.sh) и Mosquitto 2.1.2 (TLS 8883 + DynSec + persistence) | см. `git log` | `deploy/test-stand.sh` и `deploy/certs/test-make-ca.sh` зелёные; мутации (anon разрешён) ловятся |
 | 2026-11-06 | 0.8 закрытие M0 — отчёт `docs/reports/0-mvp/M0.md` | см. `git log` | M0 закрыт: 39 тестов, покрытие строк 100 %, стенд зелёный |
 | 2026-11-06 | Итоговое ревью M0: 6 Important исправлены (решения 22–25), 10 Minor отложены | см. `git log` | 42 теста, стенд зелёный; отложенные Minor — в docs/reports/0-mvp/M0.md |
+| 2026-11-06 | 1.1 console:core:mvi: MviStore, Reducer, BaseMviViewModel (10 тестов) | см. `git log` | jvmTest 10/10 зелёные, покрытие модуля 100%, полная сборка exit 0 |
