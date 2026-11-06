@@ -38,11 +38,12 @@ class SubscriptionCheckTest {
 
     @Test
     fun runRightAfterCreationWaitsForSubscriptionStart() = runTest {
-        // collect ещё не запущен (диспетчер не отработал), run() обязан дождаться старта, а не вернуть OK вслепую
+        // collect ещё не запущен (StandardTestDispatcher), а поток сразу падает: без ожидания старта run() вернул бы OK
         val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
-        val result = check(MutableSharedFlow<String>(), scope).run()
-        assertThat(result.status).isEqualTo(CheckStatus.OK)
-        scope.coroutineContext[Job]?.cancel()
+        val failing = flow<String> { throw SecurityException("denied") }
+        val result = check(failing, scope).run()
+        assertThat(result.status).isEqualTo(CheckStatus.UNAVAILABLE)
+        assertThat(result.note).isEqualTo("Failed: denied")
     }
 
     @Test
