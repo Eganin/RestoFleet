@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RestoFleet Agent</string>
+    <string name="main_title">RestoFleet Agent</string>
+    <string name="main_version">Версия %1$s</string>
+    <string name="main_start_agent">Запустить агент</string>
+    <string name="main_notifications_denied">Уведомления отключены: агент работает, но его уведомление скрыто.</string>
+    <string name="notification_channel_name">Работа агента</string>
+    <string name="notification_title">RestoFleet Agent</string>
+    <string name="notification_text">Мониторинг состояния устройства</string>
+</resources>

@@ -6,8 +6,8 @@
 
 - **Этап:** MVP-A (эмуляторы) · **ветка:** `stage/0-mvp`
 - **План:** `docs/superpowers/plans/2026-11-05-mvp-a.md`
-- **Последняя завершённая задача:** 1.7 fix round 1: классификатор по errno, P1 отдельной проверкой, tcpReachable, TLS-only клиент
-- **Следующая задача:** 1.8 agent:app (FGS, boot, watchdog, Koin, HeartbeatLog)
+- **Последняя завершённая задача:** 1.8 agent:app — FGS specialUse, автозапуск, сторож, HeartbeatLog, L1–L4
+- **Следующая задача:** 1.9 Capability Lab (MVI + JSON-отчёт)
 - **Блокеры:** GitHub-remote не настроен (CI заработает после пуша)
 - **Как поднять стенд:** `deploy/README.md` (4 команды + `./test-stand.sh`); нужен `local.properties` с `sdk.dir` для сборки.
 - **Исполнение:** M0 — в основной сессии; M1–M4 — субагенты (исполнитель + ревьюер на задачу).
@@ -36,3 +36,4 @@
 | 2026-11-06 | 1.6 agent:data/collectors: R1–R9, R11, R12, R14 + ReadingCheck/SubscriptionCheck + ChecksModule | см. `git log` | тесты agent:data зелёные (~85), строки модуля 96,7 %, ветви platform 100 %, полная сборка exit 0 |
 | 2026-11-06 | 1.7 проверки доступности P1–P3: HTTPS-пробы (классы ошибок, фазы), проба шлюза, Lab-проверки | см. `git log` | agent:data строки 96,1 %, ветви platform 100 %, agent:domain строки 97,2 %, полная сборка exit 0 |
 | 2026-11-06 | 1.7 fix round 1: классификатор по errno, P1 отдельной проверкой, tcpReachable, TLS-only клиент | см. `git log` | agent:data строки 96,4 %, agent:domain 97,2 %, ветви platform 100 %, полная сборка exit 0 |
+| 2026-11-06 | 1.8 agent:app — FGS specialUse, автозапуск, сторож, HeartbeatLog, L1–L4 | см. `git log` | agent:data строки 97,1 %, agent:app 98,2 %, корень 98,2 %, ветви platform 100 %, полная сборка exit 0; ручная проверка на rf-api36 пройдена |
