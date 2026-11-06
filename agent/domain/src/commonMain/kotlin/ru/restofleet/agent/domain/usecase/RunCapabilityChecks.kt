@@ -1,5 +1,7 @@
 package ru.restofleet.agent.domain.usecase
 
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withTimeoutOrNull
 import ru.restofleet.agent.domain.capability.CapabilityCheck
 import ru.restofleet.agent.domain.capability.CheckId
@@ -28,14 +30,17 @@ class RunCapabilityChecks(
             .filter { ids == null || it in ids }
             .map { id -> checks[id]?.let { execute(it) } ?: synthetic(id, CheckStatus.NOT_CHECKED, null) }
 
-    // Ловим именно Exception: Error — состояние процесса, пробрасывается; CancellationException — тоже.
+    // Ловим именно Exception: Error — состояние процесса, пробрасывается. CancellationException при активном
+    // вызывающем (чужой TimeoutCancellationException, отменённый future) — сбой проверки, а не отмена прогона;
+    // настоящая отмена вызывающего пробрасывается через ensureActive().
     @Suppress("TooGenericExceptionCaught")
     private suspend fun execute(check: CapabilityCheck): CheckResult =
         try {
             withTimeoutOrNull(timeoutMillis) { check.run() }
                 ?: synthetic(check.id, CheckStatus.UNAVAILABLE, "timeout $timeoutMillis ms")
         } catch (e: CancellationException) {
-            throw e
+            currentCoroutineContext().ensureActive()
+            synthetic(check.id, CheckStatus.UNAVAILABLE, e.message ?: e::class.simpleName.orEmpty())
         } catch (e: Exception) {
             synthetic(check.id, CheckStatus.UNAVAILABLE, e.message ?: e::class.simpleName.orEmpty())
         }

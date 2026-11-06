@@ -13,12 +13,12 @@ import ru.restofleet.agent.domain.model.ThermalStatus
 import ru.restofleet.agent.domain.port.TelemetrySource
 
 class FakeTelemetrySource : TelemetrySource {
-    var batteryResult: () -> Reading<BatteryState> = { Reading.Available(BATTERY) }
-    var thermalResult: () -> Reading<ThermalState> = { Reading.Available(THERMAL) }
-    var networkResult: () -> Reading<NetworkState> = { Reading.Available(NETWORK) }
-    var resourcesResult: () -> Reading<DeviceResources> = { Reading.Available(RESOURCES) }
-    var foregroundResult: () -> Reading<ForegroundApp> = { Reading.Available(FOREGROUND) }
-    var appsResult: (List<String>) -> Reading<List<AppVersion>> = { Reading.Available(APPS) }
+    var batteryResult: suspend () -> Reading<BatteryState> = { Reading.Available(BATTERY) }
+    var thermalResult: suspend () -> Reading<ThermalState> = { Reading.Available(THERMAL) }
+    var networkResult: suspend () -> Reading<NetworkState> = { Reading.Available(NETWORK) }
+    var resourcesResult: suspend () -> Reading<DeviceResources> = { Reading.Available(RESOURCES) }
+    var foregroundResult: suspend () -> Reading<ForegroundApp> = { Reading.Available(FOREGROUND) }
+    var appsResult: suspend (List<String>) -> Reading<List<AppVersion>> = { Reading.Available(APPS) }
 
     override suspend fun battery() = batteryResult()
     override suspend fun thermal() = thermalResult()

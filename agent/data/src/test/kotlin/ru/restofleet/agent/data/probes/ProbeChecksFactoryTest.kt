@@ -1,6 +1,10 @@
 package ru.restofleet.agent.data.probes
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -123,9 +127,24 @@ class ProbeChecksFactoryTest {
         assertThat(r.note).contains("boom")
     }
 
-    @Test(expected = CancellationException::class)
-    fun p1PropagatesCancellation() {
-        run(CheckId.P1, ProbeExecutor { throw CancellationException("cancelled") })
+    @Test
+    fun p1StrayCancellationIsUnavailableNotAnAbort() {
+        val r = run(CheckId.P1, ProbeExecutor { throw CancellationException("stray") })
+        assertThat(r.status).isEqualTo(CheckStatus.UNAVAILABLE)
+        assertThat(r.note).contains("stray")
+    }
+
+    @Test
+    fun p1OuterCancellationPropagates() = runTest {
+        val started = CompletableDeferred<Unit>()
+        val exec = ProbeExecutor { started.complete(Unit); awaitCancellation() }
+        val p1 = ProbeChecksFactory(Clock { TS }, exec) { gatewayResult(null) }.create().first { it.id == CheckId.P1 }
+
+        val job = async(start = CoroutineStart.UNDISPATCHED) { p1.run() }
+        started.await()
+        job.cancel()
+
+        assertThat(runCatching { job.await() }.exceptionOrNull()).isInstanceOf(CancellationException::class.java)
     }
 
     @Test

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -15,12 +16,20 @@ import ru.restofleet.agent.domain.model.UnavailableReason
 import ru.restofleet.agent.domain.model.AppVersion
 import ru.restofleet.agent.domain.model.Reading
 import ru.restofleet.shared.kernel.Clock
+import kotlin.coroutines.CoroutineContext
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [30])
 class AndroidTelemetrySourceTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val api = ApiLevel { 30 }
+    private var dispatches = 0
+    private val countingIo = object : CoroutineDispatcher() {
+        override fun dispatch(context: CoroutineContext, block: Runnable) {
+            dispatches++
+            block.run()
+        }
+    }
     private val source = AndroidTelemetrySource(
         battery = BatteryCollector(context),
         thermal = ThermalCollector(context, api, "release-keys"),
@@ -28,7 +37,20 @@ class AndroidTelemetrySourceTest {
         resources = ResourceCollector(context),
         foreground = ForegroundAppCollector(context, Clock { 0L }, api),
         appVersions = AppVersionsCollector(context),
+        io = countingIo,
     )
+
+    @Test
+    fun everyBlockingReadingGoesThroughTheIoDispatcher() = runTest {
+        source.battery()
+        source.thermal()
+        source.network()
+        source.resources()
+        source.foregroundApp()
+        source.apps(emptyList())
+
+        assertThat(dispatches).isEqualTo(6)
+    }
 
     @Test
     fun missingPackageGivesEmptyList() = runTest {

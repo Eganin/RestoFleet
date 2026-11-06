@@ -3,6 +3,8 @@ package ru.restofleet.agent.data.probes
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import ru.restofleet.agent.data.collectors.ReadingCheck
 import ru.restofleet.agent.domain.capability.CapabilityCheck
 import ru.restofleet.agent.domain.capability.CheckId
@@ -47,15 +49,16 @@ class ProbeChecksFactory(
         override val id = CheckId.P1
 
         @Suppress("TooGenericExceptionCaught") // проба не должна ронять прогон Lab
-        override suspend fun run(): CheckResult {
-            val results = try {
-                coroutineScope { P1_CASES.map { async { executor.probe(it.target) } }.awaitAll() }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                val message = e.message ?: e::class.simpleName.orEmpty()
-                return CheckResult(id, CheckStatus.UNAVAILABLE, emptyMap(), "Failed: $message", clock.nowMillis())
-            }
+        override suspend fun run(): CheckResult = try {
+            evaluate(coroutineScope { P1_CASES.map { async { executor.probe(it.target) } }.awaitAll() })
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive() // настоящая отмена — наружу; бродячий CE — сбой пробы
+            failed(e)
+        } catch (e: Exception) {
+            failed(e)
+        }
+
+        private fun evaluate(results: List<ProbeResult>): CheckResult {
             val rows = P1_CASES.zip(results)
             val raw = rows.associate { (case, r) ->
                 case.target.id to "expected=${label(case.expected)} actual=${label(r.error)} " +
@@ -65,6 +68,11 @@ class ProbeChecksFactory(
                 .map { (case, r) -> "${case.target.id}: expected ${label(case.expected)}, got ${label(r.error)}" }
             val status = if (mismatches.isEmpty()) CheckStatus.OK else CheckStatus.LIMITED
             return CheckResult(id, status, raw, mismatches.joinToString("; ").ifEmpty { null }, clock.nowMillis())
+        }
+
+        private fun failed(e: Exception): CheckResult {
+            val message = e.message ?: e::class.simpleName.orEmpty()
+            return CheckResult(id, CheckStatus.UNAVAILABLE, emptyMap(), "Failed: $message", clock.nowMillis())
         }
     }
 

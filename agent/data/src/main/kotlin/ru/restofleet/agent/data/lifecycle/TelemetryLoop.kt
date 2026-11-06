@@ -4,7 +4,9 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import ru.restofleet.agent.domain.usecase.CollectTelemetry
 import kotlin.coroutines.cancellation.CancellationException
@@ -36,13 +38,14 @@ class TelemetryLoop(
     private val tick: suspend () -> Unit,
     private val onError: (Exception) -> Unit = { Log.w(TAG, "tick failed", it) },
 ) {
-    @Suppress("TooGenericExceptionCaught") // изоляция тика; CancellationException и Error пробрасываются
+    @Suppress("TooGenericExceptionCaught") // изоляция тика; отмена цикла и Error пробрасываются
     suspend fun run() {
         while (true) {
             try {
                 tick()
             } catch (e: CancellationException) {
-                throw e
+                currentCoroutineContext().ensureActive() // настоящая отмена цикла — наружу
+                onError(e) // иначе бродячий CE (чужой таймаут, отменённый future) — сбой тика
             } catch (e: Exception) {
                 onError(e)
             }

@@ -1,5 +1,8 @@
 package ru.restofleet.agent.domain.usecase
 
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withTimeoutOrNull
 import ru.restofleet.agent.domain.model.Reading
 import ru.restofleet.agent.domain.model.TelemetrySnapshot
 import ru.restofleet.agent.domain.model.UnavailableReason
@@ -8,11 +11,15 @@ import ru.restofleet.agent.domain.port.TelemetrySource
 import ru.restofleet.shared.kernel.Clock
 import kotlin.coroutines.cancellation.CancellationException
 
-/** Собирает снимок телеметрии; сбой одного считывания не влияет на остальные. */
+/**
+ * Собирает снимок телеметрии; сбой или зависание одного считывания не влияют на остальные: каждое считывание
+ * ограничено [readingTimeoutMs] (по таймауту — `Failed("timeout N ms")`).
+ */
 class CollectTelemetry(
     private val source: TelemetrySource,
     private val clock: Clock,
     private val seq: SequenceSource,
+    private val readingTimeoutMs: Long = DEFAULT_READING_TIMEOUT_MS,
 ) {
     suspend operator fun invoke(watchedApps: List<String>): TelemetrySnapshot {
         val unavailable = mutableMapOf<String, UnavailableReason>()
@@ -40,13 +47,24 @@ class CollectTelemetry(
     }
 
     // Ловим именно Exception: Error (OOM и т.п.) — состояние процесса, не сбой считывания, и пробрасывается.
+    // CancellationException при активном вызывающем (чужой TimeoutCancellationException, отменённый future) —
+    // сбой считывания; настоящая отмена вызывающего пробрасывается через ensureActive().
     @Suppress("TooGenericExceptionCaught")
     private suspend fun <T> isolated(block: suspend () -> Reading<T>): Reading<T> =
         try {
-            block()
+            withTimeoutOrNull(readingTimeoutMs) { block() }
+                ?: Reading.Unavailable(UnavailableReason.Failed("timeout $readingTimeoutMs ms"))
         } catch (e: CancellationException) {
-            throw e
+            currentCoroutineContext().ensureActive()
+            failed(e)
         } catch (t: Exception) {
-            Reading.Unavailable(UnavailableReason.Failed(t.message ?: t::class.simpleName.orEmpty()))
+            failed(t)
         }
+
+    private fun failed(t: Exception): Reading.Unavailable =
+        Reading.Unavailable(UnavailableReason.Failed(t.message ?: t::class.simpleName.orEmpty()))
+
+    private companion object {
+        const val DEFAULT_READING_TIMEOUT_MS = 5_000L
+    }
 }

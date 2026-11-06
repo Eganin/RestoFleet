@@ -1,11 +1,18 @@
 package ru.restofleet.agent.domain.usecase
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import org.junit.Test
 import ru.restofleet.agent.domain.fake.FakeTelemetrySource
 import ru.restofleet.agent.domain.model.Reading
 import ru.restofleet.agent.domain.model.UnavailableReason
+import ru.restofleet.agent.domain.port.SequenceSource
 import ru.restofleet.shared.kernel.Clock
 import java.util.concurrent.CancellationException
 import kotlin.test.assertFailsWith
@@ -14,7 +21,7 @@ class CollectTelemetryTest {
 
     private val source = FakeTelemetrySource()
     private var counter = 0L
-    private val collect = CollectTelemetry(source, Clock { 1_700_000_000_000L }) { ++counter }
+    private val collect = CollectTelemetry(source, Clock { 1_700_000_000_000L }, SequenceSource { ++counter })
 
     @Test
     fun allReadingsAvailable() = runTest {
@@ -102,10 +109,61 @@ class CollectTelemetryTest {
     }
 
     @Test
-    fun cancellationIsNotSwallowed() = runTest {
-        source.batteryResult = { throw CancellationException("cancelled") }
+    fun strayCancellationFromReadingIsAFailureNotAnAbort() = runTest {
+        source.batteryResult = { throw CancellationException("stray") }
 
-        assertFailsWith<CancellationException> { collect(emptyList()) }
+        val snapshot = collect(emptyList())
+
+        assertThat(snapshot.battery).isNull()
+        assertThat(snapshot.unavailable["battery"]).isEqualTo(UnavailableReason.Failed("stray"))
+        assertThat(snapshot.network).isEqualTo(FakeTelemetrySource.NETWORK)
+    }
+
+    @Test
+    fun innerTimeoutOfOneReadingDoesNotAbortSnapshot() = runTest {
+        source.batteryResult = { withTimeout(10) { awaitCancellation() } }
+
+        val snapshot = collect(emptyList())
+
+        assertThat(snapshot.battery).isNull()
+        assertThat(snapshot.unavailable).containsKey("battery")
+        assertThat(snapshot.network).isEqualTo(FakeTelemetrySource.NETWORK)
+    }
+
+    @Test
+    fun outerCancellationStillPropagates() = runTest {
+        val started = CompletableDeferred<Unit>()
+        source.batteryResult = { started.complete(Unit); awaitCancellation() }
+
+        val job = async(start = CoroutineStart.UNDISPATCHED) { collect(emptyList()) }
+        started.await()
+        job.cancel()
+
+        assertFailsWith<CancellationException> { job.await() }
+    }
+
+    @Test
+    fun hangingReadingTimesOutAndOthersAreCollected() = runTest {
+        source.batteryResult = { awaitCancellation() }
+        val timed = CollectTelemetry(source, Clock { 1L }, SequenceSource { 1L }, readingTimeoutMs = 5_000)
+
+        val snapshot = timed(emptyList())
+
+        assertThat(snapshot.unavailable["battery"]).isEqualTo(UnavailableReason.Failed("timeout 5000 ms"))
+        assertThat(snapshot.network).isEqualTo(FakeTelemetrySource.NETWORK)
+        assertThat(currentTime).isEqualTo(5_000L)
+    }
+
+    @Test
+    fun everyHangingReadingGetsItsOwnTimeout() = runTest {
+        source.batteryResult = { awaitCancellation() }
+        source.thermalResult = { awaitCancellation() }
+        val timed = CollectTelemetry(source, Clock { 1L }, SequenceSource { 1L }, readingTimeoutMs = 1_000)
+
+        val snapshot = timed(emptyList())
+
+        assertThat(snapshot.unavailable.keys).containsExactly("battery", "thermal")
+        assertThat(currentTime).isEqualTo(2_000L)
     }
 
     @Test

@@ -3,6 +3,7 @@ package ru.restofleet.agent.data.lifecycle
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -84,17 +85,64 @@ class TelemetryLoopTest {
     }
 
     @Test
-    fun cancellationInsideTickIsPropagatedNotReported() = runTest {
+    fun strayCancellationFromTickDoesNotKillTheLoop() = runTest {
+        var ticks = 0
         val errors = mutableListOf<Throwable>()
         val loop = TelemetryLoop(
             intervalMs = 1_000,
-            tick = { throw CancellationException("stop") },
+            tick = { if (++ticks == 1) throw CancellationException("stray") },
+            onError = { errors += it },
+        )
+        val job = launch { loop.run() }
+
+        advanceTimeBy(1_500)
+        runCurrent()
+
+        assertThat(ticks).isEqualTo(2)
+        assertThat(job.isActive).isTrue()
+        assertThat(errors).hasSize(1)
+        job.cancel()
+    }
+
+    @Test
+    fun outerCancellationStopsTheLoop() = runTest {
+        var ticks = 0
+        val errors = mutableListOf<Throwable>()
+        val loop = TelemetryLoop(
+            intervalMs = 1_000,
+            tick = { ticks++; awaitCancellation() },
             onError = { errors += it },
         )
         val job = launch { loop.run() }
         runCurrent()
 
+        job.cancel()
+        runCurrent()
+
         assertThat(job.isCancelled).isTrue()
+        assertThat(ticks).isEqualTo(1)
+        assertThat(errors).isEmpty()
+    }
+
+    @Test
+    fun outerCancellationDuringStrayCancellationStillStopsTheLoop() = runTest {
+        var ticks = 0
+        val errors = mutableListOf<Throwable>()
+        lateinit var job: kotlinx.coroutines.Job
+        val loop = TelemetryLoop(
+            intervalMs = 1_000,
+            tick = {
+                ticks++
+                job.cancel()
+                throw CancellationException("cancelled by caller")
+            },
+            onError = { errors += it },
+        )
+        job = launch { loop.run() }
+        advanceTimeBy(5_000)
+        runCurrent()
+
+        assertThat(ticks).isEqualTo(1)
         assertThat(errors).isEmpty()
     }
 

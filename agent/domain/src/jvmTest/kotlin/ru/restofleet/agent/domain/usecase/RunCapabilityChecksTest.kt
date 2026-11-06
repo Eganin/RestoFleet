@@ -7,6 +7,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import org.junit.Test
 import ru.restofleet.agent.domain.capability.CapabilityCheck
 import ru.restofleet.agent.domain.capability.CheckId
@@ -157,6 +158,32 @@ class RunCapabilityChecksTest {
         job.cancel()
 
         assertFailsWith<kotlinx.coroutines.CancellationException> { job.await() }
+    }
+
+    @Test
+    fun strayCancellationFromCheckDoesNotAbortTheRun() = runTest {
+        val run = RunCapabilityChecks(
+            listOf(
+                check(CheckId.L1) { throw kotlin.coroutines.cancellation.CancellationException("stray") },
+                check(CheckId.L2),
+            ),
+            clock,
+        )
+
+        val results = run(setOf(CheckId.L1, CheckId.L2))
+
+        assertThat(results.map { it.status }).containsExactly(CheckStatus.UNAVAILABLE, CheckStatus.OK).inOrder()
+        assertThat(results.first().note).isEqualTo("stray")
+    }
+
+    @Test
+    fun innerTimeoutOfOneCheckDoesNotAbortTheRun() = runTest {
+        val leaking = check(CheckId.L1) { withTimeout(10) { awaitCancellation() } }
+        val run = RunCapabilityChecks(listOf(leaking, check(CheckId.L2)), clock)
+
+        val results = run(setOf(CheckId.L1, CheckId.L2))
+
+        assertThat(results.map { it.status }).containsExactly(CheckStatus.UNAVAILABLE, CheckStatus.OK).inOrder()
     }
 
     private companion object {
