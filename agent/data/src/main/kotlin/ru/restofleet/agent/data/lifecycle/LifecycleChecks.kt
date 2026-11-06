@@ -26,6 +26,7 @@ class LifecycleChecks(
     private val journal: LifecycleJournal,
     private val watchdog: WatchdogSchedule,
     private val permissions: WizardPermissions,
+    private val wakeLock: CpuWakeLock,
 ) {
     fun create(): List<CapabilityCheck> = listOf(
         check(CheckId.L1, ::l1),
@@ -53,6 +54,7 @@ class LifecycleChecks(
             "coverageMs" to "$coverage",
             "gaps" to "$gaps",
             "maxGapMs" to "${HeartbeatGaps.maxGapMillis(ts) ?: 0}",
+            "wakeLock" to if (wakeLock.isHeld) "held" else "not_held",
         )
         return when {
             gaps > 0 -> Verdict(CheckStatus.LIMITED, raw, "heartbeat gaps over ${GAP_LIMIT_MS / MS_IN_SEC} s: $gaps")
@@ -94,9 +96,12 @@ class LifecycleChecks(
         )
         return when {
             !scheduled -> Verdict(CheckStatus.UNAVAILABLE, raw, "watchdog is not scheduled")
-            // LIMITED, только если последнее событие запуска — срыв; любой более поздний старт возвращает OK.
+            // LIMITED, только если последнее событие запуска — срыв; любой более поздний старт его снимает.
             lastFailure != null && (lastStart == null || lastFailure > lastStart) ->
                 Verdict(CheckStatus.LIMITED, raw, "last launch attempt failed or was denied by the system")
+            // OK — только с доказательством: сторож действительно перезапускал агента, причём после последнего срыва.
+            started == null || (lastFailure != null && started <= lastFailure) ->
+                Verdict(CheckStatus.NOT_CHECKED, raw, "watchdog has not restarted the agent yet")
             else -> Verdict(CheckStatus.OK, raw)
         }
     }

@@ -10,6 +10,8 @@ import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import ru.restofleet.agent.AgentNotifications
 import ru.restofleet.agent.AndroidServiceStarter
+import ru.restofleet.agent.ForegroundStarter
+import ru.restofleet.agent.ServiceCompatForegroundStarter
 import ru.restofleet.agent.SettingsIntents
 import ru.restofleet.agent.WatchdogWorker
 import ru.restofleet.agent.BuildConfig
@@ -49,6 +51,7 @@ val appModule: Module = module {
     single<WatchdogSchedule> { WorkManagerWatchdogSchedule(get()) }
     single<ServiceStarter> { AndroidServiceStarter(androidContext(), get()) }
     single { AgentNotifications(androidContext()) }
+    single<ForegroundStarter> { ServiceCompatForegroundStarter() }
     single { SettingsIntents(androidContext().packageName) }
     workerOf(::WatchdogWorker)
 

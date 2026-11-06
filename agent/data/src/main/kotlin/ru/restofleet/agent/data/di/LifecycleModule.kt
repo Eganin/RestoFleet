@@ -6,7 +6,9 @@ import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import ru.restofleet.agent.data.collectors.AndroidTelemetrySource
 import ru.restofleet.agent.data.collectors.CapabilityChecksFactory
+import ru.restofleet.agent.data.lifecycle.AndroidCpuWakeLock
 import ru.restofleet.agent.data.lifecycle.AndroidWizardPermissions
+import ru.restofleet.agent.data.lifecycle.CpuWakeLock
 import ru.restofleet.agent.data.lifecycle.InMemorySequenceSource
 import ru.restofleet.agent.data.lifecycle.LifecycleChecks
 import ru.restofleet.agent.data.lifecycle.LifecycleStorage
@@ -31,10 +33,13 @@ val lifecycleModule: Module = module {
     single { get<LifecycleStorage>().heartbeatLog() }
     single { get<LifecycleStorage>().journal() }
     single<WizardPermissions> { AndroidWizardPermissions(androidContext()) }
+    single<CpuWakeLock> { AndroidCpuWakeLock(androidContext()) }
     single<SequenceSource> { InMemorySequenceSource() }
     single<TelemetrySource> { AndroidTelemetrySource(get(), get(), get(), get(), get(), get()) }
     single { CollectTelemetry(get(), get(), get()) }
     single { TelemetryTick(get(), get(), CapabilityChecksFactory.DEFAULT_WATCHED) }
-    single { TelemetryLoop(TELEMETRY_INTERVAL_MS, tick = { get<TelemetryTick>().invoke() }) }
-    single<List<CapabilityCheck>>(LIFECYCLE_CHECKS) { LifecycleChecks(get(), get(), get(), get(), get()).create() }
+    single { TelemetryLoop(TELEMETRY_INTERVAL_MS, tick = { get<TelemetryTick>().invoke() }, wakeLock = get()) }
+    single<List<CapabilityCheck>>(LIFECYCLE_CHECKS) {
+        LifecycleChecks(get(), get(), get(), get(), get(), get()).create()
+    }
 }

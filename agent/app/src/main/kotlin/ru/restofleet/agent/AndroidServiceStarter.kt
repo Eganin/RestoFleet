@@ -1,8 +1,6 @@
 package ru.restofleet.agent
 
-import android.app.ForegroundServiceStartNotAllowedException
 import android.content.Context
-import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import ru.restofleet.agent.data.lifecycle.LifecycleJournal
@@ -30,16 +28,13 @@ class AndroidServiceStarter(
 
     // Журнал сам не бросает (best effort), поэтому запись внутри catch безопасна.
     private fun record(reason: String, e: RuntimeException) {
-        if (isStartNotAllowed(e)) {
+        if (isForegroundStartNotAllowed(e)) {
             journal.recordStartDenied(reason)
         } else {
             journal.recordStartFailed(reason, e::class.java.simpleName)
         }
         Log.w(TAG, "foreground start not performed (reason=$reason)", e)
     }
-
-    private fun isStartNotAllowed(e: RuntimeException): Boolean =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && e is ForegroundServiceStartNotAllowedException
 
     private companion object {
         const val TAG = "ServiceStarter"

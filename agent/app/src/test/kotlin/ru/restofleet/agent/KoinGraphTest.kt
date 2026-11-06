@@ -12,7 +12,11 @@ import org.robolectric.annotation.Config
 import ru.restofleet.agent.data.di.LIFECYCLE_CHECKS
 import ru.restofleet.agent.data.di.PROBE_CHECKS
 import ru.restofleet.agent.data.di.READING_CHECKS
+import ru.restofleet.agent.data.lifecycle.AndroidCpuWakeLock
+import ru.restofleet.agent.data.lifecycle.CpuWakeLock
+import ru.restofleet.agent.data.lifecycle.HeartbeatLog
 import ru.restofleet.agent.data.lifecycle.ServiceStarter
+import ru.restofleet.agent.data.lifecycle.TelemetryLoop
 import ru.restofleet.agent.data.report.JsonCapabilityReportWriter
 import ru.restofleet.agent.domain.capability.CapabilityCheck
 import ru.restofleet.agent.domain.capability.CheckId
@@ -39,6 +43,12 @@ class KoinGraphTest {
 
         assertThat(koin.get<CollectTelemetry>()).isNotNull()
         assertThat(koin.get<ServiceStarter>()).isInstanceOf(AndroidServiceStarter::class.java)
+        assertThat(koin.get<TelemetryLoop>()).isNotNull()
+        assertThat(koin.get<HeartbeatLog>()).isNotNull()
+        assertThat(koin.get<AgentNotifications>()).isNotNull()
+        assertThat(koin.get<SettingsIntents>()).isNotNull()
+        assertThat(koin.get<ForegroundStarter>()).isInstanceOf(ServiceCompatForegroundStarter::class.java)
+        assertThat(koin.get<CpuWakeLock>()).isInstanceOf(AndroidCpuWakeLock::class.java)
         val lifecycle = koin.get<List<CapabilityCheck>>(LIFECYCLE_CHECKS)
         assertThat(lifecycle.map { it.id.name }).containsExactly("L1", "L2", "L3", "L4").inOrder()
         assertThat(koin.get<List<CapabilityCheck>>(READING_CHECKS)).isNotEmpty()

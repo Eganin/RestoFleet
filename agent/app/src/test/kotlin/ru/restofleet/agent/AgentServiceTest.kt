@@ -1,5 +1,6 @@
 package ru.restofleet.agent
 
+import android.app.ForegroundServiceStartNotAllowedException
 import android.app.Notification
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -14,6 +15,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
+import org.koin.core.context.GlobalContext
 import org.koin.core.context.loadKoinModules
 import org.koin.core.context.stopKoin
 import org.koin.dsl.module
@@ -21,6 +23,8 @@ import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowPowerManager
+import ru.restofleet.agent.data.lifecycle.CpuWakeLock
 import ru.restofleet.agent.data.lifecycle.LifecycleEntry
 import ru.restofleet.agent.data.lifecycle.LifecycleJournal
 import ru.restofleet.agent.data.lifecycle.TelemetryLoop
@@ -44,7 +48,7 @@ class AgentServiceTest {
         loadKoinModules(
             module {
                 single { journal }
-                single { TelemetryLoop(30_000, { ticks.incrementAndGet() }) }
+                single { TelemetryLoop(30_000, { ticks.incrementAndGet() }, get()) }
                 single<CoroutineDispatcher>(AGENT_DISPATCHER) { UnconfinedTestDispatcher() }
             },
         )
@@ -144,5 +148,74 @@ class AgentServiceTest {
         assertThat(shadow.lastForegroundNotificationId).isEqualTo(AgentNotifications.NOTIFICATION_ID)
         assertThat(shadow.isLastForegroundNotificationAttached).isTrue()
         assertThat(shadow.lastForegroundNotification.flags and Notification.FLAG_ONGOING_EVENT).isNotEqualTo(0)
+    }
+
+    private fun refuseForeground(failure: () -> RuntimeException) {
+        loadKoinModules(
+            module { single<ForegroundStarter> { ForegroundStarter { _, _, _ -> throw failure() } } },
+        )
+    }
+
+    @Test
+    fun deniedStartForegroundIsJournaledAndDoesNotCrash() {
+        refuseForeground { ForegroundServiceStartNotAllowedException("mAllowStartForeground false") }
+        val c = controller(reason = null).create()
+
+        val result = c.get().onStartCommand(null, 0, 1)
+
+        assertThat(result).isEqualTo(android.app.Service.START_NOT_STICKY)
+        assertThat(journal.entries().single().kind).isEqualTo(LifecycleEntry.Kind.START_DENIED)
+        assertThat(journal.entries().single().reason).isEqualTo("foreground_not_allowed")
+        assertThat(shadowOf(c.get()).isStoppedBySelf).isTrue()
+        assertThat(ticks.get()).isEqualTo(0)
+        assertThat(GlobalContext.get().get<CpuWakeLock>().isHeld).isFalse()
+    }
+
+    @Test
+    fun otherStartForegroundFailuresAreJournaledAsFailedWithClassName() {
+        listOf<() -> RuntimeException>(
+            { SecurityException("no permission") },
+            { IllegalArgumentException("missing type") },
+            { IllegalStateException("bad state") },
+        ).forEach { failure ->
+            journal = LifecycleJournal(File(tmp.root, "j-${failure().javaClass.simpleName}"), { 1L })
+            loadKoinModules(module { single { journal } })
+            refuseForeground(failure)
+            val c = controller().create()
+
+            val result = c.get().onStartCommand(Intent(), 0, 1)
+
+            val entry = journal.entries().single()
+            assertThat(result).isEqualTo(android.app.Service.START_NOT_STICKY)
+            assertThat(entry.kind).isEqualTo(LifecycleEntry.Kind.START_FAILED)
+            assertThat(entry.reason).isEqualTo("foreground_failed:${failure().javaClass.simpleName}")
+            assertThat(shadowOf(c.get()).isStoppedBySelf).isTrue()
+        }
+        assertThat(ticks.get()).isEqualTo(0)
+    }
+
+    @Test
+    fun refusedForegroundDoesNotStopServiceOnDestroyWithAStopRecord() {
+        refuseForeground { SecurityException("denied") }
+        val c = controller().create()
+        c.get().onStartCommand(Intent(), 0, 1)
+
+        c.destroy()
+
+        assertThat(journal.entries().map { it.kind }).containsExactly(LifecycleEntry.Kind.START_FAILED)
+    }
+
+    @Test
+    fun runningCycleHoldsPartialWakeLockAndReleasesItOnDestroy() {
+        val c = controller().create()
+        c.get().onStartCommand(Intent().putExtra(AgentService.EXTRA_REASON, "boot"), 0, 1)
+
+        val latest = ShadowPowerManager.getLatestWakeLock()
+        assertThat(shadowOf(latest).tag).isEqualTo("RestoFleet:agent")
+        assertThat(latest.isHeld).isTrue()
+
+        c.destroy()
+
+        assertThat(latest.isHeld).isFalse()
     }
 }

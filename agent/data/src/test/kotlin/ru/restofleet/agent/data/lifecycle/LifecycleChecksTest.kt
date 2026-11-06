@@ -20,6 +20,7 @@ class LifecycleChecksTest {
     private var notifications = true
     private var usage = true
     private var battery = true
+    private val wakeLock = FakeCpuWakeLock()
 
     private val heartbeat by lazy { HeartbeatLog(File(tmp.root, "hb"), clock, 100_000) }
     private val journal by lazy { LifecycleJournal(File(tmp.root, "j"), clock) }
@@ -31,7 +32,7 @@ class LifecycleChecksTest {
     }
 
     private suspend fun run(id: CheckId): CheckResult =
-        LifecycleChecks(clock, heartbeat, journal, WatchdogSchedule { scheduled }, permissions)
+        LifecycleChecks(clock, heartbeat, journal, WatchdogSchedule { scheduled }, permissions, wakeLock)
             .create().single { it.id == id }.run()
 
     private fun beats(from: Long, count: Int, step: Long = 30_000) = (0 until count).forEach {
@@ -41,7 +42,9 @@ class LifecycleChecksTest {
 
     @Test
     fun createsExactlyL1ToL4() {
-        val checks = LifecycleChecks(clock, heartbeat, journal, WatchdogSchedule { true }, permissions).create()
+        val checks = LifecycleChecks(
+            clock, heartbeat, journal, WatchdogSchedule { true }, permissions, wakeLock,
+        ).create()
         val ids = checks.map { it.id }
 
         assertThat(ids).containsExactly(CheckId.L1, CheckId.L2, CheckId.L3, CheckId.L4).inOrder()
@@ -59,6 +62,15 @@ class LifecycleChecksTest {
         assertThat(r.raw["gaps"]).isEqualTo("0")
         assertThat(r.raw["coverageMs"]).isEqualTo("43200000")
         assertThat(r.checkedAt).isEqualTo(99L)
+    }
+
+    @Test
+    fun l1RawReportsWakeLockState() = runTest {
+        assertThat(run(CheckId.L1).raw["wakeLock"]).isEqualTo("not_held")
+
+        wakeLock.hold(1_000)
+
+        assertThat(run(CheckId.L1).raw["wakeLock"]).isEqualTo("held")
     }
 
     @Test
@@ -161,10 +173,13 @@ class LifecycleChecksTest {
     }
 
     @Test
-    fun l3OkWhenScheduledEvenIfNeverRestarted() = runTest {
+    fun l3NotCheckedWhenScheduledButWatchdogNeverRestarted() = runTest {
+        journal.recordStart("boot")
         val r = run(CheckId.L3)
 
-        assertThat(r.status).isEqualTo(CheckStatus.OK)
+        assertThat(r.status).isEqualTo(CheckStatus.NOT_CHECKED)
+        assertThat(r.note).isEqualTo("watchdog has not restarted the agent yet")
+        assertThat(r.raw["scheduled"]).isEqualTo("true")
         assertThat(r.raw["lastWatchdogStartAt"]).isEqualTo("none")
         assertThat(r.raw["lastWatchdogDeniedAt"]).isEqualTo("none")
     }
@@ -207,14 +222,29 @@ class LifecycleChecksTest {
     }
 
     @Test
-    fun l3OkWhenAnyLaterStartFollowsWatchdogDenial() = runTest {
+    fun l3NotCheckedWhenOnlyAnotherStartFollowsWatchdogDenial() = runTest {
         now = 500
         journal.recordStartDenied("watchdog")
         now = 900
         journal.recordStart("manual")
         val r = run(CheckId.L3)
 
-        assertThat(r.status).isEqualTo(CheckStatus.OK)
+        // последний отказ уже не актуален, но и перезапуска сторожем после него никто не видел
+        assertThat(r.status).isEqualTo(CheckStatus.NOT_CHECKED)
+    }
+
+    @Test
+    fun l3NotCheckedWhenWatchdogRestartIsOlderThanLaterFailure() = runTest {
+        now = 300
+        journal.recordStart("watchdog")
+        now = 500
+        journal.recordStartFailed("manual", "SecurityException")
+        now = 900
+        journal.recordStart("manual")
+        val r = run(CheckId.L3)
+
+        assertThat(r.status).isEqualTo(CheckStatus.NOT_CHECKED)
+        assertThat(r.raw["lastWatchdogStartAt"]).isEqualTo("300")
     }
 
     @Test

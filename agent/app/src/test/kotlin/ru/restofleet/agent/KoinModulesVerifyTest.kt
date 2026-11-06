@@ -26,14 +26,14 @@ class KoinModulesVerifyTest {
         File::class,
         FreeFallDetector::class,
         Function1::class, // лямбды tick/onError/log с значениями по умолчанию
-        Long::class, // таймаут проверки со значением по умолчанию
-        CoroutineScope::class, // scope ViewModel со значением по умолчанию
     )
 
     @Test
     fun appModuleIsComplete() {
         appModule.verify(
-            extraTypes = platformTypes,
+            // Long — таймаут проверки со значением по умолчанию, CoroutineScope — scope ViewModel по умолчанию:
+            // нужны только appModule и в общий список не входят, чтобы не ослаблять verify других модулей.
+            extraTypes = platformTypes + listOf(Long::class, CoroutineScope::class),
             // список проверок собирается в лямбде из трёх именованных списков — по типу Koin его не найдёт
             injections = injectedParameters(definition<RunCapabilityChecks>(List::class)),
         )

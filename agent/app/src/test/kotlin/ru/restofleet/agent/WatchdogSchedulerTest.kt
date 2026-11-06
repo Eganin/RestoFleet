@@ -33,7 +33,7 @@ class WatchdogSchedulerTest {
 
         val info = infos().single()
         assertThat(info.state).isEqualTo(WorkInfo.State.ENQUEUED)
-        assertThat(WatchdogScheduler.PERIOD_MINUTES).isEqualTo(15L)
+        assertThat(info.periodicityInfo!!.repeatIntervalMillis).isEqualTo(TimeUnit.MINUTES.toMillis(15))
         assertThat(info.tags).contains(WatchdogWorker::class.java.name)
     }
 
