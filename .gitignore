@@ -1,0 +1,19 @@
+# Gradle / Kotlin
+build/
+.gradle/
+.kotlin/
+local.properties
+# IDE / OS
+.idea/
+*.iml
+.DS_Store
+captures/
+# Stand secrets and generated artifacts
+deploy/certs/out/
+deploy/out/
+deploy/apk/
+deploy/.env
+deploy/mosquitto/data/
+spikes/**/results/
+# Superpowers execution workspace
+.superpowers/

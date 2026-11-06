@@ -1,0 +1,1427 @@
+<title>RestoFleet Blueprint</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: длинная документ-страница; липкая навигация по этапам Общее · К · П · Д; макеты в рамках устройств на токенах приложения */
+:root{
+  --bg:#F3F5F9; --surface:#FFFFFF; --surface-2:#EBEFF5; --line:#D9DFE8; --fg:#121821; --muted:#5A6577;
+  --accent:#3356D9; --accent-soft:#E3E9FF; --on-accent:#FFFFFF;
+  --ok:#1C9A5F; --ok-soft:#DDF3E8; --warn:#B97206; --warn-soft:#FBEFD9; --crit:#CF3434; --crit-soft:#FBE3E3;
+  --off:#7F8898; --off-soft:#E9ECF1; --bezel:#1B222C; --scrim:rgba(14,19,26,.42);
+  --stage-m:#56627A; --stage-k:#3356D9; --stage-p:#8A4FD0; --stage-d:#0E8C83;
+  --f-ui:"Golos Text", "Segoe UI", Roboto, system-ui, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --r-s:6px; --r-m:10px; --r-l:16px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0C1118; --surface:#141B24; --surface-2:#1B2430; --line:#273241; --fg:#E5EAF1; --muted:#8C98AA;
+    --accent:#7D95FF; --accent-soft:#1E2747; --on-accent:#0C1118;
+    --ok:#3CC985; --ok-soft:#12301F; --warn:#EFA73A; --warn-soft:#33260F; --crit:#FF6A6A; --crit-soft:#3A1718;
+    --off:#6E7989; --off-soft:#1F2630; --bezel:#2A3441; --scrim:rgba(0,0,0,.55);
+    --stage-m:#A9B4C6; --stage-k:#7D95FF; --stage-p:#B48AF0; --stage-d:#3CC2B6;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0C1118; --surface:#141B24; --surface-2:#1B2430; --line:#273241; --fg:#E5EAF1; --muted:#8C98AA;
+  --accent:#7D95FF; --accent-soft:#1E2747; --on-accent:#0C1118;
+  --ok:#3CC985; --ok-soft:#12301F; --warn:#EFA73A; --warn-soft:#33260F; --crit:#FF6A6A; --crit-soft:#3A1718;
+  --off:#6E7989; --off-soft:#1F2630; --bezel:#2A3441; --scrim:rgba(0,0,0,.55);
+  --stage-m:#A9B4C6; --stage-k:#7D95FF; --stage-p:#B48AF0; --stage-d:#3CC2B6;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-padding-top:64px}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-ui);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px))}
+h1,h2,h3,h4{text-wrap:balance;margin:0;line-height:1.2}
+p{margin:0}
+code,.mono{font-family:var(--f-mono);font-size:.88em}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------- шапка ---------- */
+.hero{padding-block:40px 28px;display:grid;gap:18px}
+.eyebrow{font:600 12px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.hero h1{font-size:clamp(32px,5vw,52px);font-weight:700;letter-spacing:-.02em}
+.hero h1 span{color:var(--accent)}
+.hero .lead{max-width:68ch;color:var(--muted);font-size:17px}
+.facts{display:flex;flex-wrap:wrap;gap:8px}
+.fact{display:inline-flex;gap:6px;align-items:center;padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:13px}
+.fact b{font-weight:600}
+
+/* ---------- навигация ---------- */
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top, 0px);z-index:10;background:var(--bg)}
+.nav{position:sticky;top:env(safe-area-inset-top, 0px);z-index:9;background:color-mix(in srgb, var(--bg) 88%, transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;gap:6px;align-items:center;padding-block:10px;overflow-x:auto}
+.nav a{flex:none;text-decoration:none;color:var(--fg);padding:6px 12px;border-radius:999px;font-weight:500;font-size:14px;border:1px solid transparent;display:inline-flex;gap:8px;align-items:center}
+.nav a:hover{background:var(--surface-2)}
+.nav .dot{width:8px;height:8px;border-radius:50%}
+.nav .sp{flex:1}
+.theme{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;flex:none}
+.theme button{font:500 12px var(--f-ui);padding:5px 10px;border:0;background:transparent;color:var(--muted);cursor:pointer}
+.theme button[aria-pressed="true"]{background:var(--surface-2);color:var(--fg)}
+
+/* ---------- секции ---------- */
+section.stage{padding-block:48px 24px;border-bottom:1px solid var(--line)}
+.stage-head{display:grid;gap:10px;margin-bottom:28px}
+.stage-tag{display:inline-flex;align-items:center;gap:8px;font:600 12px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase}
+.stage-tag i{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;font-style:normal;color:var(--on-accent);font-size:12px}
+.stage-head h2{font-size:clamp(26px,3.6vw,36px);font-weight:700;letter-spacing:-.015em}
+.stage-head p{max-width:72ch;color:var(--muted)}
+h3.sub{font-size:20px;font-weight:600;margin:40px 0 14px;display:flex;align-items:baseline;gap:10px}
+h3.sub small{font:500 12px var(--f-mono);color:var(--muted);letter-spacing:.04em}
+.note{color:var(--muted);font-size:14px;max-width:72ch;margin-bottom:14px}
+
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);padding:18px;min-width:0}
+.card h4{font-size:15px;font-weight:600;margin-bottom:8px}
+.card p,.card li{font-size:14px;color:var(--muted)}
+.card ul{margin:0;padding-left:18px;display:grid;gap:4px}
+
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 12px var(--f-mono);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+tr:last-child td{border-bottom:0}
+td .mono{white-space:nowrap}
+
+pre.tree{margin:0;overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);padding:16px;font:13px/1.6 var(--f-mono);color:var(--fg)}
+pre.tree .c{color:var(--muted)}
+.bk,.bp,.bd{font:600 10.5px var(--f-mono);padding:1px 6px;border-radius:4px;color:var(--on-accent)}
+.bm{background:var(--stage-m)} .bk{background:var(--stage-k)} .bp{background:var(--stage-p)} .bd{background:var(--stage-d)}
+
+.diagram{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);padding:16px;overflow-x:auto}
+.diagram pre.mermaid{margin:0;background:transparent;min-width:560px}
+
+/* ---------- дизайн-система ---------- */
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+.sw{border:1px solid var(--line);border-radius:var(--r-m);overflow:hidden;background:var(--surface)}
+.sw div{height:46px}
+.sw p{padding:8px 10px;font-size:12.5px}
+.sw p b{display:block;font-weight:600;color:var(--fg)}
+.sw p span{font-family:var(--f-mono);color:var(--muted);font-size:11.5px}
+.typeset{display:grid;gap:10px}
+.typeset div{display:flex;gap:16px;align-items:baseline;border-bottom:1px dashed var(--line);padding-bottom:8px;flex-wrap:wrap}
+.typeset .lbl{width:120px;flex:none;font:500 12px var(--f-mono);color:var(--muted)}
+
+/* ---------- компоненты приложения (используются и в макетах) ---------- */
+.pill{display:inline-flex;align-items:center;gap:5px;font:600 11px/1 var(--f-ui);padding:4px 8px;border-radius:999px;white-space:nowrap}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.pill.ok{color:var(--ok);background:var(--ok-soft)} .pill.warn{color:var(--warn);background:var(--warn-soft)}
+.pill.crit{color:var(--crit);background:var(--crit-soft)} .pill.off{color:var(--off);background:var(--off-soft)}
+.pill.acc{color:var(--accent);background:var(--accent-soft)}
+.pill.nodot::before{display:none}
+.role{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;flex:none;background:var(--surface-2);color:var(--fg)}
+.role svg{width:17px;height:17px}
+.ico{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- рамки устройств ---------- */
+.gallery{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start}
+.shot{display:grid;gap:10px;width:300px;max-width:100%}
+.shot figcaption{font-size:13px;color:var(--muted)}
+.shot figcaption b{color:var(--fg);font-weight:600;display:block;font-size:14px}
+figure{margin:0}
+.phone{width:300px;max-width:100%;height:630px;border-radius:36px;border:8px solid var(--bezel);background:var(--bg);overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 18px 40px -24px rgba(0,0,0,.45)}
+.sbar{height:24px;flex:none;display:flex;justify-content:space-between;align-items:center;padding:0 16px;font:600 11px var(--f-mono);color:var(--fg)}
+.abar{flex:none;display:flex;align-items:center;gap:10px;padding:6px 14px 10px}
+.abar h5{font-size:18px;font-weight:600;margin:0;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.abar .back{width:24px;height:24px;display:grid;place-items:center;color:var(--muted)}
+.live{display:inline-flex;align-items:center;gap:5px;font:500 10.5px var(--f-mono);color:var(--muted)}
+.live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
+.scr{flex:1;min-height:0;overflow:hidden;padding:0 12px 12px;display:flex;flex-direction:column;gap:10px}
+.bnav{flex:none;height:58px;border-top:1px solid var(--line);background:var(--surface);display:grid;grid-template-columns:repeat(4,1fr);font-size:10.5px;color:var(--muted)}
+.bnav div{display:grid;place-items:center;align-content:center;gap:3px;position:relative}
+.bnav .on{color:var(--accent);font-weight:600}
+.bnav .on .ico{background:var(--accent-soft);border-radius:999px;width:46px;padding:3px 0;height:26px}
+.bnav .badge{position:absolute;top:6px;left:calc(50% + 6px);background:var(--crit);color:#fff;font:700 9px/1 var(--f-ui);padding:3px 5px;border-radius:999px}
+
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 11px;display:grid;gap:2px;min-width:0}
+.tile .k{font-size:11px;color:var(--muted)}
+.tile .v{font:600 22px/1.15 var(--f-mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.tile .v small{font-size:12px;color:var(--muted);font-weight:500}
+.tile .d{font-size:11px;color:var(--muted)}
+.tile.crit{border-color:color-mix(in srgb, var(--crit) 45%, var(--line))} .tile.crit .v{color:var(--crit)}
+.tile.warn .v{color:var(--warn)} .tile.ok .v{color:var(--ok)}
+.sect{font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;margin-top:2px}
+.list{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.row{display:flex;gap:10px;align-items:center;padding:9px 11px;border-bottom:1px solid var(--line);min-width:0}
+.row:last-child{border-bottom:0}
+.row .t{flex:1;min-width:0}
+.row .t b{display:block;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .t span{display:block;font:11px var(--f-mono);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sev{width:3px;align-self:stretch;border-radius:3px;flex:none}
+.sev.crit{background:var(--crit)} .sev.warn{background:var(--warn)} .sev.off{background:var(--off)} .sev.ok{background:var(--ok)}
+.chips{display:flex;gap:6px;flex-wrap:nowrap;overflow:hidden}
+.chip{flex:none;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);white-space:nowrap}
+.chip.on{background:var(--accent-soft);border-color:transparent;color:var(--accent);font-weight:600}
+.search{display:flex;gap:8px;align-items:center;background:var(--surface-2);border-radius:12px;padding:9px 12px;color:var(--muted);font-size:13px}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:0 -12px;padding:0 12px;flex:none}
+.tabs span{font-size:12.5px;padding:8px 8px;color:var(--muted);white-space:nowrap}
+.tabs .on{color:var(--fg);font-weight:600;box-shadow:inset 0 -2px 0 var(--accent)}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;background:var(--surface-2);border-radius:10px;padding:3px;font-size:12px;flex:none}
+.seg span{text-align:center;padding:6px 4px;border-radius:8px;color:var(--muted)}
+.seg .on{background:var(--surface);color:var(--fg);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.btn{display:flex;justify-content:center;align-items:center;gap:8px;font:600 13.5px var(--f-ui);padding:11px 14px;border-radius:12px;background:var(--accent);color:var(--on-accent);border:0}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.field{display:grid;gap:4px}
+.field label{font-size:11.5px;color:var(--muted)}
+.field div{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13.5px}
+.field .mono{font-size:12.5px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:12px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;font-family:var(--f-mono);text-align:right}
+.spark{width:100%;height:64px;display:block}
+.chartbox{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 11px 6px;display:grid;gap:4px}
+.chartbox .h{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted)}
+.chartbox .h b{color:var(--fg);font-weight:600}
+.json{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font:11.5px/1.65 var(--f-mono);white-space:pre;overflow:hidden}
+.json .k{color:var(--muted)} .json .chg{background:var(--warn-soft);color:var(--warn);border-radius:3px;padding:0 3px}
+.sheet{position:absolute;inset:0;background:var(--scrim);display:flex;align-items:flex-end}
+.sheet .panel{background:var(--surface);width:100%;border-radius:22px 22px 0 0;padding:8px 14px 16px;display:grid;gap:8px}
+.grab{width:36px;height:4px;border-radius:2px;background:var(--line);margin:2px auto 4px}
+.cmd{display:flex;gap:10px;align-items:center;padding:8px 2px;border-bottom:1px solid var(--line);font-size:13px}
+.cmd:last-child{border-bottom:0}
+.cmd .t{flex:1;min-width:0}
+.cmd .t span{display:block;font-size:11px;color:var(--muted)}
+.cmd.dis{opacity:.5}
+.dim{opacity:.35;filter:saturate(.6)}
+.code-big{font:600 34px/1 var(--f-mono);letter-spacing:.06em;text-align:center;padding:14px 0 6px}
+.steps{display:flex;gap:4px}
+.steps i{flex:1;height:4px;border-radius:2px;background:var(--line)}
+.steps i.on{background:var(--accent)}
+.perm{display:flex;gap:10px;align-items:flex-start;padding:10px 11px;border-bottom:1px solid var(--line)}
+.perm:last-child{border-bottom:0}
+.perm .t{flex:1;min-width:0;font-size:13px}
+.perm .t span{display:block;font-size:11px;color:var(--muted);line-height:1.4}
+.ck{width:20px;height:20px;border-radius:50%;flex:none;display:grid;place-items:center;font:700 11px var(--f-ui)}
+.ck.ok{background:var(--ok);color:var(--surface)} .ck.todo{border:2px solid var(--warn)}
+.wf{display:grid;gap:5px;font:11px var(--f-mono)}
+.wf div{display:grid;grid-template-columns:38px 1fr 44px;gap:6px;align-items:center}
+.wf .bar{height:10px;border-radius:3px;position:relative;background:var(--surface-2)}
+.wf .bar i{position:absolute;top:0;bottom:0;border-radius:3px}
+.wf .num{text-align:right;color:var(--muted)}
+.ticks{display:flex;gap:2px}
+.ticks i{flex:1;height:16px;border-radius:2px;background:var(--ok)}
+.ticks i.f{background:var(--crit)} .ticks i.s{background:var(--warn)}
+.why{background:var(--accent-soft);border-radius:12px;padding:10px 12px;font-size:12px;line-height:1.5}
+.why b{display:block;font-size:12.5px;margin-bottom:3px}
+
+/* ---------- desktop ---------- */
+.deskscroll{overflow-x:auto;padding-bottom:6px}
+.desk{width:1180px;height:700px;border:1px solid var(--line);border-radius:14px;background:var(--bg);display:grid;grid-template-columns:212px 1fr;overflow:hidden;box-shadow:0 22px 50px -30px rgba(0,0,0,.5)}
+.dside{background:var(--surface);border-right:1px solid var(--line);padding:14px 10px;display:flex;flex-direction:column;gap:2px;font-size:13.5px}
+.dside .brand{display:flex;gap:8px;align-items:center;font-weight:700;padding:4px 8px 14px;font-size:15px}
+.dside a{display:flex;gap:10px;align-items:center;padding:7px 10px;border-radius:8px;color:var(--fg);text-decoration:none}
+.dside a.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.dside a .n{margin-left:auto;font:600 11px var(--f-mono);color:var(--muted)}
+.dside a.on .n{color:var(--accent)}
+.dside .grp{font:600 10.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:12px 10px 4px}
+.dmain{display:flex;flex-direction:column;min-width:0}
+.dtop{height:54px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:0 18px;background:var(--surface)}
+.dtop h5{font-size:17px;margin:0;font-weight:600}
+.dtop .sp{flex:1}
+.dbody{flex:1;min-height:0;display:grid;overflow:hidden}
+.dpane{padding:14px 16px;overflow:hidden;display:flex;flex-direction:column;gap:12px;min-width:0}
+.dtbl{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:12.5px}
+.dtbl .tr{display:grid;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line)}
+.dtbl .tr:last-child{border-bottom:0}
+.dtbl .th{font:600 10.5px var(--f-mono);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+.dtbl .sel{background:var(--accent-soft)}
+.dtbl .mono{font-size:11.5px}
+.heat{display:grid;grid-template-columns:120px repeat(24,1fr);gap:2px;font:10.5px var(--f-mono);align-items:center}
+.heat span{height:20px;border-radius:3px}
+.heat .rn{font:500 12px var(--f-ui);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;height:auto}
+.heat .hh{height:auto;text-align:center;color:var(--muted)}
+.legend{display:flex;gap:12px;font-size:11.5px;color:var(--muted);align-items:center;flex-wrap:wrap}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:4px}
+.src{font:600 10px var(--f-mono);padding:2px 6px;border-radius:4px;background:var(--surface-2);color:var(--muted)}
+.src.r{background:var(--accent-soft);color:var(--accent)} .src.o{background:var(--warn-soft);color:var(--warn)}
+.prog{height:8px;border-radius:4px;background:var(--surface-2);overflow:hidden}
+.prog i{display:block;height:100%;background:var(--ok)}
+
+/* ---------- план ---------- */
+.gantt{display:grid;gap:8px}
+.gr{display:grid;grid-template-columns:minmax(150px,240px) 1fr;gap:12px;align-items:center}
+.gr .nm{font-size:13.5px;font-weight:500}
+.gr .nm small{display:block;color:var(--muted);font-weight:400;font-size:12px}
+.track{position:relative;height:26px;background:repeating-linear-gradient(90deg,var(--surface-2) 0 1px,transparent 1px calc(100% / var(--w)));border-radius:6px;border:1px solid var(--line);background-color:var(--surface)}
+.track i{position:absolute;top:3px;bottom:3px;border-radius:4px;display:flex;align-items:center;padding:0 8px;font:600 11px var(--f-mono);color:var(--on-accent);white-space:nowrap;overflow:hidden}
+.gscale{display:grid;grid-template-columns:minmax(150px,240px) 1fr;gap:12px;font:11px var(--f-mono);color:var(--muted)}
+.gscale div:last-child{display:flex;justify-content:space-between}
+.milestones{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:12px;margin-top:16px}
+.ms{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);padding:14px;display:grid;gap:6px;align-content:start}
+.ms h4{font-size:14.5px;font-weight:600;display:flex;gap:8px;align-items:baseline}
+.ms h4 .mono{color:var(--muted);font-size:12px;font-weight:500}
+.ms ul{margin:0;padding-left:17px;font-size:13px;color:var(--muted);display:grid;gap:3px}
+.ms .res{font-size:12.5px;border-top:1px dashed var(--line);padding-top:6px}
+.ms .res b{color:var(--fg)}
+
+footer{padding-block:32px 48px;color:var(--muted);font-size:13px}
+@media (max-width:640px){
+  .gr,.gscale{grid-template-columns:1fr}
+  .gscale div:first-child{display:none}
+}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto!important}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-kitchen" viewBox="0 0 24 24"><path d="M12 3c1.2 3 4.5 4.6 4.5 9a4.5 4.5 0 0 1-9 0c0-2.2 1.1-3.6 2.3-4.6.1 2 .9 3.1 2.2 3.4C11.5 8.4 10.9 5.6 12 3z"/></symbol>
+    <symbol id="i-hall" viewBox="0 0 24 24"><path d="M7 3v18M4.5 3v4.5a2.5 2.5 0 0 0 5 0V3M17 21V3c-2.2 1-3.5 3.5-3.5 7 0 2 1.2 3 3.5 3"/></symbol>
+    <symbol id="i-pack" viewBox="0 0 24 24"><path d="M3.5 7.5 12 3.5l8.5 4-8.5 4-8.5-4zM3.5 7.5v9l8.5 4 8.5-4v-9M12 11.5v9"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z"/></symbol>
+    <symbol id="i-tab" viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM10.5 18h3"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0"/></symbol>
+    <symbol id="i-store" viewBox="0 0 24 24"><path d="M4 9.5 5.5 4h13L20 9.5M4 9.5h16M4 9.5a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0 2.7 2.7 0 0 0 5.3 0M5.5 12v8h13v-8M10 20v-4.5h4V20"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><path d="M10.5 17a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13zM15.5 15.5 20 20"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6z"/></symbol>
+    <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 5 12 2.5-6h4"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.2 7.5 9.5 4.3-1.3 7.5-4.9 7.5-9.5V6z"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 10h16M4 14.5h16M9 5v14M14.5 5v14"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M5 4v16M12 4v16M19 4v16M3 15h4M10 8h4M17 13h4"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6"/></symbol>
+  </defs>
+</svg>
+
+<header class="wrap hero">
+  <div class="eyebrow">ТЗ v0.2 → архитектура 1.0 · 05.11.2026</div>
+  <h1>Resto<span>Fleet</span> Blueprint</h1>
+  <p class="lead">Архитектура, дизайн и план IoT-платформы мониторинга устройств ресторанной сети. Четыре этапа: MVP проверяет, что каждое считывание агента и Device Owner реально работают; курсовая строит ядро — протокол MQTT и агент; практика добавляет тревоги, корреляцию инцидентов и Android-консоль; диплом доводит систему до Desktop-консоли, Device Owner, 10&nbsp;000 устройств и VPS.</p>
+  <div class="facts">
+    <span class="fact"><b>Kotlin</b> везде: агент, консоль, Ktor-бэкенд, симулятор</span>
+    <span class="fact"><b>Clean Architecture</b> + TDD, покрытие ≥ 80&nbsp;%</span>
+    <span class="fact"><b>Koin</b> везде, включая Ktor</span>
+    <span class="fact"><b>KMP</b> · Compose MP · Decompose · MVI</span>
+    <span class="fact"><b>MQTT 5</b> · Mosquitto 2.1 + DynSec</span>
+    <span class="fact"><b>build.gradle.kts + toml</b>, без convention-плагинов</span>
+  </div>
+</header>
+
+<nav class="nav" aria-label="Этапы">
+  <div class="wrap">
+    <a href="#overview"><span class="dot" style="background:var(--fg)"></span>Общее</a>
+    <a href="#design"><span class="dot" style="background:var(--muted)"></span>Дизайн-система</a>
+    <a href="#mvp"><span class="dot" style="background:var(--stage-m)"></span>MVP</a>
+    <a href="#k"><span class="dot" style="background:var(--stage-k)"></span>Курсовая</a>
+    <a href="#p"><span class="dot" style="background:var(--stage-p)"></span>Практика</a>
+    <a href="#d"><span class="dot" style="background:var(--stage-d)"></span>Диплом</a>
+    <span class="sp"></span>
+    <div class="theme" role="group" aria-label="Тема">
+      <button type="button" id="th-sys" data-t="">Система</button>
+      <button type="button" id="th-light" data-t="light">Светлая</button>
+      <button type="button" id="th-dark" data-t="dark">Тёмная</button>
+    </div>
+  </div>
+</nav>
+
+<main>
+<!-- ======================= ОБЩЕЕ ======================= -->
+<section class="stage" id="overview">
+  <div class="wrap">
+    <div class="stage-head">
+      <span class="stage-tag" style="color:var(--fg)">Общее</span>
+      <h2>Система целиком</h2>
+      <p>Пять подсистем, один язык. Модуль протокола <code>shared:protocol</code> подключают агент, консоль, бэкенд и симулятор, поэтому формат сообщений описан ровно в одном месте. <b>Симулятор</b> — обычная консольная программа на Kotlin: запускается на компьютере или в docker и изображает тысячи виртуальных агентов, которые говорят по тому же протоколу. Он нужен для нагрузки, эксперимента MQTT против REST и сценариев отказов, потому что тысяч реальных планшетов нет.</p>
+    </div>
+
+    <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  subgraph R["Ресторан"]
+    A1["Агент · кухня"]
+    A2["Агент · зал"]
+    A3["Агент · сборка"]
+  end
+  subgraph S["Стенд RestoFleet · docker compose"]
+    B[("Mosquitto 2.1 · TLS 8883 · DynSec")]
+    K["Backend · Ktor + Koin"]
+    P[("PostgreSQL 17")]
+    T["Toxiproxy"]
+  end
+  C["Консоль · Android П → Desktop Д"]
+  SIM["Симулятор устройств · консольное Kotlin-приложение"]
+  X["Бэкенд компании · кухонная станция · эталон"]
+  A1 -- MQTT 5 --> B
+  A2 -- MQTT 5 --> B
+  A3 -- MQTT 5 --> B
+  SIM -- MQTT 5 / REST --> B
+  A1 -. HTTPS-проверки .-> X
+  A2 -. на стенде .-> T
+  B -- "$share/backend" --> K
+  K -- "$CONTROL/dynamic-security" --> B
+  K --> P
+  C -- REST + WebSocket --> K
+</pre>
+    </div>
+
+    <h3 class="sub">Ключевые решения <small>что изменилось относительно ТЗ v0.2</small></h3>
+    <div class="tbl"><table>
+      <thead><tr><th>#</th><th>Решение</th><th>Почему</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">D1</td><td><b>Kotlin вместо Go</b> для бэкенда (Ktor) и симулятора</td><td>Go для автора новый. Общий модуль протокола исключает расхождение форматов</td></tr>
+        <tr><td class="mono">D2</td><td><b>Clean Architecture везде</b>: domain / data / presentation в консоли, агенте и бэкенде</td><td>Требование. Правило зависимостей держат Gradle-модули и тесты Konsist</td></tr>
+        <tr><td class="mono">D3</td><td><b>Покрытие unit-тестами ≥ 80&nbsp;%</b>, domain ≥ 90&nbsp;%, гейт Kover в CI, TDD</td><td>Требование; в ТЗ было ≥ 60&nbsp;% только для бэкенда</td></tr>
+        <tr><td class="mono">D5</td><td>MVI: <code>MviStore</code> + <code>Reducer</code> + Session→UiState + <code>Effect</code> + один <code>onIntent</code></td><td>Канон новых фич <code>white-label-android</code> на Decompose</td></tr>
+        <tr><td class="mono">D6</td><td><b>Koin на всех частях</b>, включая Ktor-бэкенд</td><td>Требование. Один DI на проект, <code>verify()</code> проверяет граф в тесте</td></tr>
+        <tr><td class="mono">D7</td><td><b>Без convention-плагинов</b>: свой <code>build.gradle.kts</code> у модуля, всё версионное — в <code>libs.versions.toml</code></td><td>Требование. Модулей держим минимум, SDK-уровни меняются в одном месте</td></tr>
+        <tr><td class="mono">D8</td><td><b>Сначала MVP</b>: все считывания агента и Device Owner до курсовой</td><td>Невыполнимое требование выявляется в начале, а не в дипломе</td></tr>
+        <tr><td class="mono">D9</td><td><b>Курсовая — минимальное ядро</b>: протокол, агент, брокер, ядро бэкенда, симулятор, эксперимент</td><td>Консоль, тревоги и инциденты переезжают в практику и диплом</td></tr>
+        <tr><td class="mono">D10</td><td>Dynamic Security уже в курсовой</td><td>Провижининг создаёт и отзывает учётки на лету</td></tr>
+        <tr><td class="mono">D12</td><td>Рестораны: CRUD API и dev-seed стенда в К, <b>добавление и правка в Desktop-консоли</b> в Д. Импорта из CSV нет</td><td>Dev-seed — тестовые данные стенда и симулятора, не функция продукта</td></tr>
+        <tr><td class="mono">D15</td><td>Реальные устройства: планшет Android 8.0 (сброс → Device Owner) и телефон Android 12</td><td>Появятся позже, поэтому MVP разделён на MVP-A (эмуляторы) и MVP-B (устройства)</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3 class="sub">Модули <small>Gradle-монорепо</small></h3>
+<pre class="tree">restofleet/
+├─ settings.gradle.kts · build.gradle.kts · gradle/libs.versions.toml   <span class="c">без convention-плагинов</span>
+├─ shared/                   <span class="c">← подключают агент, консоль, бэкенд, симулятор</span>
+│  ├─ kernel                 <span class="c">DomainError, Result, Clock</span>                   <span class="bm">MVP</span>
+│  ├─ protocol               <span class="c">DTO MQTT/REST, топики, golden-фикстуры</span>        <span class="bm">MVP</span> <span class="bk">К</span>
+│  ├─ shadow                 <span class="c">delta, версии</span> <span class="bk">К</span> <span class="c">· merge профилей</span> <span class="bd">Д</span>
+│  └─ probes                 <span class="c">автомат up↔down, классы ошибок</span>                <span class="bk">К</span>
+├─ agent/
+│  ├─ domain                 <span class="c">сущности, порты, use cases</span>                    <span class="bm">MVP</span> <span class="bk">К</span>
+│  ├─ data                   <span class="c">коллекторы, OkHttp, HiveMQ, Room, DPM</span>         <span class="bm">MVP</span> <span class="bk">К</span>
+│  ├─ presentation           <span class="c">мастер, статус, Capability Lab (MVI)</span>          <span class="bm">MVP</span> <span class="bk">К</span>
+│  └─ app                    <span class="c">FGS, Boot, Watchdog, AdminReceiver, Koin</span>      <span class="bm">MVP</span>
+├─ server/
+│  ├─ domain · data · api · app   <span class="c">Ktor + Koin + Exposed + Flyway, CLI seed</span>  <span class="bk">К</span>
+│  └─ simulator              <span class="c">консольное приложение, тысячи виртуальных агентов</span> <span class="bm">спайк</span> <span class="bk">К</span>
+├─ console/
+│  ├─ core/* · root · app-android                                            <span class="bp">П</span>
+│  ├─ app-desktop                                                            <span class="bd">Д</span>
+│  └─ feature/&lt;f&gt;/{-domain, -data, -ui, -component}
+│     ├─ auth · dashboard · restaurants · devices · device-details
+│     │  shadow · commands · alerts · provisioning · incidents              <span class="bp">П</span>
+│     └─ availability · profiles · rules · reports                         <span class="bd">Д</span>
+├─ deploy/                   <span class="c">compose, mosquitto + dynsec, toxiproxy, CA, seed/restaurants.yaml</span>
+└─ docs/                     <span class="c">ТЗ, architecture.md, plan.md, stages/ (по файлу на этап), fixtures, openapi.yaml</span></pre>
+
+    <h3 class="sub">Экран фичи изнутри <small>канон white-label на Decompose</small></h3>
+    <div class="grid2">
+      <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  UI["DevicesScreen · state, onIntent"] -- Intent --> VM["DevicesViewModel"]
+  VM -- Action --> ST["MviStore"]
+  ST -- reduce --> RD["Reducer · Session"]
+  RD --> MP["UiStateMapper"]
+  MP -- UiState --> UI
+  VM -- Effect --> CT["Container · ObserveEffects"]
+  VM -- invoke --> UC["GetDevicesUseCase · domain"]
+  VM -- навигация --> RT["IDevicesRouter"]
+  RT --> CMP["DevicesComponent"]
+</pre>
+      </div>
+      <div class="card">
+        <h4>Что берём из white-label и что меняем</h4>
+        <ul>
+          <li><code>Intent</code> — единственный публичный API экрана: <code>User.*</code> от пользователя, <code>External.*</code> из других экранов и WebSocket</li>
+          <li><code>Session</code> — источник истины, <code>UiState</code> строится маппером синхронно</li>
+          <li><code>Effect</code> — снэкбары и диалоги, ровно один подписчик в <code>Container</code></li>
+          <li><b>Отличие:</b> навигация идёт через <code>IRouter</code>, а не через Effect, потому что нет фрагментов-«клея». Роутер мокается в тестах</li>
+          <li><code>BaseMviViewModel</code> живёт в <code>InstanceKeeper</code> Decompose, а не в androidx-хранилище</li>
+          <li>Только coroutines/Flow, Koin только через конструктор, <code>KoinComponent</code> запрещён</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3 class="sub">Clean Architecture и тесты <small>одно правило на три части</small></h3>
+    <div class="grid2">
+      <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  subgraph CON["Консоль, на фичу"]
+    CU["-ui · MVI"] --> CD["-domain"]
+    CDA["-data · Ktor client"] --> CD
+  end
+  subgraph AG["Агент"]
+    AP["presentation"] --> AD["domain"]
+    ADA["data · Android API"] --> AD
+  end
+  subgraph SRV["Бэкенд"]
+    SA["api · Ktor routes"] --> SD["domain"]
+    SDA["data · Exposed, HiveMQ"] --> SD
+  end
+  CD --> K["shared: kernel, shadow, probes"]
+  AD --> K
+  SD --> K
+</pre>
+      </div>
+      <div class="tbl"><table>
+        <thead><tr><th>Что</th><th>Чем тестируем</th><th>Цель</th></tr></thead>
+        <tbody>
+          <tr><td>domain, <code>shared:*</code></td><td>unit, фейки портов, табличные тесты правил</td><td class="mono">≥ 90%</td></tr>
+          <tr><td>Reducer, Mapper, ViewModel</td><td>unit, Turbine, фейковые use cases и роутер</td><td class="mono">≥ 85%</td></tr>
+          <tr><td>data: мапперы, репозитории</td><td>unit с фейковыми источниками</td><td class="mono">≥ 80%</td></tr>
+          <tr><td>Android-адаптеры</td><td>логика в чистых функциях, Robolectric, Capability Lab</td><td class="mono">≥ 70%</td></tr>
+          <tr><td>Exposed, Flyway, MQTT</td><td>Testcontainers: PostgreSQL, Mosquitto</td><td class="mono">сценарии</td></tr>
+          <tr><td>Ktor routes</td><td><code>testApplication</code></td><td class="mono">все</td></tr>
+          <tr><td>Протокол, DI, слои</td><td>golden-фикстуры, <code>koin verify()</code>, Konsist</td><td class="mono">100%</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <h3 class="sub">Правки протокола <small>к разделу 7 ТЗ</small></h3>
+    <div class="tbl"><table>
+      <thead><tr><th>#</th><th>Дыра в v0.2</th><th>Правка</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">P1</td><td>Статус <code>delivered</code> не определить: PUBACK приходит от брокера</td><td>Агент сразу отвечает <code>received</code>, потом итоговым статусом</td></tr>
+        <tr><td class="mono">P2</td><td>Брокер молча выбрасывает просроченную команду</td><td>Поле <code>expiresAt</code> и таймер на бэкенде; поздний ответ устройства побеждает <code>expired</code></td></tr>
+        <tr><td class="mono">P3</td><td>LWT старой сессии может прийти после нового <code>online</code></td><td><code>connId</code> в <code>online</code> и в LWT</td></tr>
+        <tr><td class="mono">P4</td><td>Shared subscription не получает retained</td><td>Источник истины статуса — БД</td></tr>
+        <tr><td class="mono">P5</td><td>ACL <code>%u/#</code> позволяет устройству писать себе <code>desired</code></td><td>ACL по направлениям в роли DynSec <code>device</code></td></tr>
+        <tr><td class="mono">P6</td><td>Client ID не привязан к учётке</td><td><code>clientid = deviceId</code> в DynSec</td></tr>
+        <tr><td class="mono">P7</td><td>R-01 «&gt; 2 мин» противоречит S2 «≤ 95 с» и требованию «≤ keepalive × 1,5 + 5 с»</td><td>Keepalive 30 с, тревога сразу по LWT: ≈50 с. Ожидание перед тревогой настраивается</td></tr>
+        <tr><td class="mono">P8–10</td><td>Нет persistence брокера, аутентификации REST-polling, ack после записи</td><td><code>persistence true</code>; Basic учёткой устройства; ack после commit пакета в БД</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- ======================= ДИЗАЙН-СИСТЕМА ======================= -->
+<section class="stage" id="design">
+  <div class="wrap">
+    <div class="stage-head">
+      <span class="stage-tag" style="color:var(--muted)">Дизайн-система · core:designsystem</span>
+      <h2>Операционный центр</h2>
+      <p>Плотный интерфейс для инженера, который за пять секунд должен понять, что сломалось и где. Цвет состояния отделён от акцентного цвета, все цифры моноширинные и выровнены. Обе темы равноправны, переключатель вверху страницы меняет и макеты.</p>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h4>Цвет</h4>
+        <div class="swatches">
+          <div class="sw"><div style="background:var(--accent)"></div><p><b>Accent</b><span>действия, выбор</span></p></div>
+          <div class="sw"><div style="background:var(--ok)"></div><p><b>OK</b><span>online, цель доступна</span></p></div>
+          <div class="sw"><div style="background:var(--warn)"></div><p><b>Warning</b><span>порог близко, delta</span></p></div>
+          <div class="sw"><div style="background:var(--crit)"></div><p><b>Critical</b><span>тревога, down</span></p></div>
+          <div class="sw"><div style="background:var(--off)"></div><p><b>Offline</b><span>нет данных</span></p></div>
+          <div class="sw"><div style="background:var(--surface-2)"></div><p><b>Surface</b><span>фон, карточки</span></p></div>
+        </div>
+      </div>
+      <div class="card">
+        <h4>Типографика</h4>
+        <div class="typeset">
+          <div><span class="lbl">Golos Text 600</span><span style="font-size:22px;font-weight:600">Кухня 2 · Химки</span></div>
+          <div><span class="lbl">Golos Text 400</span><span style="font-size:14px">Бэкенд недоступен из 2 ресторанов</span></div>
+          <div><span class="lbl">JetBrains Mono</span><span style="font:600 22px var(--f-mono)">46.8 °C · −71 dBm</span></div>
+          <div><span class="lbl">Mono caps</span><span style="font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Рестораны с проблемами</span></div>
+        </div>
+        <p style="margin-top:10px">Оба шрифта с кириллицей, лежат в Compose-ресурсах <code>core:designsystem</code>.</p>
+      </div>
+      <div class="card">
+        <h4>Компоненты <code>core:ui</code></h4>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+          <span class="pill ok">online</span><span class="pill off">offline 7 мин</span><span class="pill warn">delta</span><span class="pill crit">R-03 перегрев</span><span class="pill acc nodot">v12</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <span class="role" title="Кухня"><svg class="ico"><use href="#i-kitchen"/></svg></span>
+          <span class="role" title="Зал"><svg class="ico"><use href="#i-hall"/></svg></span>
+          <span class="role" title="Сборка"><svg class="ico"><use href="#i-pack"/></svg></span>
+          <span style="font-size:13px;color:var(--muted);align-self:center">RoleIcon: кухня · зал · сборка</span>
+        </div>
+        <div class="tiles" style="max-width:320px">
+          <div class="tile crit"><span class="k">t батареи</span><span class="v">46.8<small> °C</small></span><span class="d">порог 45</span></div>
+          <div class="tile"><span class="k">Wi-Fi</span><span class="v">−71<small> dBm</small></span><span class="d">validated</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <h4>Принципы</h4>
+        <ul>
+          <li>Состояние кодируется формой и цветом: пилюля, полоса важности слева у тревоги, рамка плитки. Цифры дублируют, но не заменяют</li>
+          <li>Главное сверху: счётчики, потом проблемы, потом всё остальное</li>
+          <li>Время везде относительное («7 мин»), точное — по долгому нажатию или в подсказке на Desktop</li>
+          <li>Роль устройства всегда видна иконкой, ресторан — в названии: «Кухня 2 · Химки»</li>
+          <li>Опасные действия (Д) требуют подтверждения с вводом имени устройства</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= MVP ======================= -->
+<section class="stage" id="mvp">
+  <div class="wrap">
+    <div class="stage-head">
+      <span class="stage-tag" style="color:var(--stage-m)"><i style="background:var(--stage-m)">M</i>MVP-A · ≈1,5 активных недели · MVP-B позже</span>
+      <h2>Сначала проверить, что агент вообще может это прочитать</h2>
+      <p>До курсовой проверяем каждое считывание агента, каждое действие Device Owner и цепочку MQTT в два захода. <b>MVP-A</b> идёт сейчас на эмуляторах API 26, 29, 31, 33, 35, 36 и актуальном и блокирует курсовую. <b>MVP-B</b> — на реальных устройствах, когда они появятся: планшет Android 8.0 (после сброса — Device Owner) и телефон Android 12. MVP-B должен закончиться до Device Owner в дипломе. Итог — матрица <code>docs/stages/0-mvp-feasibility.md</code> и ТЗ v0.3. Код MVP не выбрасываем: каркас, протокол и data-слой агента сразу пишутся по Clean Architecture с тестами. Одноразовые только спайки сервера.</p>
+    </div>
+
+    <div class="grid2">
+      <div class="tbl"><table>
+        <thead><tr><th>Где может не получиться</th><th>Почему</th><th>Где проверяем</th></tr></thead>
+        <tbody>
+          <tr><td>Тепловой запас, температуры CPU</td><td>Эмулятор отдаёт заглушки; на Android 8.0 thermal status нет вовсе; <code>HardwarePropertiesManager</code> только в DO</td><td class="mono">тел. 12 · планш. DO</td></tr>
+          <tr><td>Приложение на экране</td><td>Нужен ручной Usage Access, события приходят с задержкой</td><td class="mono">все API</td></tr>
+          <tr><td>SSID Wi-Fi</td><td>Нужны геолокация и включённый GPS</td><td class="mono">29 · 36 · реал.</td></tr>
+          <tr><td>Проверка роутера ресторана</td><td>Новое разрешение на доступ к локальной сети</td><td class="mono">актуальный</td></tr>
+          <tr><td>Автозапуск после перезагрузки</td><td>Android 15 ограничивает запуск FGS из BOOT_COMPLETED</td><td class="mono">35 · 36 · акт.</td></tr>
+          <tr><td>Открыть приложение из фона</td><td>С Android 10 только через уведомление, <code>SYSTEM_ALERT_WINDOW</code> или DO</td><td class="mono">все API</td></tr>
+          <tr><td>Киоск с Chrome</td><td>Поведение Chrome в lock task, адресная строка</td><td class="mono">DO</td></tr>
+          <tr><td>Тихая установка APK</td><td><code>PackageInstaller</code> в режиме DO, проверка SHA-256</td><td class="mono">DO</td></tr>
+          <tr><td>10&nbsp;000 MQTT-клиентов в одной JVM</td><td>Память Netty-клиентов HiveMQ</td><td class="mono">спайк</td></tr>
+          <tr><td>DynSec на 10&nbsp;000 учёток</td><td>Время создания и старта брокера</td><td class="mono">спайк</td></tr>
+        </tbody>
+      </table></div>
+      <div class="card">
+        <h4>Что делаем с результатом</h4>
+        <ul>
+          <li><span class="pill ok nodot">✅</span> требование остаётся как есть</li>
+          <li><span class="pill warn nodot">⚠️</span> остаётся с ограничением: оно попадает в матрицу возможностей ТЗ 10.2 и в доменную модель <code>Capabilities</code> агента</li>
+          <li><span class="pill crit nodot">❌</span> требование исключается или уходит в «Планы на развитие»</li>
+          <li>Если спайк 10&nbsp;000 клиентов провален, симулятор переписывается на Go до курсовой</li>
+          <li>Если DO не работает на планшете, в дипломе DO показывается на эмуляторе с явной оговоркой в ТЗ</li>
+          <li>Если на кухнях стоят такие же планшеты на 8.0, правило перегрева опирается только на температуру батареи. Версии устройств уточняем в практике</li>
+        </ul>
+        <h4 style="margin-top:14px">Проверяем без бэкенда</h4>
+        <p>Агент публикует в локальный Mosquitto (TLS + DynSec). Сообщения смотрим в MQTT Explorer, команды с MQTT 5-свойствами отправляем через <code>mosquitto_pub -D</code>. Так проверяются LWT, retained <code>desired</code>, сроки команд и досылка буфера.</p>
+      </div>
+    </div>
+
+    <h3 class="sub">Агент · Capability Lab <small>отладочный экран MVP, остаётся в агенте</small></h3>
+    <div class="gallery">
+      <figure class="shot">
+        <div class="phone">
+          <div class="sbar"><span>10:14</span><span>Wi-Fi ▮▮▮</span></div>
+          <div class="abar"><h5>Capability Lab</h5><span class="pill acc nodot">API 36</span></div>
+          <div class="scr">
+            <div class="seg"><span>Все · 44</span><span class="on">Проблемы · 6</span><span>DO · 7</span></div>
+            <div class="list">
+              <div class="row"><span class="pill ok nodot">✓</span><div class="t"><b>R1 Батарея</b><span>87% · AC · 38.4 °C</span></div></div>
+              <div class="row"><span class="pill warn nodot">!</span><div class="t"><b>R3 Тепловой запас</b><span>status NONE · headroom NaN (эмулятор)</span></div></div>
+              <div class="row"><span class="pill ok nodot">✓</span><div class="t"><b>R4 Wi-Fi</b><span>−67 dBm · validated</span></div></div>
+              <div class="row"><span class="pill warn nodot">!</span><div class="t"><b>R5 SSID</b><span>&lt;unknown ssid&gt; · нужна геолокация</span></div></div>
+              <div class="row"><span class="pill ok nodot">✓</span><div class="t"><b>R8 Приложение на экране</b><span>com.android.chrome · задержка 1.2 с</span></div></div>
+              <div class="row"><span class="pill off nodot">—</span><div class="t"><b>R10 Температуры CPU</b><span>только в режиме Device Owner</span></div></div>
+              <div class="row"><span class="pill crit nodot">✕</span><div class="t"><b>P3 Шлюз 192.168.1.1</b><span>EPERM · нет доступа к локальной сети</span></div></div>
+              <div class="row"><span class="pill ok nodot">✓</span><div class="t"><b>L1 Ночной прогон</b><span>11 ч 52 мин · пропусков 0</span></div></div>
+            </div>
+            <div style="flex:1"></div>
+            <div class="btns"><span class="btn ghost">Экспорт</span><span class="btn">В MQTT</span></div>
+          </div>
+        </div>
+        <figcaption><b>Capability Lab</b>Каждое считывание показывает статус и сырые значения. Экспорт сразу заполняет строку матрицы для этой версии Android.</figcaption>
+      </figure>
+
+      <figure class="shot">
+        <div class="phone">
+          <div class="sbar"><span>10:21</span><span>Wi-Fi ▮▮▮</span></div>
+          <div class="abar"><span class="back"><svg class="ico"><use href="#i-back"/></svg></span><h5>Device Owner</h5><span class="pill ok">активен</span></div>
+          <div class="scr">
+            <dl class="kv"><dt>Владелец</dt><dd>ru.restofleet.agent</dd><dt>Серийный номер</dt><dd>R52N70K4QZ</dd><dt>Аккаунты</dt><dd>0</dd></dl>
+            <div class="list">
+              <div class="row"><span class="pill ok nodot">✓</span><div class="t"><b>D2 Перезагрузка</b><span>проверено 10:12 · online через 41 с</span></div></div>
+              <div class="row"><span class="pill ok nodot">✓</span><div class="t"><b>D3 Тихая установка</b><span>waiter-4.13.apk · SHA-256 совпал</span></div></div>
+              <div class="row"><span class="pill warn nodot">!</span><div class="t"><b>D4 Киоск с Chrome</b><span>видна адресная строка Chrome</span></div></div>
+              <div class="row"><span class="pill ok nodot">✓</span><div class="t"><b>D5 Запуск из фона</b><span>Chrome открыт без участия</span></div></div>
+              <div class="row"><span class="pill ok nodot">✓</span><div class="t"><b>D6 Самовыдача разрешений</b><span>Usage Access, геолокация</span></div></div>
+              <div class="row"><span class="pill ok nodot">✓</span><div class="t"><b>R10 Температуры CPU</b><span>cpu 41.0 · skin 33.5 °C</span></div></div>
+            </div>
+            <div class="field"><label>APK для теста установки</label><div class="mono">https://10.0.2.2/apk/waiter-4.13.apk</div></div>
+            <div style="flex:1"></div>
+            <span class="btn">Запустить все проверки DO</span>
+          </div>
+        </div>
+        <figcaption><b>Проверки Device Owner</b>На эмуляторе без аккаунтов после <code>dpm set-device-owner</code>; на реальном устройстве после сброса.</figcaption>
+      </figure>
+    </div>
+
+    <h3 class="sub">План MVP <small>активные дни</small></h3>
+    <div class="gantt" style="--w:8">
+      <div class="gscale"><div></div><div><span>0</span><span>2</span><span>4</span><span>6</span><span>8</span></div></div>
+      <div class="gr"><div class="nm">M0 · Каркас<small>монорепо, toml, CI, Kover, Mosquitto</small></div><div class="track"><i style="left:0;width:18.75%;background:var(--stage-m)">1,5</i></div></div>
+      <div class="gr"><div class="nm">M1 · Все считывания<small>коллекторы, проверки, FGS, Lab</small></div><div class="track"><i style="left:18.75%;width:31.25%;background:var(--stage-m)">2,5</i></div></div>
+      <div class="gr"><div class="nm">M2 · Device Owner и команды<small>reboot, установка, киоск</small></div><div class="track"><i style="left:50%;width:18.75%;background:var(--stage-m)">1,5</i></div></div>
+      <div class="gr"><div class="nm">M3 · MQTT и спайки<small>LWT, retained, expiry, 10k, DynSec</small></div><div class="track"><i style="left:68.75%;width:18.75%;background:var(--stage-m)">1,5</i></div></div>
+      <div class="gr"><div class="nm">M4 · Прогон и ТЗ v0.3<small>матрица, ночной прогон, решения</small></div><div class="track"><i style="left:87.5%;width:12.5%;background:var(--stage-m)">1</i></div></div>
+    </div>
+    <div class="milestones">
+      <div class="ms"><h4>Стенд</h4><ul><li>MVP-A: эмуляторы API 26 / 29 / 31 / 33 / 35 / 36 / актуальный, эмуляторы 26 и 36 в режиме DO</li><li>MVP-B: планшет Android 8.0 со сбросом и DO, телефон Android 12 в обычном режиме</li><li>Локальный compose: Mosquitto, MQTT Explorer</li></ul></div>
+      <div class="ms"><h4>Что остаётся в проекте</h4><ul><li>Gradle-каркас, CI, Kover</li><li><code>shared:kernel</code>, черновик <code>shared:protocol</code></li><li><code>agent:domain/data/presentation/app</code> с тестами</li><li>Capability Lab как отладочный экран</li></ul></div>
+      <div class="ms"><h4>Готово, когда</h4><ul><li>MVP-A: в столбцах эмуляторов нет ⏳, по каждому ⚠️ и ❌ принято решение</li><li>MVP-B: столбцы планшета и телефона заполнены до Д1</li><li>ТЗ v0.3 согласовано: стек, этапы, протокол, матрица 10.2</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= КУРСОВАЯ ======================= -->
+<section class="stage" id="k">
+  <div class="wrap">
+    <div class="stage-head">
+      <span class="stage-tag" style="color:var(--stage-k)"><i style="background:var(--stage-k)">К</i>Курсовая · ≈3 активных недели</span>
+      <h2>Ядро: протокол MQTT и агент</h2>
+      <p>Минимум, на котором держится всё остальное: протокол, агент в обычном режиме, брокер с Dynamic Security, ядро бэкенда на Ktor + Koin, симулятор и эксперимент «MQTT против REST-polling». Интерфейса консоли пока нет: показываем через Swagger UI, MQTT Explorer и экраны агента.</p>
+    </div>
+
+    <h3 class="sub">Жизненный цикл команды <small>с правками P1–P2</small></h3>
+    <div class="diagram">
+<pre class="mermaid">
+sequenceDiagram
+  participant C as Консоль
+  participant B as Backend
+  participant M as Mosquitto
+  participant A as Агент
+  C->>B: POST /devices/{id}/commands
+  B->>B: commands: queued, expiresAt = now + 300 с
+  B->>M: cmd/req (Response Topic, Correlation Data, Expiry 300)
+  M->>A: доставка (сразу или при переподключении)
+  A->>M: cmd/res status=received
+  M->>B: $share/backend
+  B-->>C: WS: delivered
+  A->>A: выполнение
+  A->>M: cmd/res status=succeeded
+  M->>B: $share/backend
+  B-->>C: WS: succeeded
+  Note over B: нет ответа к expiresAt, тогда expired
+</pre>
+    </div>
+
+    <div class="grid2" style="margin-top:16px">
+      <div class="card">
+        <h4>Что входит</h4>
+        <ul>
+          <li><b>Протокол:</b> DTO по ТЗ 7.2 и правкам P1–P10, golden-фикстуры, <code>shared:shadow</code>, <code>shared:probes</code></li>
+          <li><b>Агент:</b> телеметрия, события, проверки с фазами DNS/TCP/TLS/TTFB, тень, базовые команды, outbox, переподключение, мастер и статус</li>
+          <li><b>Брокер:</b> TLS, DynSec-роль <code>device</code> с ACL по направлениям, persistence, сессии</li>
+          <li><b>Бэкенд:</b> рестораны, провижининг, приём данных, online/offline, тени, команды, REST + Swagger, REST-polling</li>
+          <li><b>Симулятор и эксперимент:</b> 100 / 1&nbsp;000 / 5&nbsp;000 устройств</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>Наполнение базы ресторанами</h4>
+        <ul>
+          <li><b>Продукт:</b> <code>POST/PATCH/GET /restaurants</code> на use cases <code>CreateRestaurant</code> и <code>UpdateRestaurant</code>. В курсовой их вызывают из Swagger UI, в дипломе — из Desktop-консоли</li>
+          <li><b>Стенд:</b> <code>deploy/seed/restaurants.yaml</code> с ~40 демо-ресторанами. Одноразовый сервис <code>seed</code> в compose вызывает те же use cases. Это тестовые данные, не функция продукта</li>
+          <li>Импорта из CSV нет</li>
+          <li>Миграции содержат только схему; на VPS сервис <code>seed</code> не запускается</li>
+          <li>Симулятор раскладывает виртуальные устройства по существующим ресторанам</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3 class="sub">Агент · Android <small>agent:presentation</small></h3>
+    <div class="gallery">
+      <figure class="shot">
+        <div class="phone">
+          <div class="sbar"><span>09:02</span><span>Wi-Fi ▮▮▮</span></div>
+          <div class="abar"><h5>Настройка · 3 из 4</h5></div>
+          <div class="scr">
+            <div class="steps"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div>
+            <p style="font-size:13px;color:var(--muted)">Агенту нужны эти разрешения, чтобы работать в фоне и видеть, какое приложение открыто.</p>
+            <div class="list">
+              <div class="perm"><span class="ck ok">✓</span><div class="t">Уведомления<span>постоянное уведомление агента</span></div></div>
+              <div class="perm"><span class="ck todo"></span><div class="t">Доступ к истории использования<span>чтобы видеть, что кухонная станция открыта</span></div><span class="pill warn nodot">Открыть</span></div>
+              <div class="perm"><span class="ck ok">✓</span><div class="t">Без ограничений батареи<span>иначе система остановит агент ночью</span></div></div>
+              <div class="perm"><span class="ck todo"></span><div class="t">Автозапуск · Xiaomi<span>Настройки → Приложения → Автозапуск</span></div><span class="pill acc nodot">Как</span></div>
+            </div>
+            <div style="flex:1"></div>
+            <div class="btns"><span class="btn ghost">Назад</span><span class="btn">Далее</span></div>
+          </div>
+        </div>
+        <figcaption><b>Мастер настройки</b>FR-AG-04. Шаги: код, роль, разрешения, проверка связи.</figcaption>
+      </figure>
+
+      <figure class="shot">
+        <div class="phone">
+          <div class="sbar"><span>12:41</span><span>Wi-Fi ▮▮▮</span></div>
+          <div class="abar"><h5>RestoFleet Agent</h5><span class="pill ok">на связи</span></div>
+          <div class="scr">
+            <div class="card" style="padding:12px;border-radius:12px;display:grid;gap:4px">
+              <b style="font-size:15px">Кухня 2 · Химки</b>
+              <span style="font:11.5px var(--f-mono);color:var(--muted)">d-khm-k2 · rf.stand.local:8883</span>
+            </div>
+            <dl class="kv"><dt>Режим</dt><dd>обычный</dd><dt>Телеметрия</dt><dd>каждые 30 с · 8 с назад</dd><dt>Тень</dt><dd>v12 применена</dd><dt>Буфер</dt><dd>0 записей</dd></dl>
+            <div class="sect"><span>Проверки доступности</span></div>
+            <div class="list">
+              <div class="row"><span class="pill ok nodot">up</span><div class="t"><b>api</b><span>200 · 212 мс</span></div></div>
+              <div class="row"><span class="pill ok nodot">up</span><div class="t"><b>kds · кухонная станция</b><span>200 · 180 мс</span></div></div>
+              <div class="row"><span class="pill ok nodot">up</span><div class="t"><b>ref · эталон</b><span>200 · 95 мс</span></div></div>
+            </div>
+            <div class="sect"><span>Разрешения</span><span style="color:var(--ok)">4/4</span></div>
+            <div style="flex:1"></div>
+            <span class="btn ghost">Проверить сейчас</span>
+          </div>
+        </div>
+        <figcaption><b>Статус агента</b>FR-AG-05. Персонал ресторана сам видит, что агент работает и бэкенд доступен.</figcaption>
+      </figure>
+    </div>
+
+    <h3 class="sub">План курсовой <small>активные дни</small></h3>
+    <div class="gantt" style="--w:15">
+      <div class="gscale"><div></div><div><span>0</span><span>3</span><span>6</span><span>9</span><span>12</span><span>15</span></div></div>
+      <div class="gr"><div class="nm">К1 · Протокол<small>DTO, фикстуры, shadow, probes</small></div><div class="track"><i style="left:0;width:13.33%;background:var(--stage-k)">2</i></div></div>
+      <div class="gr"><div class="nm">К2 · Агент, обычный режим<small>use cases, MQTT, outbox, мастер</small></div><div class="track"><i style="left:13.33%;width:33.33%;background:var(--stage-k)">5</i></div></div>
+      <div class="gr"><div class="nm">К3 · Брокер и ядро бэкенда<small>DynSec, Ktor + Koin, seed, Swagger</small></div><div class="track"><i style="left:46.67%;width:33.33%;background:var(--stage-k)">5</i></div></div>
+      <div class="gr"><div class="nm">К4 · Симулятор и эксперимент<small>MQTT vs REST, записка</small></div><div class="track"><i style="left:80%;width:20%;background:var(--stage-k)">3</i></div></div>
+    </div>
+    <div class="milestones">
+      <div class="ms"><h4>Приёмка <span class="mono">без консоли</span></h4><ul><li>S1: провижининг через Swagger, код в агенте, устройство <code>online</code></li><li>S2′: сеть выключена, через ≈50 с статус <code>offline</code>, буфер дослан</li><li>S4: <code>desired</code> применена, <code>delta</code> пуста</li><li>S5: команда офлайн-устройству доставлена или <code>expired</code></li><li>S7′: <code>api</code> отключён, событие <code>probe_state: down</code></li></ul></div>
+      <div class="ms"><h4>Качество</h4><ul><li>TDD: тест use case пишется до реализации</li><li>Kover в CI: проект ≥ 80&nbsp;%, domain ≥ 90&nbsp;%</li><li>Testcontainers: provision → telemetry → БД; команда → <code>expired</code></li></ul></div>
+      <div class="ms"><h4>Защита</h4><ul><li>Эксперимент на N ≥ 1&nbsp;000</li><li>Демо: агент на эмуляторе, MQTT Explorer, Swagger UI</li><li>Если нужен интерфейс: два экрана консоли (список и карточка), ≈2 дня</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= ПРАКТИКА ======================= -->
+<section class="stage" id="p">
+  <div class="wrap">
+    <div class="stage-head">
+      <span class="stage-tag" style="color:var(--stage-p)"><i style="background:var(--stage-p)">П</i>Практика · ≈2 активных недели</span>
+      <h2>Тревоги, инциденты и Android-консоль</h2>
+      <p>Главная причина обращений в поддержку — «бэкенд не отвечает». Практика добавляет правила и тревоги, корреляцию по ресторанам и Android-консоль для инженера. При глобальном отказе инженер видит один инцидент вместо сотни одинаковых тревог. Параллельно идёт анализ в компании: процессы, версии Android на устройствах ресторанов, цели проверок.</p>
+    </div>
+
+    <h3 class="sub">Консоль · Android <small>смартфон, одна панель · Clean Architecture на фичу</small></h3>
+    <div class="gallery">
+
+      <!-- 1 Вход -->
+      <figure class="shot">
+        <div class="phone">
+          <div class="sbar"><span>12:41</span><span>5G ▮▮▮</span></div>
+          <div class="scr" style="justify-content:center;gap:14px;padding:0 20px 20px">
+            <div style="display:grid;gap:6px;justify-items:start">
+              <span class="role" style="background:var(--accent);color:var(--on-accent);width:40px;height:40px;border-radius:11px"><svg class="ico" style="width:22px;height:22px"><use href="#i-pulse"/></svg></span>
+              <b style="font-size:24px">RestoFleet</b>
+              <span style="color:var(--muted);font-size:13px">Консоль службы поддержки</span>
+            </div>
+            <div class="field"><label>Сервер</label><div class="mono">https://rf.stand.local</div></div>
+            <div class="field"><label>Логин</label><div>support.ivanova</div></div>
+            <div class="field"><label>Пароль</label><div>••••••••••••</div></div>
+            <span class="btn">Войти</span>
+            <span style="font-size:11px;color:var(--muted);text-align:center">TLS · сертификат стенда закреплён</span>
+          </div>
+        </div>
+        <figcaption><b>Вход</b>FR-CN-01. JWT access и refresh, токены в Keystore.</figcaption>
+      </figure>
+
+      <!-- 2 Обзор -->
+      <figure class="shot">
+        <div class="phone">
+          <div class="sbar"><span>12:41</span><span>5G ▮▮▮</span></div>
+          <div class="abar"><h5>Обзор</h5><span class="live">live</span></div>
+          <div class="scr">
+            <div class="tiles">
+              <div class="tile ok"><span class="k">Онлайн</span><span class="v">214<small>/228</small></span><span class="d">94%</span></div>
+              <div class="tile"><span class="k">Офлайн</span><span class="v">14</span><span class="d">+3 за час</span></div>
+              <div class="tile crit"><span class="k">Тревоги</span><span class="v">9</span><span class="d">3 критичные</span></div>
+              <div class="tile warn"><span class="k">Ресторанов с проблемами</span><span class="v">3<small>/38</small></span></div>
+            </div>
+            <div class="sect"><span>Рестораны с проблемами</span><span>все ›</span></div>
+            <div class="list">
+              <div class="row"><span class="sev crit"></span><div class="t"><b>Сокол</b><span>api недоступен · 4 из 6 устройств</span></div><span class="pill crit">R-05</span></div>
+              <div class="row"><span class="sev crit"></span><div class="t"><b>Химки</b><span>Кухня 2 · перегрев 46.8 °C</span></div><span class="pill crit">R-03</span></div>
+              <div class="row"><span class="sev off"></span><div class="t"><b>Арбат</b><span>Зал 3 офлайн 7 мин</span></div><span class="pill off">R-01</span></div>
+            </div>
+            <div class="sect"><span>Последние события</span></div>
+            <div class="list">
+              <div class="row"><div class="t"><b style="font-weight:500">Сборка 1 · Тверская</b><span>заряд 18% без зарядки · 2 мин</span></div><span class="pill warn">R-02</span></div>
+            </div>
+          </div>
+          <div class="bnav">
+            <div class="on"><svg class="ico"><use href="#i-grid"/></svg>Обзор</div>
+            <div><svg class="ico"><use href="#i-tab"/></svg>Устройства</div>
+            <div><span class="badge">9</span><svg class="ico"><use href="#i-bell"/></svg>Тревоги</div>
+            <div><svg class="ico"><use href="#i-store"/></svg>Рестораны</div>
+          </div>
+        </div>
+        <figcaption><b>Обзор</b>FR-CN-02. Счётчики и рестораны с проблемами обновляются через WebSocket.</figcaption>
+      </figure>
+
+      <!-- 3 Устройства -->
+      <figure class="shot">
+        <div class="phone">
+          <div class="sbar"><span>12:41</span><span>5G ▮▮▮</span></div>
+          <div class="abar"><h5>Устройства</h5><span class="live">228</span></div>
+          <div class="scr">
+            <div class="search"><svg class="ico"><use href="#i-search"/></svg>Имя, ресторан, модель</div>
+            <div class="chips"><span class="chip on">Проблемы · 17</span><span class="chip">Ресторан ▾</span><span class="chip">Роль ▾</span><span class="chip">Версия ▾</span></div>
+            <div class="list">
+              <div class="row"><span class="role"><svg class="ico"><use href="#i-kitchen"/></svg></span><div class="t"><b>Кухня 2 · Химки</b><span>34% ⚡ · 46.8 °C · SEVERE</span></div><span class="pill crit">перегрев</span></div>
+              <div class="row"><span class="role"><svg class="ico"><use href="#i-hall"/></svg></span><div class="t"><b>Зал 3 · Арбат</b><span>офлайн с 12:34 · lwt</span></div><span class="pill off">7 мин</span></div>
+              <div class="row"><span class="role"><svg class="ico"><use href="#i-kitchen"/></svg></span><div class="t"><b>Кухня 1 · Сокол</b><span>api: timeout ×3 · ref ок</span></div><span class="pill crit">api down</span></div>
+              <div class="row"><span class="role"><svg class="ico"><use href="#i-pack"/></svg></span><div class="t"><b>Сборка 1 · Тверская</b><span>18% · 31.2 °C · официант 4.12</span></div><span class="pill warn">заряд</span></div>
+              <div class="row"><span class="role"><svg class="ico"><use href="#i-kitchen"/></svg></span><div class="t"><b>Кухня 3 · Сокол</b><span>Chrome не на экране 14 мин</span></div><span class="pill warn">R-04</span></div>
+              <div class="row"><span class="role"><svg class="ico"><use href="#i-hall"/></svg></span><div class="t"><b>Зал 1 · Сокол</b><span>api: timeout ×3 · ref ок</span></div><span class="pill crit">api down</span></div>
+              <div class="row"><span class="role"><svg class="ico"><use href="#i-pack"/></svg></span><div class="t"><b>Сборка 2 · Химки</b><span>свободно 410 МБ</span></div><span class="pill warn">R-06</span></div>
+            </div>
+          </div>
+          <div class="bnav">
+            <div><svg class="ico"><use href="#i-grid"/></svg>Обзор</div>
+            <div class="on"><svg class="ico"><use href="#i-tab"/></svg>Устройства</div>
+            <div><span class="badge">9</span><svg class="ico"><use href="#i-bell"/></svg>Тревоги</div>
+            <div><svg class="ico"><use href="#i-store"/></svg>Рестораны</div>
+          </div>
+        </div>
+        <figcaption><b>Устройства</b>FR-CN-04. По умолчанию фильтр «Проблемы»: сначала то, что требует внимания.</figcaption>
+      </figure>
+
+      <!-- 4 Карточка: состояние -->
+      <figure class="shot">
+        <div class="phone">
+          <div class="sbar"><span>12:41</span><span>5G ▮▮▮</span></div>
+          <div class="abar"><span class="back"><svg class="ico"><use href="#i-back"/></svg></span><h5>Кухня 2 · Химки</h5></div>
+          <div class="scr">
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span class="pill ok">online 3 ч 12 мин</span><span class="pill crit">R-03</span><span style="font:11px var(--f-mono);color:var(--muted)">Lenovo M10 · A13</span></div>
+            <div class="tabs"><span class="on">Состояние</span><span>Проверки</span><span>События</span><span>Тень</span></div>
+            <div class="tiles">
+              <div class="tile crit"><span class="k">t батареи</span><span class="v">46.8<small> °C</small></span><span class="d">SEVERE · запас 0.12</span></div>
+              <div class="tile"><span class="k">Заряд</span><span class="v">34<small>%</small></span><span class="d">⚡ от сети</span></div>
+              <div class="tile"><span class="k">Wi-Fi</span><span class="v">−71<small> dBm</small></span><span class="d">интернет есть</span></div>
+              <div class="tile"><span class="k">На экране</span><span class="v" style="font-size:15px;padding-top:4px">Chrome</span><span class="d">2 ч 05 мин</span></div>
+            </div>
+            <div class="chartbox">
+              <div class="h"><span><b>Температура</b> · 30 мин</span><span class="mono">порог 45</span></div>
+              <svg class="spark" viewBox="0 0 260 64" preserveAspectRatio="none" aria-label="Рост температуры с 38 до 46.8 градусов">
+                <line x1="0" y1="22" x2="260" y2="22" stroke="var(--crit)" stroke-dasharray="4 4" stroke-width="1"/>
+                <path d="M0 52 L20 51 L40 50 L60 48 L80 49 L100 45 L120 40 L140 37 L160 33 L180 28 L200 24 L220 19 L240 15 L260 12 L260 64 L0 64Z" fill="var(--crit-soft)"/>
+                <path d="M0 52 L20 51 L40 50 L60 48 L80 49 L100 45 L120 40 L140 37 L160 33 L180 28 L200 24 L220 19 L240 15 L260 12" fill="none" stroke="var(--crit)" stroke-width="2"/>
+                <circle cx="258" cy="12" r="3.5" fill="var(--crit)"/>
+              </svg>
+            </div>
+            <dl class="kv"><dt>Память / диск</dt><dd>1.2 ГБ / 4.8 ГБ</dd><dt>Агент · тень</dt><dd>1.0.0 · v12 ✓</dd><dt>Последние данные</dt><dd>8 с назад</dd></dl>
+            <span class="btn"><svg class="ico"><use href="#i-bolt"/></svg>Команда</span>
+          </div>
+        </div>
+        <figcaption><b>Карточка устройства</b>FR-CN-05. График с линией порога, плитка в состоянии тревоги выделена рамкой.</figcaption>
+      </figure>
+
+      <!-- 5 Тень -->
+      <figure class="shot">
+        <div class="phone">
+          <div class="sbar"><span>12:41</span><span>5G ▮▮▮</span></div>
+          <div class="abar"><span class="back"><svg class="ico"><use href="#i-back"/></svg></span><h5>Кухня 2 · Химки</h5></div>
+          <div class="scr">
+            <div class="tabs"><span>Состояние</span><span>Проверки</span><span>События</span><span class="on">Тень</span></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="pill acc nodot">desired v13</span><span class="pill off nodot">reported v12</span><span class="pill warn">delta · 42 с</span></div>
+            <div class="why" style="background:var(--warn-soft)"><b>Ожидает применения</b>Устройство получит v13 при следующей синхронизации. Если delta не пуста больше 10 мин, сработает R-12 (диплом).</div>
+<div class="json"><span class="k">telemetry.intervalSec</span>  <span class="chg">30 → 15</span>
+<span class="k">thresholds.batteryLowPct</span> 20
+<span class="k">thresholds.tempHighC</span>    45
+<span class="k">thresholds.fgAbsentMin</span>  10
+<span class="k">watchedApps</span>
+  com.android.chrome
+<span class="k">probes</span>
+  api  http · 30 с · K=3
+  kds  http · 60 с · K=3
+  ref  http · 60 с · эталон</div>
+            <div class="btns"><span class="btn ghost">JSON</span><span class="btn">Изменить</span></div>
+          </div>
+        </div>
+        <figcaption><b>Тень</b>FR-CN-06. Разница <code>delta</code> подсвечена на месте, а не отдельным списком.</figcaption>
+      </figure>
+
+      <!-- 6 Команда -->
+      <figure class="shot">
+        <div class="phone">
+          <div class="sbar"><span>12:41</span><span>5G ▮▮▮</span></div>
+          <div class="abar"><span class="back"><svg class="ico"><use href="#i-back"/></svg></span><h5>Кухня 2 · Химки</h5></div>
+          <div class="scr dim">
+            <div class="tiles"><div class="tile"><span class="k">t</span><span class="v">46.8</span></div><div class="tile"><span class="k">Заряд</span><span class="v">34</span></div></div>
+          </div>
+          <div class="sheet"><div class="panel">
+            <div class="grab"></div>
+            <b style="font-size:15px">Команда устройству</b>
+            <div>
+              <div class="cmd"><svg class="ico"><use href="#i-pulse"/></svg><div class="t">Ping<span>ответ со временем устройства</span></div></div>
+              <div class="cmd"><svg class="ico"><use href="#i-doc"/></svg><div class="t">Показать сообщение<span>персоналу кухни</span></div></div>
+              <div class="cmd"><svg class="ico"><use href="#i-search"/></svg><div class="t">Собрать диагностику<span>снимок + прогон всех проверок</span></div></div>
+              <div class="cmd"><svg class="ico"><use href="#i-tab"/></svg><div class="t">Открыть кухонную станцию<span>через уведомление</span></div></div>
+              <div class="cmd dis"><svg class="ico"><use href="#i-shield"/></svg><div class="t">Перезагрузить<span>нужен режим Device Owner</span></div></div>
+            </div>
+            <div class="sect"><span>Недавние</span></div>
+            <div class="list">
+              <div class="row"><div class="t"><b style="font-weight:500">show_message</b><span>delivered 0.4 с → succeeded 1.2 с</span></div><span class="pill ok">ok</span></div>
+              <div class="row"><div class="t"><b style="font-weight:500">ping</b><span>устройство было офлайн 5 мин</span></div><span class="pill off">expired</span></div>
+            </div>
+          </div></div>
+        </div>
+        <figcaption><b>Команды</b>FR-CN-07. Недоступные в обычном режиме команды видны, но объяснено, почему они выключены.</figcaption>
+      </figure>
+
+      <!-- 7 Тревоги -->
+      <figure class="shot">
+        <div class="phone">
+          <div class="sbar"><span>12:41</span><span>5G ▮▮▮</span></div>
+          <div class="abar"><h5>Тревоги</h5></div>
+          <div class="scr">
+            <div class="seg"><span class="on">Открытые · 9</span><span>Подтв. · 4</span><span>Закрытые</span></div>
+            <div class="list">
+              <div class="row"><span class="sev crit"></span><div class="t"><b>Перегрев</b><span>Кухня 2 · Химки · 4 мин</span></div><span class="pill crit nodot">R-03</span></div>
+              <div class="row"><span class="sev crit"></span><div class="t"><b>Цель api недоступна</b><span>Кухня 1 · Сокол · timeout ×3</span></div><span class="pill crit nodot">R-05</span></div>
+              <div class="row"><span class="sev crit"></span><div class="t"><b>Цель api недоступна</b><span>Зал 1 · Сокол · timeout ×3</span></div><span class="pill crit nodot">R-05</span></div>
+              <div class="row"><span class="sev off"></span><div class="t"><b>Устройство офлайн</b><span>Зал 3 · Арбат · 7 мин</span></div><span class="pill off nodot">R-01</span></div>
+              <div class="row"><span class="sev warn"></span><div class="t"><b>Рабочее приложение не на экране</b><span>Кухня 3 · Сокол · 14 мин</span></div><span class="pill warn nodot">R-04</span></div>
+              <div class="row"><span class="sev warn"></span><div class="t"><b>Низкий заряд</b><span>Сборка 1 · Тверская · 18%</span></div><span class="pill warn nodot">R-02</span></div>
+            </div>
+            <div class="why"><b>Свайп вправо — подтвердить, влево — закрыть</b>Закрытие требует комментария. Автоматически закрытые помечаются «авто».</div>
+          </div>
+          <div class="bnav">
+            <div><svg class="ico"><use href="#i-grid"/></svg>Обзор</div>
+            <div><svg class="ico"><use href="#i-tab"/></svg>Устройства</div>
+            <div class="on"><span class="badge">9</span><svg class="ico"><use href="#i-bell"/></svg>Тревоги</div>
+            <div><svg class="ico"><use href="#i-store"/></svg>Рестораны</div>
+          </div>
+        </div>
+        <figcaption><b>Тревоги</b>FR-CN-08. Пока корреляции нет, две тревоги R-05 из Сокола видны отдельно. Экран «Инциденты» ниже объединяет их.</figcaption>
+      </figure>
+
+      <!-- 8 Провижининг -->
+      <figure class="shot">
+        <div class="phone">
+          <div class="sbar"><span>12:41</span><span>5G ▮▮▮</span></div>
+          <div class="abar"><span class="back"><svg class="ico"><use href="#i-back"/></svg></span><h5>Новое устройство</h5></div>
+          <div class="scr">
+            <div class="field"><label>Ресторан</label><div>Арбат ▾</div></div>
+            <div class="field"><label>Роль</label></div>
+            <div class="seg" style="margin-top:-6px"><span class="on">Кухня</span><span>Зал</span><span>Сборка</span></div>
+            <div class="field"><label>Имя</label><div>Кухня 3</div></div>
+            <div class="card" style="padding:14px;border-radius:14px;display:grid;gap:4px">
+              <span style="font-size:12px;color:var(--muted);text-align:center">Код регистрации</span>
+              <div class="code-big">482 913</div>
+              <span style="font:11.5px var(--f-mono);color:var(--muted);text-align:center">действует 23:59:12 · одноразовый</span>
+            </div>
+            <div class="why"><b>Как зарегистрировать</b>RestoFleet Agent → «Регистрация» → ввести код. На эмуляторе:<br><span class="mono" style="font-size:10.5px">adb shell am start -a rf.PROVISION --es code 482913</span></div>
+            <span class="btn ghost">Скопировать код</span>
+          </div>
+        </div>
+        <figcaption><b>Провижининг</b>FR-CN-09. Код живёт 24 ч, в БД хранится только его хэш.</figcaption>
+      </figure>
+    </div>
+
+    <h3 class="sub">Корреляция инцидентов</h3>
+    <div class="grid2">
+      <div class="diagram">
+<pre class="mermaid">
+flowchart TD
+  W["Окно 2 мин, по ресторану и цели"] --> N{"≥ 50% устройств офлайн или ref down со всех?"}
+  N -- да --> R7["Сеть ресторана · R-07"]
+  N -- нет --> A{"api down у ≥ P% онлайн-устройств при живом ref?"}
+  A -- нет --> D{"одно устройство офлайн, соседи живы?"}
+  D -- да --> R1["Устройство · R-01"]
+  A -- да --> M{"таких ресторанов ≥ M?"}
+  M -- да --> R8["Бэкенд глобально · R-08, один инцидент"]
+  M -- нет --> R9["Бэкенд локально · R-09 на ресторан"]
+</pre>
+      </div>
+      <div class="card">
+        <h4>Как это устроено</h4>
+        <ul>
+          <li><b>Агрегатор</b> раз в 30 с считает по каждой паре «ресторан × цель» долю онлайн-устройств с целью в состоянии down</li>
+          <li><b>Классификатор</b> — чистая функция с таблицей решений и порогами из конфига, покрыта табличными тестами</li>
+          <li><b>Подавление:</b> тревоги R-05 и R-01, которые покрывает инцидент, получают <code>parent_incident_id</code> и пропадают из ленты</li>
+          <li><b>Точность:</b> симулятор в режиме <code>synthetic</code> пишет эталонную разметку сценариев, скрипт сверяет её с <code>/incidents</code> и строит матрицу ошибок. Цель ≥ 90&nbsp;%</li>
+          <li><b>Фазы проверки</b> DNS/TCP/TLS/TTFB через OkHttp <code>EventListener</code> показывают, где именно рвётся запрос</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3 class="sub">Инциденты в консоли</h3>
+    <div class="gallery">
+      <figure class="shot">
+        <div class="phone">
+          <div class="sbar"><span>14:07</span><span>5G ▮▮▮</span></div>
+          <div class="abar"><h5>Тревоги</h5></div>
+          <div class="scr">
+            <div class="seg"><span>Тревоги · 6</span><span class="on">Инциденты · 2</span></div>
+            <div class="list">
+              <div class="row" style="align-items:flex-start"><span class="sev crit"></span><div class="t"><b>Бэкенд недоступен глобально</b><span>17 ресторанов · 12 мин · ref ок</span><span>подавлено 143 тревоги R-05</span></div><span class="pill crit nodot">R-08</span></div>
+              <div class="row" style="align-items:flex-start"><span class="sev crit"></span><div class="t"><b>Бэкенд недоступен локально</b><span>Сокол, Бутово · 26 мин</span><span>подавлено 11 тревог</span></div><span class="pill crit nodot">R-09</span></div>
+            </div>
+            <div class="sect"><span>Закрытые сегодня</span></div>
+            <div class="list">
+              <div class="row"><span class="sev ok"></span><div class="t"><b style="font-weight:500">Сеть ресторана · Химки</b><span>09:12–09:31 · 19 мин</span></div><span class="pill ok nodot">R-07</span></div>
+              <div class="row"><span class="sev ok"></span><div class="t"><b style="font-weight:500">Бэкенд локально · Арбат</b><span>08:02–08:09 · 7 мин</span></div><span class="pill ok nodot">R-09</span></div>
+            </div>
+          </div>
+          <div class="bnav">
+            <div><svg class="ico"><use href="#i-grid"/></svg>Обзор</div>
+            <div><svg class="ico"><use href="#i-tab"/></svg>Устройства</div>
+            <div class="on"><span class="badge">8</span><svg class="ico"><use href="#i-bell"/></svg>Тревоги</div>
+            <div><svg class="ico"><use href="#i-store"/></svg>Рестораны</div>
+          </div>
+        </div>
+        <figcaption><b>Инциденты</b>FR-CN-10. Одна строка вместо 143 одинаковых тревог.</figcaption>
+      </figure>
+
+      <figure class="shot">
+        <div class="phone">
+          <div class="sbar"><span>14:07</span><span>5G ▮▮▮</span></div>
+          <div class="abar"><span class="back"><svg class="ico"><use href="#i-back"/></svg></span><h5>Инцидент #214</h5></div>
+          <div class="scr">
+            <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="pill crit">открыт 26 мин</span><span class="pill acc nodot">Бэкенд · локально</span></div>
+            <div class="why"><b>Почему так решили</b>api недоступен с 6 из 6 устройств в Соколе и с 5 из 5 в Бутово. Эталонная цель при этом доступна, а в 36 других ресторанах api отвечает. Проблема на пути от этих ресторанов до сервера: провайдер, DNS или маршрут.</div>
+            <div class="sect"><span>Затронутые рестораны</span></div>
+            <div class="list">
+              <div class="row"><div class="t"><b>Сокол</b><span>api 6/6 down · ref 6/6 up</span></div><span class="pill crit nodot">100%</span></div>
+              <div class="row"><div class="t"><b>Бутово</b><span>api 5/5 down · ref 5/5 up</span></div><span class="pill crit nodot">100%</span></div>
+            </div>
+            <div class="sect"><span>Ошибки проверок</span></div>
+            <dl class="kv"><dt>timeout</dt><dd>9</dd><dt>dns_fail</dt><dd>2</dd><dt>conn_refused · tls · 5xx</dt><dd>0</dd></dl>
+            <div style="flex:1"></div>
+            <div class="btns"><span class="btn ghost">Комментарий</span><span class="btn">Подтвердить</span></div>
+          </div>
+        </div>
+        <figcaption><b>Карточка инцидента</b>Главное — объяснение причины: что видно и почему классификатор так решил.</figcaption>
+      </figure>
+
+      <figure class="shot">
+        <div class="phone">
+          <div class="sbar"><span>14:07</span><span>5G ▮▮▮</span></div>
+          <div class="abar"><span class="back"><svg class="ico"><use href="#i-back"/></svg></span><h5>Кухня 1 · Сокол</h5></div>
+          <div class="scr">
+            <div class="tabs"><span>Состояние</span><span class="on">Проверки</span><span>События</span><span>Тень</span></div>
+            <div class="chartbox">
+              <div class="h"><span><b>api</b> · последняя</span><span class="pill crit nodot">timeout</span></div>
+              <div class="wf">
+                <div><span>DNS</span><span class="bar"><i style="left:0;width:2%;background:var(--ok)"></i></span><span class="num">14</span></div>
+                <div><span>TCP</span><span class="bar"><i style="left:2%;width:5%;background:var(--ok)"></i></span><span class="num">38</span></div>
+                <div><span>TLS</span><span class="bar"><i style="left:7%;width:93%;background:var(--crit)"></i></span><span class="num">—</span></div>
+                <div><span>TTFB</span><span class="bar"></span><span class="num">—</span></div>
+              </div>
+              <span style="font-size:11px;color:var(--muted)">таймаут 5000 мс на TLS-рукопожатии</span>
+            </div>
+            <div class="chartbox">
+              <div class="h"><span><b>kds</b> · последняя</span><span class="pill ok nodot">212 мс</span></div>
+              <div class="wf">
+                <div><span>DNS</span><span class="bar"><i style="left:0;width:4%;background:var(--ok)"></i></span><span class="num">9</span></div>
+                <div><span>TCP</span><span class="bar"><i style="left:4%;width:15%;background:var(--ok)"></i></span><span class="num">31</span></div>
+                <div><span>TLS</span><span class="bar"><i style="left:19%;width:30%;background:var(--ok)"></i></span><span class="num">64</span></div>
+                <div><span>TTFB</span><span class="bar"><i style="left:49%;width:51%;background:var(--accent)"></i></span><span class="num">108</span></div>
+              </div>
+            </div>
+            <div class="sect"><span>Последние 30 проверок</span></div>
+            <div style="display:grid;gap:6px;font:11px var(--f-mono)">
+              <div style="display:grid;grid-template-columns:34px 1fr;gap:6px;align-items:center"><span>api</span><span class="ticks"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="s"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i></span></div>
+              <div style="display:grid;grid-template-columns:34px 1fr;gap:6px;align-items:center"><span>kds</span><span class="ticks"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+              <div style="display:grid;grid-template-columns:34px 1fr;gap:6px;align-items:center"><span>ref</span><span class="ticks"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>Проверки устройства</b>FR-AG-33. Водопад фаз показывает, на каком этапе рвётся запрос.</figcaption>
+      </figure>
+    </div>
+
+    <h3 class="sub">План практики <small>активные дни</small></h3>
+    <div class="gantt" style="--w:10">
+      <div class="gscale"><div></div><div><span>0</span><span>2</span><span>4</span><span>6</span><span>8</span><span>10</span></div></div>
+      <div class="gr"><div class="nm">П1 · Анализ в компании<small>BPMN, интервью, рестораны в CSV</small></div><div class="track"><i style="left:0;width:100%;background:var(--stage-p);opacity:.55">параллельно, по графику практики</i></div></div>
+      <div class="gr"><div class="nm">П2 · Тревоги и корреляция<small>R-01…R-09, WS, сценарии симулятора</small></div><div class="track"><i style="left:0;width:40%;background:var(--stage-p)">4</i></div></div>
+      <div class="gr"><div class="nm">П3 · Android-консоль<small>core, 10 фич, тесты</small></div><div class="track"><i style="left:40%;width:50%;background:var(--stage-p)">5</i></div></div>
+      <div class="gr"><div class="nm">П4 · Приёмка и отчёт<small>S1–S8, точность ≥ 90%</small></div><div class="track"><i style="left:90%;width:10%;background:var(--stage-p)">1</i></div></div>
+    </div>
+    <div class="milestones">
+      <div class="ms"><h4>П1 <span class="mono">анализ</span></h4><ul><li>BPMN обращения «бэкенд не работает», как есть и как будет</li><li>Проверить допущение о том, как поддержка сейчас ищет причину</li><li>Версии Android и модели устройств в ресторанах</li><li>Package name приложений официанта и сборщика</li></ul></div>
+      <div class="ms"><h4>П2–П3 <span class="mono">разработка</span></h4><ul><li>FR-BE-30…37, R-01…R-09, <code>GET /incidents</code>, WebSocket</li><li>Симулятор: SM-04, SM-05, режим <code>synthetic</code> с эталонной разметкой</li><li>Консоль: FR-CN-01…10, у каждой фичи <code>-domain/-data/-ui/-component</code></li></ul></div>
+      <div class="ms"><h4>Если практика короче</h4><ul><li>Сначала обзор, устройства, карточка, тревоги, инциденты</li><li>Рестораны, провижининг и редактор тени переносятся в диплом</li></ul><div class="res"><b>Готово, когда:</b> S1–S8 проходят из консоли, отчёт сдан</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= ДИПЛОМ ======================= -->
+<section class="stage" id="d">
+  <div class="wrap">
+    <div class="stage-head">
+      <span class="stage-tag" style="color:var(--stage-d)"><i style="background:var(--stage-d)">Д</i>Диплом · ≈3 активных недели</span>
+      <h2>Законченная система: Device Owner, Desktop, 10&nbsp;000 устройств, VPS</h2>
+      <p>Desktop-консоль становится основным рабочим местом поддержки. Те же модули <code>-ui</code> и <code>-component</code>, новая оболочка и раскладка «список рядом с карточкой». Плюс профили параметров, редактор правил, роли, аудит, mTLS и режим Device Owner в агенте.</p>
+    </div>
+
+    <div class="grid2">
+      <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  G["Глобальный профиль"] --> M(("merge · shared:shadow"))
+  R["Профиль ресторана"] --> M
+  RO["Профиль роли"] --> M
+  I["Индивидуальные правки"] --> M
+  M --> D["desired vN, retained"]
+  D --> A["Агенты"]
+  A --> REP["reported"]
+  REP --> X["Применено X из Y, R-12"]
+</pre>
+      </div>
+      <div class="card">
+        <h4>Что добавляется в архитектуру</h4>
+        <ul>
+          <li><b>Брокер:</b> роли ресторанов в DynSec для групповых команд через <code>rf/v1/rest/{id}/broadcast</code>; mTLS с CA стенда</li>
+          <li><b>Backend:</b> роли admin, support и observer, журнал аудита, подтверждение опасных команд, R-10…R-12, отчёты в CSV</li>
+          <li><b>БД:</b> гипертаблицы Timescale, хранение сырых данных 30 дней, агрегаты на 1 год</li>
+          <li><b>Агент:</b> модуль <code>device-policy</code> (перезагрузка, тихая установка, киоск с браузером), QR, SSID, локальная сеть, акселерометр</li>
+          <li><b>Консоль:</b> <code>app-desktop</code> и Decompose <code>childPanels</code> для раскладки список + карточка, фичи availability, profiles, rules, reports</li>
+          <li><b>Рестораны:</b> добавление и правка в Desktop-консоли с валидацией в domain и записью в аудит; observer видит только просмотр</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3 class="sub">Консоль · Desktop <small>прокрутите вбок на узком экране</small></h3>
+
+    <figure class="shot" style="width:auto">
+      <div class="deskscroll"><div class="desk">
+        <aside class="dside">
+          <div class="brand"><span class="role" style="background:var(--accent);color:var(--on-accent);width:26px;height:26px;border-radius:7px"><svg class="ico" style="width:15px;height:15px"><use href="#i-pulse"/></svg></span>RestoFleet</div>
+          <a><svg class="ico"><use href="#i-grid"/></svg>Обзор</a>
+          <a><svg class="ico"><use href="#i-bolt"/></svg>Инциденты<span class="n">2</span></a>
+          <a><svg class="ico"><use href="#i-map"/></svg>Доступность</a>
+          <a><svg class="ico"><use href="#i-store"/></svg>Рестораны<span class="n">38</span></a>
+          <a class="on"><svg class="ico"><use href="#i-tab"/></svg>Устройства<span class="n">228</span></a>
+          <a><svg class="ico"><use href="#i-bell"/></svg>Тревоги<span class="n">6</span></a>
+          <div class="grp">Управление</div>
+          <a><svg class="ico"><use href="#i-sliders"/></svg>Профили</a>
+          <a><svg class="ico"><use href="#i-shield"/></svg>Правила</a>
+          <a><svg class="ico"><use href="#i-doc"/></svg>Отчёты и аудит</a>
+          <div style="flex:1"></div>
+          <a style="font-size:12px;color:var(--muted)">support.ivanova · инженер</a>
+        </aside>
+        <div class="dmain">
+          <div class="dtop"><h5>Устройства</h5><span class="search" style="width:300px;padding:7px 10px"><svg class="ico"><use href="#i-search"/></svg>Имя, ресторан, модель</span><span class="chip on">Проблемы · 17</span><span class="chip">Ресторан ▾</span><span class="chip">Роль ▾</span><span class="sp"></span><span class="live">live · 12:41:05</span><span class="btn" style="padding:7px 12px;font-size:12.5px"><svg class="ico"><use href="#i-plus"/></svg>Устройство</span></div>
+          <div class="dbody" style="grid-template-columns:1fr 420px">
+            <div class="dpane">
+              <div class="dtbl">
+                <div class="tr th" style="grid-template-columns:30px 1.4fr 1fr .8fr .7fr .8fr"><span></span><span>Устройство</span><span>Проблема</span><span>Заряд · t</span><span>Сеть</span><span>Статус</span></div>
+                <div class="tr sel" style="grid-template-columns:30px 1.4fr 1fr .8fr .7fr .8fr"><span class="role" style="width:26px;height:26px"><svg class="ico"><use href="#i-kitchen"/></svg></span><b>Кухня 2 · Химки</b><span>перегрев</span><span class="mono">34% · 46.8°</span><span class="mono">−71</span><span class="pill crit">R-03</span></div>
+                <div class="tr" style="grid-template-columns:30px 1.4fr 1fr .8fr .7fr .8fr"><span class="role" style="width:26px;height:26px"><svg class="ico"><use href="#i-hall"/></svg></span><b>Зал 3 · Арбат</b><span>офлайн, lwt</span><span class="mono">—</span><span class="mono">—</span><span class="pill off">7 мин</span></div>
+                <div class="tr" style="grid-template-columns:30px 1.4fr 1fr .8fr .7fr .8fr"><span class="role" style="width:26px;height:26px"><svg class="ico"><use href="#i-kitchen"/></svg></span><b>Кухня 1 · Сокол</b><span>в инциденте #214</span><span class="mono">100% · 33.0°</span><span class="mono">−58</span><span class="pill crit">api down</span></div>
+                <div class="tr" style="grid-template-columns:30px 1.4fr 1fr .8fr .7fr .8fr"><span class="role" style="width:26px;height:26px"><svg class="ico"><use href="#i-pack"/></svg></span><b>Сборка 1 · Тверская</b><span>низкий заряд</span><span class="mono">18% · 31.2°</span><span class="mono">−63</span><span class="pill warn">R-02</span></div>
+                <div class="tr" style="grid-template-columns:30px 1.4fr 1fr .8fr .7fr .8fr"><span class="role" style="width:26px;height:26px"><svg class="ico"><use href="#i-kitchen"/></svg></span><b>Кухня 3 · Сокол</b><span>Chrome не на экране</span><span class="mono">96% · 35.1°</span><span class="mono">−60</span><span class="pill warn">R-04</span></div>
+                <div class="tr" style="grid-template-columns:30px 1.4fr 1fr .8fr .7fr .8fr"><span class="role" style="width:26px;height:26px"><svg class="ico"><use href="#i-pack"/></svg></span><b>Сборка 2 · Химки</b><span>мало места</span><span class="mono">71% · 29.4°</span><span class="mono">−66</span><span class="pill warn">R-06</span></div>
+                <div class="tr" style="grid-template-columns:30px 1.4fr 1fr .8fr .7fr .8fr"><span class="role" style="width:26px;height:26px"><svg class="ico"><use href="#i-hall"/></svg></span><b>Зал 1 · Сокол</b><span>в инциденте #214</span><span class="mono">88% · 30.8°</span><span class="mono">−55</span><span class="pill crit">api down</span></div>
+                <div class="tr" style="grid-template-columns:30px 1.4fr 1fr .8fr .7fr .8fr"><span class="role" style="width:26px;height:26px"><svg class="ico"><use href="#i-hall"/></svg></span><b>Зал 2 · Бутово</b><span>в инциденте #214</span><span class="mono">64% · 29.9°</span><span class="mono">−61</span><span class="pill crit">api down</span></div>
+              </div>
+            </div>
+            <div class="dpane" style="border-left:1px solid var(--line);background:var(--surface)">
+              <div style="display:flex;gap:10px;align-items:center"><span class="role"><svg class="ico"><use href="#i-kitchen"/></svg></span><div><b style="font-size:16px">Кухня 2 · Химки</b><div style="font:11.5px var(--f-mono);color:var(--muted)">d-khm-k2 · Lenovo M10 · Android 13 · агент 1.2.0</div></div></div>
+              <div style="display:flex;gap:6px"><span class="pill ok">online 3 ч 12 мин</span><span class="pill crit">R-03</span><span class="pill acc nodot">Device Owner</span></div>
+              <div class="tabs" style="margin:0"><span class="on">Состояние</span><span>Проверки</span><span>События</span><span>Тень</span><span>Команды</span></div>
+              <div class="tiles" style="grid-template-columns:repeat(3,1fr)">
+                <div class="tile crit"><span class="k">t батареи</span><span class="v">46.8<small>°C</small></span></div>
+                <div class="tile"><span class="k">Заряд</span><span class="v">34<small>%</small></span></div>
+                <div class="tile"><span class="k">Wi-Fi</span><span class="v">−71</span></div>
+              </div>
+              <div class="chartbox">
+                <div class="h"><span><b>Температура</b> · 6 ч</span><span class="mono">порог 45</span></div>
+                <svg class="spark" viewBox="0 0 380 80" preserveAspectRatio="none" style="height:90px" aria-label="Температура за 6 часов">
+                  <line x1="0" y1="26" x2="380" y2="26" stroke="var(--crit)" stroke-dasharray="4 4" stroke-width="1"/>
+                  <path d="M0 62 L30 60 L60 58 L90 52 L120 45 L150 50 L180 57 L210 60 L240 55 L270 46 L300 38 L330 30 L355 22 L380 17 L380 80 L0 80Z" fill="var(--crit-soft)"/>
+                  <path d="M0 62 L30 60 L60 58 L90 52 L120 45 L150 50 L180 57 L210 60 L240 55 L270 46 L300 38 L330 30 L355 22 L380 17" fill="none" stroke="var(--crit)" stroke-width="2"/>
+                  <circle cx="378" cy="17" r="3.5" fill="var(--crit)"/>
+                </svg>
+                <div class="h"><span class="mono">06:41</span><span class="mono">09:41</span><span class="mono">12:41</span></div>
+              </div>
+              <dl class="kv"><dt>На экране</dt><dd>Chrome · киоск kitchen.company</dd><dt>Тень</dt><dd>v12 · профиль «Кухня»</dd><dt>Последние данные</dt><dd>8 с назад</dd></dl>
+              <div class="btns"><span class="btn ghost">Сообщение</span><span class="btn">Перезагрузить…</span></div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <figcaption><b>Устройства · список и карточка рядом</b>FR-CN-04/05 на Desktop. Те же фичи <code>devices</code> и <code>device-details</code>, что на Android, но в двух панелях.</figcaption>
+    </figure>
+
+    <div style="height:28px"></div>
+
+    <figure class="shot" style="width:auto">
+      <div class="deskscroll"><div class="desk">
+        <aside class="dside">
+          <div class="brand"><span class="role" style="background:var(--accent);color:var(--on-accent);width:26px;height:26px;border-radius:7px"><svg class="ico" style="width:15px;height:15px"><use href="#i-pulse"/></svg></span>RestoFleet</div>
+          <a><svg class="ico"><use href="#i-grid"/></svg>Обзор</a>
+          <a><svg class="ico"><use href="#i-bolt"/></svg>Инциденты<span class="n">2</span></a>
+          <a class="on"><svg class="ico"><use href="#i-map"/></svg>Доступность</a>
+          <a><svg class="ico"><use href="#i-store"/></svg>Рестораны<span class="n">38</span></a>
+          <a><svg class="ico"><use href="#i-tab"/></svg>Устройства<span class="n">228</span></a>
+          <a><svg class="ico"><use href="#i-bell"/></svg>Тревоги<span class="n">6</span></a>
+          <div class="grp">Управление</div>
+          <a><svg class="ico"><use href="#i-sliders"/></svg>Профили</a>
+          <a><svg class="ico"><use href="#i-shield"/></svg>Правила</a>
+          <a><svg class="ico"><use href="#i-doc"/></svg>Отчёты и аудит</a>
+        </aside>
+        <div class="dmain">
+          <div class="dtop"><h5>Доступность бэкенда</h5><span class="seg" style="width:240px"><span class="on">api</span><span>kds</span><span>ref</span></span><span class="chip">Сегодня ▾</span><span class="sp"></span><span class="btn ghost" style="padding:7px 12px;font-size:12.5px">Экспорт CSV</span></div>
+          <div class="dbody"><div class="dpane" id="heatpane">
+            <div class="tiles" style="grid-template-columns:repeat(4,1fr)">
+              <div class="tile ok"><span class="k">Доступность api из ресторанов</span><span class="v">99.21<small>%</small></span><span class="d">цель 99.5%</span></div>
+              <div class="tile"><span class="k">p95 ответа</span><span class="v">412<small> мс</small></span><span class="d">порог R-10: 2000</span></div>
+              <div class="tile crit"><span class="k">Инцидентов за сутки</span><span class="v">4</span><span class="d">1 глобальный · 3 локальных</span></div>
+              <div class="tile"><span class="k">Суммарный простой</span><span class="v">58<small> мин</small></span><span class="d">по всем ресторанам</span></div>
+            </div>
+            <div class="card" style="padding:14px;display:grid;gap:8px">
+              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><b style="font-size:14px">Доступность по часам, % успешных проверок</b>
+                <div class="legend"><span><i style="background:var(--ok)"></i>≥ 99</span><span><i style="background:color-mix(in srgb,var(--warn) 55%,var(--ok))"></i>95–99</span><span><i style="background:var(--warn)"></i>80–95</span><span><i style="background:var(--crit)"></i>&lt; 80</span><span><i style="background:var(--off-soft)"></i>закрыт</span></div></div>
+              <div class="heat" id="heat"></div>
+            </div>
+          </div></div>
+        </div>
+      </div></div>
+      <figcaption><b>Доступность</b>FR-CN-11, FR-BE-38. Глобальный отказ в 11:00 виден как вертикальная полоса, локальный отказ в Соколе и Бутово — как горизонтальная.</figcaption>
+    </figure>
+
+    <div style="height:28px"></div>
+
+    <figure class="shot" style="width:auto">
+      <div class="deskscroll"><div class="desk">
+        <aside class="dside">
+          <div class="brand"><span class="role" style="background:var(--accent);color:var(--on-accent);width:26px;height:26px;border-radius:7px"><svg class="ico" style="width:15px;height:15px"><use href="#i-pulse"/></svg></span>RestoFleet</div>
+          <a><svg class="ico"><use href="#i-grid"/></svg>Обзор</a>
+          <a><svg class="ico"><use href="#i-bolt"/></svg>Инциденты<span class="n">2</span></a>
+          <a><svg class="ico"><use href="#i-map"/></svg>Доступность</a>
+          <a><svg class="ico"><use href="#i-store"/></svg>Рестораны<span class="n">38</span></a>
+          <a><svg class="ico"><use href="#i-tab"/></svg>Устройства<span class="n">228</span></a>
+          <a><svg class="ico"><use href="#i-bell"/></svg>Тревоги<span class="n">6</span></a>
+          <div class="grp">Управление</div>
+          <a class="on"><svg class="ico"><use href="#i-sliders"/></svg>Профили</a>
+          <a><svg class="ico"><use href="#i-shield"/></svg>Правила</a>
+          <a><svg class="ico"><use href="#i-doc"/></svg>Отчёты и аудит</a>
+        </aside>
+        <div class="dmain">
+          <div class="dtop"><h5>Профили параметров</h5><span class="sp"></span><span class="btn ghost" style="padding:7px 12px;font-size:12.5px">История</span><span class="btn" style="padding:7px 12px;font-size:12.5px">Опубликовать v14</span></div>
+          <div class="dbody" style="grid-template-columns:260px 1fr">
+            <div class="dpane" style="border-right:1px solid var(--line);background:var(--surface);gap:4px;font-size:13.5px">
+              <div class="sect" style="margin-bottom:4px"><span>Слои</span></div>
+              <div style="padding:7px 10px;border-radius:8px">Глобальный</div>
+              <div style="padding:7px 10px 7px 22px;border-radius:8px;color:var(--muted)">Ресторан · 38</div>
+              <div style="padding:7px 10px 7px 22px;border-radius:8px;background:var(--accent-soft);color:var(--accent);font-weight:600;display:flex;gap:8px;align-items:center"><svg class="ico"><use href="#i-kitchen"/></svg>Роль · Кухня</div>
+              <div style="padding:7px 10px 7px 22px;border-radius:8px;display:flex;gap:8px;align-items:center"><svg class="ico"><use href="#i-hall"/></svg>Роль · Зал</div>
+              <div style="padding:7px 10px 7px 22px;border-radius:8px;display:flex;gap:8px;align-items:center"><svg class="ico"><use href="#i-pack"/></svg>Роль · Сборка</div>
+              <div style="padding:7px 10px;border-radius:8px;color:var(--muted)">Индивидуальные · 5</div>
+              <div style="flex:1"></div>
+              <div class="card" style="padding:12px;display:grid;gap:6px">
+                <span style="font-size:12px;color:var(--muted)">Применено на устройствах кухни</span>
+                <b class="mono" style="font-size:20px">71 <span style="color:var(--muted);font-size:13px">из 76</span></b>
+                <div class="prog"><i style="width:93%"></i></div>
+                <span style="font-size:11.5px;color:var(--warn)">5 с delta, из них 2 офлайн</span>
+              </div>
+            </div>
+            <div class="dpane">
+              <p style="font-size:13px;color:var(--muted)">Итоговый <code>desired</code> = глобальный ⊕ ресторан ⊕ роль ⊕ индивидуальный. Колонка «Источник» показывает, какой слой задал значение.</p>
+              <div class="dtbl">
+                <div class="tr th" style="grid-template-columns:1.6fr 1fr 1fr .9fr"><span>Параметр</span><span>Значение для «Кухни»</span><span>Источник</span><span>Глобально</span></div>
+                <div class="tr" style="grid-template-columns:1.6fr 1fr 1fr .9fr"><span class="mono">telemetry.intervalSec</span><b class="mono">15</b><span><span class="src r">роль</span></span><span class="mono" style="color:var(--muted)">30</span></div>
+                <div class="tr" style="grid-template-columns:1.6fr 1fr 1fr .9fr"><span class="mono">thresholds.tempHighC</span><b class="mono">48</b><span><span class="src r">роль</span></span><span class="mono" style="color:var(--muted)">45</span></div>
+                <div class="tr" style="grid-template-columns:1.6fr 1fr 1fr .9fr"><span class="mono">thresholds.batteryLowPct</span><span class="mono">20</span><span><span class="src">глобальный</span></span><span class="mono" style="color:var(--muted)">20</span></div>
+                <div class="tr" style="grid-template-columns:1.6fr 1fr 1fr .9fr"><span class="mono">thresholds.fgAbsentMin</span><b class="mono">5</b><span><span class="src r">роль</span></span><span class="mono" style="color:var(--muted)">10</span></div>
+                <div class="tr" style="grid-template-columns:1.6fr 1fr 1fr .9fr"><span class="mono">watchedApps</span><span class="mono">com.android.chrome</span><span><span class="src r">роль</span></span><span class="mono" style="color:var(--muted)">[]</span></div>
+                <div class="tr" style="grid-template-columns:1.6fr 1fr 1fr .9fr"><span class="mono">kiosk.url</span><span class="mono">kitchen.company…/</span><span><span class="src r">роль</span></span><span class="mono" style="color:var(--muted)">—</span></div>
+                <div class="tr" style="grid-template-columns:1.6fr 1fr 1fr .9fr"><span class="mono">probes.api.intervalSec</span><span class="mono">30</span><span><span class="src">глобальный</span></span><span class="mono" style="color:var(--muted)">30</span></div>
+                <div class="tr" style="grid-template-columns:1.6fr 1fr 1fr .9fr"><span class="mono">workHours</span><span class="mono">по ресторану</span><span><span class="src o">ресторан</span></span><span class="mono" style="color:var(--muted)">00–24</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <figcaption><b>Профили параметров</b>FR-CN-12, FR-BE-22/23. Видно, откуда взялось каждое значение и сколько устройств его уже применили.</figcaption>
+    </figure>
+
+    <div style="height:28px"></div>
+
+    <figure class="shot" style="width:auto">
+      <div class="deskscroll"><div class="desk">
+        <aside class="dside">
+          <div class="brand"><span class="role" style="background:var(--accent);color:var(--on-accent);width:26px;height:26px;border-radius:7px"><svg class="ico" style="width:15px;height:15px"><use href="#i-pulse"/></svg></span>RestoFleet</div>
+          <a><svg class="ico"><use href="#i-grid"/></svg>Обзор</a>
+          <a><svg class="ico"><use href="#i-bolt"/></svg>Инциденты<span class="n">2</span></a>
+          <a><svg class="ico"><use href="#i-map"/></svg>Доступность</a>
+          <a class="on"><svg class="ico"><use href="#i-store"/></svg>Рестораны<span class="n">38</span></a>
+          <a><svg class="ico"><use href="#i-tab"/></svg>Устройства<span class="n">228</span></a>
+          <a><svg class="ico"><use href="#i-bell"/></svg>Тревоги<span class="n">6</span></a>
+          <div class="grp">Управление</div>
+          <a><svg class="ico"><use href="#i-sliders"/></svg>Профили</a>
+          <a><svg class="ico"><use href="#i-shield"/></svg>Правила</a>
+          <a><svg class="ico"><use href="#i-doc"/></svg>Отчёты и аудит</a>
+        </aside>
+        <div class="dmain">
+          <div class="dtop"><h5>Рестораны</h5><span class="search" style="width:280px;padding:7px 10px"><svg class="ico"><use href="#i-search"/></svg>Код, название, город</span><span class="chip">Город ▾</span><span class="chip">С проблемами</span><span class="sp"></span><span class="btn" style="padding:7px 12px;font-size:12.5px"><svg class="ico"><use href="#i-plus"/></svg>Добавить ресторан</span></div>
+          <div class="dbody" style="grid-template-columns:1fr 430px">
+            <div class="dpane">
+              <div class="dtbl">
+                <div class="tr th" style="grid-template-columns:.7fr 1.3fr 1fr .8fr .9fr"><span>Код</span><span>Название</span><span>Город</span><span>Устройства</span><span>Состояние</span></div>
+                <div class="tr" style="grid-template-columns:.7fr 1.3fr 1fr .8fr .9fr"><span class="mono">MSK-ARB</span><b>Арбат</b><span>Москва</span><span class="mono">6 · 5 online</span><span class="pill off">1 офлайн</span></div>
+                <div class="tr" style="grid-template-columns:.7fr 1.3fr 1fr .8fr .9fr"><span class="mono">MSK-BUT</span><b>Бутово</b><span>Москва</span><span class="mono">5 · 5 online</span><span class="pill crit">R-09</span></div>
+                <div class="tr" style="grid-template-columns:.7fr 1.3fr 1fr .8fr .9fr"><span class="mono">MO-KHM</span><b>Химки</b><span>Химки</span><span class="mono">6 · 6 online</span><span class="pill crit">R-03</span></div>
+                <div class="tr" style="grid-template-columns:.7fr 1.3fr 1fr .8fr .9fr"><span class="mono">MSK-KUZ</span><b>Кузьминки</b><span>Москва</span><span class="mono">6 · 6 online</span><span class="pill ok">норма</span></div>
+                <div class="tr" style="grid-template-columns:.7fr 1.3fr 1fr .8fr .9fr"><span class="mono">MSK-SOK</span><b>Сокол</b><span>Москва</span><span class="mono">6 · 6 online</span><span class="pill crit">R-09</span></div>
+                <div class="tr sel" style="grid-template-columns:.7fr 1.3fr 1fr .8fr .9fr"><span class="mono">MSK-STR</span><b>Строгино</b><span>Москва</span><span class="mono">0</span><span class="pill acc nodot">новый</span></div>
+                <div class="tr" style="grid-template-columns:.7fr 1.3fr 1fr .8fr .9fr"><span class="mono">MSK-TVE</span><b>Тверская</b><span>Москва</span><span class="mono">6 · 6 online</span><span class="pill warn">R-02</span></div>
+                <div class="tr" style="grid-template-columns:.7fr 1.3fr 1fr .8fr .9fr"><span class="mono">MSK-TUS</span><b>Тушино</b><span>Москва</span><span class="mono">6 · 6 online</span><span class="pill ok">норма</span></div>
+              </div>
+            </div>
+            <div class="dpane" style="border-left:1px solid var(--line);background:var(--surface)">
+              <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:16px">Строгино</b><span class="pill acc nodot">правка</span></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <div class="field"><label>Код · после создания не меняется</label><div class="mono" style="color:var(--muted)">MSK-STR</div></div>
+                <div class="field"><label>Город</label><div>Москва</div></div>
+              </div>
+              <div class="field"><label>Название</label><div>Строгино</div></div>
+              <div class="field"><label>Адрес</label><div style="border-color:var(--crit)">ул. Кулакова, </div><span style="font-size:11.5px;color:var(--crit)">Укажите номер дома</span></div>
+              <div class="field"><label>Часовой пояс</label><div class="mono">Europe/Moscow · UTC+3</div></div>
+              <div class="field"><label>Рабочие часы</label></div>
+              <div class="dtbl" style="margin-top:-6px">
+                <div class="tr" style="grid-template-columns:1fr 1fr 1fr"><span>Пн–Чт</span><span class="mono">10:00</span><span class="mono">23:00</span></div>
+                <div class="tr" style="grid-template-columns:1fr 1fr 1fr"><span>Пт–Сб</span><span class="mono">10:00</span><span class="mono">02:00 <span style="color:var(--muted)">+1</span></span></div>
+                <div class="tr" style="grid-template-columns:1fr 1fr 1fr"><span>Вс</span><span class="mono">11:00</span><span class="mono">23:00</span></div>
+              </div>
+              <div style="flex:1"></div>
+              <span style="font-size:11.5px;color:var(--muted)">Изменения попадут в журнал аудита · support.ivanova</span>
+              <div class="btns"><span class="btn ghost">Отмена</span><span class="btn">Сохранить</span></div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <figcaption><b>Рестораны · добавление и правка</b>FR-CN-03 на Desktop. Форма проверяет поля через domain-валидацию и показывает ошибку у поля. Рабочие часы нужны правилам тревог (R-04, FR-BE-32). Импорта из CSV нет.</figcaption>
+    </figure>
+
+<h3 class="sub">План диплома <small>активные дни</small></h3>
+    <div class="gantt" style="--w:15">
+      <div class="gscale"><div></div><div><span>0</span><span>3</span><span>6</span><span>9</span><span>12</span><span>15</span></div></div>
+      <div class="gr"><div class="nm">Д1 · Агент: Device Owner<small>только то, что прошло MVP</small></div><div class="track"><i style="left:0;width:26.67%;background:var(--stage-d)">4</i></div></div>
+      <div class="gr"><div class="nm">Д2 · Платформа и безопасность<small>роли, аудит, mTLS, профили, правила</small></div><div class="track"><i style="left:26.67%;width:26.67%;background:var(--stage-d)">4</i></div></div>
+      <div class="gr"><div class="nm">Д3 · Desktop-консоль<small>оболочка, список + карточка, 4 фичи</small></div><div class="track"><i style="left:53.33%;width:26.67%;background:var(--stage-d)">4</i></div></div>
+      <div class="gr"><div class="nm">Д4 · VPS, масштаб, ВКР<small>10 000, ресурсы, экономика</small></div><div class="track"><i style="left:80%;width:20%;background:var(--stage-d)">3</i></div></div>
+    </div>
+    <div class="milestones">
+      <div class="ms"><h4>VPS <span class="mono">Д4</span></h4><ul><li>Тот же compose, домен, TLS, firewall: наружу только 443 и 8883</li><li>Секреты в <code>.env</code> вне git, бэкап БД</li><li>Рестораны заводятся в Desktop-консоли, симулятор подключается снаружи</li></ul></div>
+      <div class="ms"><h4>Что выкинуть при нехватке времени</h4><ul><li>Датчики, акселерометр, SSID</li><li>Экспорт отчётов в CSV</li><li>Редактор правил (оставить правила в конфиге)</li><li>mTLS (оставить пароли DynSec)</li></ul></div>
+      <div class="ms"><h4>Приёмка ВКР</h4><ul><li>Сценарии S1–S9</li><li>10&nbsp;000 устройств на 4 vCPU / 8 ГБ</li><li>Агент: ОЗУ ≤ 60 МБ, трафик ≤ 20 МБ/сутки</li><li>Экономика на экспертных оценках с явными допущениями</li></ul></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="wrap">Источники: ТЗ RestoFleet v0.2, <code>docs/architecture.md</code>, <code>docs/plan.md</code>. Данные на макетах условные: рестораны, устройства и цифры придуманы для иллюстрации.</footer>
+
+<script>
+(function(){
+  // тема
+  var root=document.documentElement, btns=document.querySelectorAll('.theme button');
+  function apply(t){ if(t){root.setAttribute('data-theme',t);} else {root.removeAttribute('data-theme');}
+    btns.forEach(function(b){b.setAttribute('aria-pressed', String(b.dataset.t===(t||'')));}); }
+  var saved=''; try{ saved=localStorage.getItem('rf-theme')||''; }catch(e){}
+  apply(saved);
+  btns.forEach(function(b){ b.addEventListener('click',function(){ apply(b.dataset.t); try{localStorage.setItem('rf-theme',b.dataset.t);}catch(e){} }); });
+
+  // тепловая карта доступности (условные данные)
+  var rests=['Арбат','Тверская','Сокол','Бутово','Химки','Сухаревская','Тушино','Митино','Кузьминки','Люблино','Строгино','Отрадное'];
+  var heat=document.getElementById('heat'); if(!heat) return;
+  var html='<span class="rn"></span>';
+  for(var h=0;h<24;h++){ html+='<span class="hh">'+(h%3===0?String(h).padStart(2,'0'):'')+'</span>'; }
+  function seed(i,h){ var x=Math.sin(i*97.3+h*13.7)*10000; return x-Math.floor(x); }
+  rests.forEach(function(r,i){
+    html+='<span class="rn">'+r+'</span>';
+    for(var h=0;h<24;h++){
+      var c;
+      if(h<8) c='var(--off-soft)';
+      else if(h===11) c='var(--crit)';
+      else if((r==='Сокол'||r==='Бутово') && h>=13 && h<=14) c='var(--crit)';
+      else if(r==='Химки' && h===9) c='var(--warn)';
+      else { var s=seed(i,h); c = s>0.93 ? 'color-mix(in srgb,var(--warn) 55%,var(--ok))' : 'var(--ok)'; }
+      html+='<span style="background:'+c+'" title="'+r+', '+h+':00"></span>';
+    }
+  });
+  heat.innerHTML=html;
+})();
+</script>
