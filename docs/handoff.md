@@ -6,7 +6,7 @@
 
 - **Этап:** MVP-A (эмуляторы) · **ветка:** `stage/0-mvp`
 - **План:** `docs/superpowers/plans/2026-11-05-mvp-a.md`
-- **Последняя завершённая задача:** 1.3 CollectTelemetry: изоляция сбоев считываний, Failed(message), CancellationException пробрасывается
+- **Последняя завершённая задача:** 1.3 fix: CollectTelemetry ловит Exception, Error пробрасывается
 - **Следующая задача:** 1.4 каталог проверок, RunCapabilityChecks, ExportCapabilityReport
 - **Блокеры:** GitHub-remote не настроен (CI заработает после пуша)
 - **Как поднять стенд:** `deploy/README.md` (4 команды + `./test-stand.sh`); нужен `local.properties` с `sdk.dir` для сборки.
@@ -29,3 +29,4 @@
 | 2026-11-06 | 1.1 console:core:mvi: MviStore, Reducer, BaseMviViewModel (10 тестов) | см. `git log` | jvmTest 10/10 зелёные, покрытие модуля 100%, полная сборка exit 0 |
 | 2026-11-06 | 1.2 agent:domain: модель считываний (Reading, BatteryState и др.) и порты TelemetrySource/SequenceSource | см. `git log` | jvmTest 11 тестов зелёные, покрытие модуля 100%, полная сборка exit 0 |
 | 2026-11-06 | 1.3 CollectTelemetry: изоляция сбоев считываний, Failed(message), CancellationException пробрасывается | см. `git log` | agent:domain jvmTest зелёные, покрытие инструкций 96.7%, строк 94% |
+| 2026-11-06 | 1.3 fix: CollectTelemetry ловит Exception, Error пробрасывается | см. `git log` | agent:domain тесты зелёные, покрытие >=90% |

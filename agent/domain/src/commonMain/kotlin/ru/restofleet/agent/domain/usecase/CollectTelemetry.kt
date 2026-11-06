@@ -39,13 +39,14 @@ class CollectTelemetry(
         )
     }
 
-    @Suppress("TooGenericExceptionCaught") // изоляция сбоя любого считывания — цель класса
+    // Ловим именно Exception: Error (OOM и т.п.) — состояние процесса, не сбой считывания, и пробрасывается.
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun <T> isolated(block: suspend () -> Reading<T>): Reading<T> =
         try {
             block()
         } catch (e: CancellationException) {
             throw e
-        } catch (t: Throwable) {
+        } catch (t: Exception) {
             Reading.Unavailable(UnavailableReason.Failed(t.message ?: t::class.simpleName.orEmpty()))
         }
 }

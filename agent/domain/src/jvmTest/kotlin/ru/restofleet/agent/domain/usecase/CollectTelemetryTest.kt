@@ -109,6 +109,13 @@ class CollectTelemetryTest {
     }
 
     @Test
+    fun errorIsNotSwallowed() = runTest {
+        source.batteryResult = { throw OutOfMemoryError("oom") }
+
+        assertFailsWith<OutOfMemoryError> { collect(emptyList()) }
+    }
+
+    @Test
     fun seqIsMonotonic() = runTest {
         val seqs = List(3) { collect(emptyList()).seq }
 
