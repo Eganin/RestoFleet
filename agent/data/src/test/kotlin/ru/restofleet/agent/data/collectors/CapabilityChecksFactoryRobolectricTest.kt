@@ -31,7 +31,7 @@ class CapabilityChecksFactoryRobolectricTest {
             ssid = SsidCollector(appContext),
             resources = ResourceCollector(appContext),
             appVersions = AppVersionsCollector(appContext),
-            foreground = ForegroundAppCollector(appContext, clock, api),
+            foreground = ForegroundAppCollector(appContext, clock, apiLevel = api),
             light = LightSensorCollector(appContext, 10L),
             motion = MotionCollector(appContext, FreeFallDetector()),
             packageEvents = PackageEventsObserver(appContext),

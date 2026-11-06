@@ -35,7 +35,7 @@ class AndroidTelemetrySourceTest {
         thermal = ThermalCollector(context, api, "release-keys"),
         network = NetworkCollector(context, api),
         resources = ResourceCollector(context),
-        foreground = ForegroundAppCollector(context, Clock { 0L }, api),
+        foreground = ForegroundAppCollector(context, Clock { 0L }, apiLevel = api),
         appVersions = AppVersionsCollector(context),
         io = countingIo,
     )

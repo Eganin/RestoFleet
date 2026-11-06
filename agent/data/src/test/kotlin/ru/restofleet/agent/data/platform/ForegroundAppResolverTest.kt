@@ -44,4 +44,39 @@ class ForegroundAppResolverTest {
         val events = listOf(UsageEventRaw("a", 2, 100), UsageEventRaw("a", 23, 200))
         assertThat(ForegroundAppResolver.resolve(events) as Any?).isNull()
     }
+
+    @Test
+    fun previousAppSurvivesWindowWithoutEvents() {
+        val previous = ForegroundApp("a", 100)
+
+        assertThat(ForegroundAppResolver.resolve(emptyList(), previous)).isEqualTo(previous)
+    }
+
+    @Test
+    fun newerResumeReplacesPreviousApp() {
+        val events = listOf(UsageEventRaw("b", 1, 300))
+
+        assertThat(ForegroundAppResolver.resolve(events, ForegroundApp("a", 100))).isEqualTo(ForegroundApp("b", 300))
+    }
+
+    @Test
+    fun olderResumeInOverlapDoesNotReplacePreviousApp() {
+        val events = listOf(UsageEventRaw("b", 1, 90))
+
+        assertThat(ForegroundAppResolver.resolve(events, ForegroundApp("a", 100))).isEqualTo(ForegroundApp("a", 100))
+    }
+
+    @Test
+    fun pauseOfPreviousAppWithoutNewResumeIsNull() {
+        val events = listOf(UsageEventRaw("a", 2, 200))
+
+        assertThat(ForegroundAppResolver.resolve(events, ForegroundApp("a", 100)) as Any?).isNull()
+    }
+
+    @Test
+    fun pauseOfPreviousAppFollowedByNewResumeOfSameAppIsThatApp() {
+        val events = listOf(UsageEventRaw("a", 2, 200), UsageEventRaw("a", 1, 250))
+
+        assertThat(ForegroundAppResolver.resolve(events, ForegroundApp("a", 100))).isEqualTo(ForegroundApp("a", 250))
+    }
 }
