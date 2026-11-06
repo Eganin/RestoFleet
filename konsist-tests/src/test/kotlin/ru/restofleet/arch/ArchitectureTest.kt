@@ -32,7 +32,8 @@ class ArchitectureTest {
             .assertTrue(testName = "use case has exactly one public operator invoke") { useCase ->
                 val publicFunctions = useCase.functions(includeNested = false, includeLocal = false)
                     .filter { it.hasPublicOrDefaultModifier }
-                publicFunctions.size == 1 && publicFunctions.single().let { it.name == "invoke" && it.hasOperatorModifier }
+                val single = publicFunctions.singleOrNull()
+                single != null && single.name == "invoke" && single.hasOperatorModifier
             }
     }
 
