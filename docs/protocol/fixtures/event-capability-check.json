@@ -1,0 +1,8 @@
+{
+  "type": "capability_check",
+  "ts": 1793865720000,
+  "checkId": "R3",
+  "status": "LIMITED",
+  "raw": { "status": "NONE", "headroom": "NaN" },
+  "note": "эмулятор отдаёт заглушку"
+}

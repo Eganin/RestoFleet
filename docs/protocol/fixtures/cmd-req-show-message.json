@@ -1,0 +1,6 @@
+{
+  "cmdId": "c-01J9Z3",
+  "type": "show_message",
+  "params": { "text": "Перезагрузите роутер", "level": "warning" },
+  "expiresAt": 1793866100000
+}

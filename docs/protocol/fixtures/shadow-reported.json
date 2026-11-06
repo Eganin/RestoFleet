@@ -1,0 +1,12 @@
+{
+  "version": 12,
+  "telemetry": { "intervalSec": 30 },
+  "thresholds": { "batteryLowPct": 20, "tempHighC": 45.0, "fgAbsentMin": 10 },
+  "watchedApps": [ "com.android.chrome" ],
+  "probes": [
+    { "id": "api", "type": "http", "url": "https://api.company.example/health", "intervalSec": 30, "timeoutMs": 5000, "failThreshold": 3, "reference": false }
+  ],
+  "appliedVersion": 12,
+  "appliedAt": 1793865605000,
+  "errors": []
+}

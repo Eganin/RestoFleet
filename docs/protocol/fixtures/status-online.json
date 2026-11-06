@@ -1,0 +1,10 @@
+{
+  "state": "online",
+  "ts": 1793865600000,
+  "connId": "k-7f3a9c",
+  "agentVersion": "0.1.0-mvp",
+  "mode": "normal",
+  "role": "kitchen",
+  "bootId": "b7f2c1d0",
+  "device": { "model": "sdk_gphone64_arm64", "manufacturer": "Google", "osVersion": "16", "apiLevel": 36 }
+}

@@ -1,0 +1,8 @@
+{
+  "ts": 1793865630000,
+  "results": [
+    { "id": "api", "ok": false, "error": "timeout", "totalMs": 5000, "dnsMs": 14, "connectMs": 38 },
+    { "id": "kds", "ok": true, "status": 200, "totalMs": 212, "dnsMs": 9, "connectMs": 31, "tlsMs": 64, "ttfbMs": 108 },
+    { "id": "ref", "ok": true, "status": 200, "totalMs": 95 }
+  ]
+}

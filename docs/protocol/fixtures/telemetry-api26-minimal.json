@@ -1,0 +1,10 @@
+{
+  "ts": 1793865630000,
+  "seq": 1,
+  "battery": { "level": 54, "charging": false, "plugged": "none", "tempC": 31.0 },
+  "net": { "type": "wifi", "validated": false },
+  "storage": { "freeMb": 812 },
+  "memory": { "availMb": 640 },
+  "uptimeSec": 120,
+  "apps": []
+}

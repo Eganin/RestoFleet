@@ -1,0 +1,12 @@
+{
+  "ts": 1793865630000,
+  "seq": 18234,
+  "battery": { "level": 87, "charging": true, "plugged": "ac", "tempC": 38.4 },
+  "thermal": { "status": "LIGHT", "headroom": 0.62 },
+  "net": { "type": "wifi", "rssi": -67, "validated": true },
+  "storage": { "freeMb": 5120 },
+  "memory": { "availMb": 1430 },
+  "uptimeSec": 360021,
+  "foregroundApp": "com.android.chrome",
+  "apps": [ { "pkg": "com.android.chrome", "versionName": "130.0", "versionCode": 0 } ]
+}

@@ -35,3 +35,10 @@ kover {
         }
     }
 }
+
+tasks.withType<Test>().configureEach {
+    // Golden-фикстуры протокола лежат в docs/ и являются частью контракта (архитектура, разд. 7)
+    val fixtures = rootProject.layout.projectDirectory.dir("docs/protocol/fixtures")
+    inputs.dir(fixtures).withPropertyName("protocolFixtures")
+    systemProperty("fixturesDir", fixtures.asFile.absolutePath)
+}

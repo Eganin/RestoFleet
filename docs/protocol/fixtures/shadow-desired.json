@@ -1,0 +1,11 @@
+{
+  "version": 12,
+  "telemetry": { "intervalSec": 30 },
+  "thresholds": { "batteryLowPct": 20, "tempHighC": 45.0, "fgAbsentMin": 10 },
+  "watchedApps": [ "com.android.chrome" ],
+  "probes": [
+    { "id": "api", "type": "http", "url": "https://api.company.example/health", "intervalSec": 30, "timeoutMs": 5000, "failThreshold": 3, "reference": false },
+    { "id": "kds", "type": "http", "url": "https://kitchen.company.example/", "intervalSec": 60, "timeoutMs": 5000, "failThreshold": 3, "reference": false },
+    { "id": "ref", "type": "http", "url": "https://reference.example/", "intervalSec": 60, "timeoutMs": 5000, "failThreshold": 3, "reference": true }
+  ]
+}

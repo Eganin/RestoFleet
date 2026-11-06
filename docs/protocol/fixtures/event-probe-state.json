@@ -1,0 +1,1 @@
+{ "type": "probe_state", "ts": 1793865700000, "target": "api", "state": "down", "error": "timeout", "failures": 3 }
