@@ -3,6 +3,7 @@ package ru.restofleet.agent.data.probes
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
+import kotlin.coroutines.cancellation.CancellationException
 import ru.restofleet.agent.domain.capability.CheckId
 import ru.restofleet.agent.domain.capability.CheckResult
 import ru.restofleet.agent.domain.capability.CheckStatus
@@ -64,7 +65,7 @@ class ProbeChecksFactoryTest {
             "https://www.google.com/generate_204" to 5_000L,
             "https://nonexistent.invalid/" to 5_000L,
             "https://10.255.255.1/" to 3_000L,
-            "https://10.0.2.2:9/" to 5_000L,
+            "https://127.0.0.1:9/" to 5_000L,
             "https://expired.badssl.com/" to 5_000L,
             "https://httpbin.org/status/503" to 5_000L,
         ).inOrder()
@@ -74,19 +75,20 @@ class ProbeChecksFactoryTest {
     fun p1IsOkWhenEveryClassIsDeterminedCorrectly() {
         val r = run(CheckId.P1)
         assertThat(r.status).isEqualTo(CheckStatus.OK)
+        assertThat(r.note as Any?).isNull()
         assertThat(r.checkedAt).isEqualTo(TS)
         assertThat(r.raw).containsExactly(
-            "google_204", "ok 204 120ms",
-            "nonexistent", "dns_fail 120ms",
-            "blackhole", "timeout 120ms",
-            "refused", "conn_refused 120ms",
-            "expired_badssl", "tls_error 120ms",
-            "httpbin_503", "http_5xx 503 120ms",
+            "google_204", "expected=ok actual=ok httpStatus=204 totalMs=120",
+            "nonexistent", "expected=dns_fail actual=dns_fail httpStatus=- totalMs=120",
+            "blackhole", "expected=timeout actual=timeout httpStatus=- totalMs=120",
+            "refused", "expected=conn_refused actual=conn_refused httpStatus=- totalMs=120",
+            "expired_badssl", "expected=tls_error actual=tls_error httpStatus=- totalMs=120",
+            "httpbin_503", "expected=http_5xx actual=http_5xx httpStatus=503 totalMs=120",
         )
     }
 
     @Test
-    fun p1ReportsMismatchesInNote() {
+    fun p1MismatchIsLimitedWithFullRawAndNote() {
         val exec = executor(
             mapOf(
                 "expired_badssl" to result("expired_badssl", 200, null),
@@ -94,17 +96,34 @@ class ProbeChecksFactoryTest {
             ),
         )
         val r = run(CheckId.P1, exec)
-        assertThat(r.status).isEqualTo(CheckStatus.UNAVAILABLE)
+        assertThat(r.status).isEqualTo(CheckStatus.LIMITED)
         assertThat(r.note).contains("refused: expected conn_refused, got timeout")
         assertThat(r.note).contains("expired_badssl: expected tls_error, got ok")
+        assertThat(r.raw).hasSize(6)
+        assertThat(r.raw["refused"]).isEqualTo("expected=conn_refused actual=timeout httpStatus=- totalMs=120")
+        assertThat(r.raw["expired_badssl"]).isEqualTo("expected=tls_error actual=ok httpStatus=200 totalMs=120")
+        assertThat(r.raw["google_204"]).isEqualTo("expected=ok actual=ok httpStatus=204 totalMs=120")
     }
 
     @Test
     fun p1ExpectsOkTargetToSucceed() {
         val exec = executor(mapOf("google_204" to result("google_204", null, ProbeError.DNS_FAIL)))
         val r = run(CheckId.P1, exec)
-        assertThat(r.status).isEqualTo(CheckStatus.UNAVAILABLE)
+        assertThat(r.status).isEqualTo(CheckStatus.LIMITED)
         assertThat(r.note).contains("google_204: expected ok, got dns_fail")
+    }
+
+    @Test
+    fun p1ExecutorFailureIsUnavailableNotThrown() {
+        val exec = ProbeExecutor { throw IllegalStateException("boom") }
+        val r = run(CheckId.P1, exec)
+        assertThat(r.status).isEqualTo(CheckStatus.UNAVAILABLE)
+        assertThat(r.note).contains("boom")
+    }
+
+    @Test(expected = CancellationException::class)
+    fun p1PropagatesCancellation() {
+        run(CheckId.P1, ProbeExecutor { throw CancellationException("cancelled") })
     }
 
     @Test
@@ -153,6 +172,15 @@ class ProbeChecksFactoryTest {
         val r = run(CheckId.P3, gateway = gatewayResult(ProbeError.LOCAL_NETWORK_DENIED))
         assertThat(r.status).isEqualTo(CheckStatus.UNAVAILABLE)
         assertThat(r.note).contains("local_network_denied")
+    }
+
+    @Test
+    fun p3UnreachableClassesAreNotReachable() {
+        listOf(ProbeError.OTHER, ProbeError.NO_NETWORK, ProbeError.DNS_FAIL).forEach {
+            val r = run(CheckId.P3, gateway = gatewayResult(it))
+            assertThat(r.status).isEqualTo(CheckStatus.UNAVAILABLE)
+            assertThat(r.note).contains(it.name.lowercase())
+        }
     }
 
     @Test

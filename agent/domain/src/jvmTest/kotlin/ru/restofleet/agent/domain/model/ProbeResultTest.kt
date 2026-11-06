@@ -8,18 +8,24 @@ class ProbeResultTest {
         ProbeResult("t", ok, null, error, 10, ProbePhases(null, null, null, null), 1L)
 
     @Test
-    fun acceptedConnectionMeansHostReachable() {
-        assertThat(result(ok = true, error = null).hostReachable).isTrue()
+    fun httpCodesAreNotConsidered() {
+        val r = ProbeResult("t", false, 503, ProbeError.HTTP_5XX, 10, ProbePhases(null, null, null, null), 1L)
+        assertThat(r.tcpReachable).isFalse()
     }
 
     @Test
-    fun refusedConnectionStillMeansHostReachable() {
-        assertThat(result(ok = false, error = ProbeError.CONN_REFUSED).hostReachable).isTrue()
+    fun acceptedConnectionMeansTcpReachable() {
+        assertThat(result(ok = true, error = null).tcpReachable).isTrue()
+    }
+
+    @Test
+    fun refusedConnectionStillMeansTcpReachable() {
+        assertThat(result(ok = false, error = ProbeError.CONN_REFUSED).tcpReachable).isTrue()
     }
 
     @Test
     fun otherFailuresMeanHostUnreachable() {
         val unreachable = ProbeError.entries - ProbeError.CONN_REFUSED
-        unreachable.forEach { assertThat(result(ok = false, error = it).hostReachable).isFalse() }
+        unreachable.forEach { assertThat(result(ok = false, error = it).tcpReachable).isFalse() }
     }
 }

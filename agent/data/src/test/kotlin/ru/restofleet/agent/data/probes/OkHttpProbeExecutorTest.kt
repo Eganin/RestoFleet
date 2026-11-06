@@ -23,6 +23,7 @@ import ru.restofleet.shared.kernel.Clock
 import java.net.InetAddress
 import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 class OkHttpProbeExecutorTest {
     private val server = MockWebServer()
@@ -150,6 +151,9 @@ class OkHttpProbeExecutorTest {
         assertThat(r.ok).isFalse()
         assertThat(r.httpStatus as Any?).isNull()
         assertThat(r.error).isEqualTo(ProbeError.TLS_ERROR)
+        // TCP-соединение прошло, рукопожатие нет: connect есть, tls нет.
+        assertThat(r.phases.connectMs as Any?).isNotNull()
+        assertThat(r.phases.tlsMs as Any?).isNull()
     }
 
     @Test
@@ -189,6 +193,25 @@ class OkHttpProbeExecutorTest {
     }
 
     @Test
+    fun throwingNetworkAvailabilityDoesNotBreakTheProbe() {
+        val executor = OkHttpProbeExecutor(baseClient, Clock { TS }, { throw SecurityException("no permission") })
+        val r = runBlocking { executor.probe(ProbeTarget("t", "http://nonexistent.invalid/", 2_000)) }
+        assertThat(r.ok).isFalse()
+        assertThat(r.error).isEqualTo(ProbeError.DNS_FAIL)
+    }
+
+    @Test
+    fun productionClientForbidsCleartext() {
+        server.enqueue(MockResponse.Builder().code(200).build())
+        val client = productionProbeClient().newBuilder().dns(loopbackDns).build()
+        assertThat(client.connectionSpecs).containsExactly(okhttp3.ConnectionSpec.MODERN_TLS)
+        val r = probe(httpUrl(), client = client)
+        assertThat(r.ok).isFalse()
+        assertThat(r.error).isEqualTo(ProbeError.OTHER)
+        assertThat(server.requestCount).isEqualTo(0)
+    }
+
+    @Test
     fun malformedUrlIsOtherAndNeverThrows() {
         val r = probe("not a url")
         assertThat(r.ok).isFalse()
@@ -198,8 +221,9 @@ class OkHttpProbeExecutorTest {
     @Test
     fun totalMsComesFromMonotonicSource() {
         server.enqueue(MockResponse.Builder().code(200).build())
-        val ticks = generateSequence(0L) { it + 250_000_000L }.iterator()
-        val r = runBlocking { executor(nano = { ticks.next() }).probe(ProbeTarget("t", httpUrl(), 2_000)) }
+        val ticks = AtomicLong()
+        val exec = executor(nano = { ticks.addAndGet(250_000_000L) })
+        val r = runBlocking { exec.probe(ProbeTarget("t", httpUrl(), 2_000)) }
         assertThat(r.totalMs % 250).isEqualTo(0L)
         assertThat(r.totalMs).isGreaterThan(0L)
     }

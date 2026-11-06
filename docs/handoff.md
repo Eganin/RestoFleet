@@ -6,7 +6,7 @@
 
 - **Этап:** MVP-A (эмуляторы) · **ветка:** `stage/0-mvp`
 - **План:** `docs/superpowers/plans/2026-11-05-mvp-a.md`
-- **Последняя завершённая задача:** 1.7 проверки доступности P1–P3: HTTPS-пробы (классы ошибок, фазы), проба шлюза, Lab-проверки
+- **Последняя завершённая задача:** 1.7 fix round 1: классификатор по errno, P1 отдельной проверкой, tcpReachable, TLS-only клиент
 - **Следующая задача:** 1.8 agent:app (FGS, boot, watchdog, Koin, HeartbeatLog)
 - **Блокеры:** GitHub-remote не настроен (CI заработает после пуша)
 - **Как поднять стенд:** `deploy/README.md` (4 команды + `./test-stand.sh`); нужен `local.properties` с `sdk.dir` для сборки.
@@ -35,3 +35,4 @@
 | 2026-11-06 | 1.5 fix round 1: check зависит от koverVerifyPlatform, тест округления | см. `git log` | гейт platform проверен мутацией (98% -> FAIL), полная сборка exit 0 |
 | 2026-11-06 | 1.6 agent:data/collectors: R1–R9, R11, R12, R14 + ReadingCheck/SubscriptionCheck + ChecksModule | см. `git log` | тесты agent:data зелёные (~85), строки модуля 96,7 %, ветви platform 100 %, полная сборка exit 0 |
 | 2026-11-06 | 1.7 проверки доступности P1–P3: HTTPS-пробы (классы ошибок, фазы), проба шлюза, Lab-проверки | см. `git log` | agent:data строки 96,1 %, ветви platform 100 %, agent:domain строки 97,2 %, полная сборка exit 0 |
+| 2026-11-06 | 1.7 fix round 1: классификатор по errno, P1 отдельной проверкой, tcpReachable, TLS-only клиент | см. `git log` | agent:data строки 96,4 %, agent:domain 97,2 %, ветви platform 100 %, полная сборка exit 0 |

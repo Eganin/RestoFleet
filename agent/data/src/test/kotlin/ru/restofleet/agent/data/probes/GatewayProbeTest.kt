@@ -16,6 +16,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import ru.restofleet.agent.data.collectors.appContext
 import ru.restofleet.agent.domain.model.ProbeError
+import ru.restofleet.agent.domain.model.tcpReachable
 import ru.restofleet.shared.kernel.Clock
 import java.net.ConnectException
 import java.net.InetAddress
@@ -28,6 +29,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import android.content.Context
+import android.content.ContextWrapper
 import android.net.ConnectivityManager
 
 @RunWith(RobolectricTestRunner::class)
@@ -110,6 +112,37 @@ class GatewayProbeTest {
         assertThat(refused.error).isEqualTo(ProbeError.CONN_REFUSED)
         val timeout = probe(RecordingSocket { _, _ -> throw SocketTimeoutException("connect timed out") })
         assertThat(timeout.error).isEqualTo(ProbeError.TIMEOUT)
+    }
+
+    private fun androidError(errno: String, text: String) = ConnectException(
+        "failed to connect to /192.168.1.1 (port 80) from /192.168.1.50 (port 41234) after 3000ms: " +
+            "isConnected failed: $errno ($text)",
+    )
+
+    @Test
+    fun androidErrnoTextsAreNotMistakenForRefused() {
+        setGatewayRoute(gateway)
+        val cases = mapOf(
+            androidError("ECONNREFUSED", "Connection refused") to ProbeError.CONN_REFUSED,
+            androidError("EHOSTUNREACH", "No route to host") to ProbeError.OTHER,
+            androidError("ENETUNREACH", "Network is unreachable") to ProbeError.NO_NETWORK,
+            androidError("ETIMEDOUT", "Connection timed out") to ProbeError.TIMEOUT,
+        )
+        cases.forEach { (e, expected) ->
+            val r = probe(RecordingSocket { _, _ -> throw e })
+            assertThat(r.error).isEqualTo(expected)
+            assertThat(r.tcpReachable).isEqualTo(expected == ProbeError.CONN_REFUSED)
+        }
+    }
+
+    @Test
+    fun securityExceptionFromConnectivityManagerIsOtherNotDenied() {
+        val denying = object : ContextWrapper(appContext) {
+            override fun getSystemService(name: String): Any = throw SecurityException("ACCESS_NETWORK_STATE")
+        }
+        val r = runBlocking { GatewayProbe(denying, { Socket() }, Clock { TS }).probe() }
+        assertThat(r.ok).isFalse()
+        assertThat(r.error).isEqualTo(ProbeError.OTHER)
     }
 
     @Test

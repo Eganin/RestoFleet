@@ -3,7 +3,6 @@ package ru.restofleet.agent.data.di
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import okhttp3.OkHttpClient
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.Module
 import org.koin.core.qualifier.named
@@ -25,6 +24,7 @@ import ru.restofleet.agent.data.probes.GatewayProbe
 import ru.restofleet.agent.data.probes.NetworkAvailability
 import ru.restofleet.agent.data.probes.OkHttpProbeExecutor
 import ru.restofleet.agent.data.probes.ProbeChecksFactory
+import ru.restofleet.agent.data.probes.productionProbeClient
 import ru.restofleet.agent.domain.capability.CapabilityCheck
 import ru.restofleet.agent.domain.port.ProbeExecutor
 
@@ -66,8 +66,8 @@ val checksModule: Module = module {
         ).create()
     }
 
-    // Продакшн-клиент: системное хранилище доверия, проверка имени хоста включена (без trust-all).
-    single { OkHttpClient.Builder().build() }
+    // Продакшн-клиент проб (TLS-only, системный trust store) собирается вне di.
+    single { productionProbeClient() }
     single { NetworkAvailability(androidContext()) }
     single { GatewayProbe(androidContext(), clock = get()) }
     single<ProbeExecutor> {

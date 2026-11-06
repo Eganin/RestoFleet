@@ -28,10 +28,17 @@ internal class PhaseTimingListener(private val nanoTime: () -> Long = System::na
         val tls = span(tlsStart, tlsEnd)
         return ProbePhases(
             dnsMs = span(dnsStart, dnsEnd),
-            connectMs = span(connectStart, connectEnd)?.let { it - (tls ?: 0L) },
+            connectMs = tcpMs(tls),
             tlsMs = tls,
             ttfbMs = span(callStart, headersStart),
         )
+    }
+
+    /** TCP-время: без TLS при успехе; если рукопожатие не завершилось — до его начала (TCP уже прошёл). */
+    private fun tcpMs(tls: Long?): Long? = when {
+        connectEnd != null -> span(connectStart, connectEnd)?.let { it - (tls ?: 0L) }
+        tlsStart != null && tlsEnd == null -> span(connectStart, tlsStart)
+        else -> null
     }
 
     private fun span(start: Long?, end: Long?): Long? =

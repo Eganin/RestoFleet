@@ -30,5 +30,5 @@ data class ProbeResult(
     val ts: Long,
 )
 
-/** Хост достижим по TCP: соединение принято либо отвергнуто (RST — значит хост ответил). */
-val ProbeResult.hostReachable: Boolean get() = ok || error == ProbeError.CONN_REFUSED
+/** TCP-уровень: ok или CONN_REFUSED (RST) означают, что хост ответил; HTTP-коды не учитываются. */
+val ProbeResult.tcpReachable: Boolean get() = ok || error == ProbeError.CONN_REFUSED

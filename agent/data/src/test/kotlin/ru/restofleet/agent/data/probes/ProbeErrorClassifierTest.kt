@@ -6,6 +6,7 @@ import ru.restofleet.agent.domain.model.ProbeError
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.net.ConnectException
+import java.net.NoRouteToHostException
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -71,6 +72,63 @@ class ProbeErrorClassifierTest {
             "failed to connect to /192.168.1.1 (port 80): connect failed: EPERM (Operation not permitted)",
         )
         assertThat(classify(e)).isEqualTo(ProbeError.LOCAL_NETWORK_DENIED)
+    }
+
+    private fun android(errno: String, text: String) = ConnectException(
+        "failed to connect to /192.168.1.1 (port 80) from /192.168.1.50 (port 41234) after 3000ms: " +
+            "isConnected failed: $errno ($text)",
+    )
+
+    @Test
+    fun androidConnectExceptionIsClassifiedByErrno() {
+        assertThat(classify(android("ECONNREFUSED", "Connection refused"))).isEqualTo(ProbeError.CONN_REFUSED)
+        assertThat(classify(android("ETIMEDOUT", "Connection timed out"))).isEqualTo(ProbeError.TIMEOUT)
+        assertThat(classify(android("ENETUNREACH", "Network is unreachable"))).isEqualTo(ProbeError.NO_NETWORK)
+        assertThat(classify(android("EHOSTUNREACH", "No route to host"))).isEqualTo(ProbeError.OTHER)
+        assertThat(classify(android("EPERM", "Operation not permitted"))).isEqualTo(ProbeError.LOCAL_NETWORK_DENIED)
+        assertThat(classify(android("EACCES", "Permission denied"))).isEqualTo(ProbeError.LOCAL_NETWORK_DENIED)
+    }
+
+    @Test
+    fun jvmMessagesAreClassified() {
+        assertThat(classify(ConnectException("Connection refused"))).isEqualTo(ProbeError.CONN_REFUSED)
+        assertThat(classify(ConnectException("Connection refused (Connection refused)")))
+            .isEqualTo(ProbeError.CONN_REFUSED)
+        assertThat(classify(ConnectException("Connection timed out (Connection timed out)")))
+            .isEqualTo(ProbeError.TIMEOUT)
+        assertThat(classify(SocketException("Network is unreachable (connect failed)")))
+            .isEqualTo(ProbeError.NO_NETWORK)
+        assertThat(classify(NoRouteToHostException("No route to host"))).isEqualTo(ProbeError.OTHER)
+        assertThat(classify(SocketException("Permission denied"))).isEqualTo(ProbeError.LOCAL_NETWORK_DENIED)
+    }
+
+    @Test
+    fun matchingIsCaseInsensitive() {
+        assertThat(classify(ConnectException("CONNECTION REFUSED"))).isEqualTo(ProbeError.CONN_REFUSED)
+        assertThat(classify(ConnectException("econnrefused"))).isEqualTo(ProbeError.CONN_REFUSED)
+    }
+
+    @Test
+    fun unrecognizedConnectExceptionIsOther() {
+        assertThat(classify(ConnectException("weird"))).isEqualTo(ProbeError.OTHER)
+        assertThat(classify(ConnectException())).isEqualTo(ProbeError.OTHER)
+    }
+
+    @Test
+    fun causeChainIsInspected() {
+        val wrapped = IOException("call failed", android("ECONNREFUSED", "Connection refused"))
+        assertThat(classify(wrapped)).isEqualTo(ProbeError.CONN_REFUSED)
+        val eperm = ConnectException("connect failed")
+            .apply { initCause(SocketException("EPERM (Operation not permitted)")) }
+        assertThat(classify(eperm)).isEqualTo(ProbeError.LOCAL_NETWORK_DENIED)
+    }
+
+    @Test
+    fun causeCycleDoesNotHang() {
+        val a = ConnectException("a")
+        val b = IOException("b", a)
+        a.initCause(b)
+        assertThat(classify(a)).isEqualTo(ProbeError.OTHER)
     }
 
     @Test

@@ -54,6 +54,15 @@ class PhaseTimingListenerTest {
     }
 
     @Test
+    fun failedTlsHandshakeKeepsTcpConnectTime() {
+        at(1_000) { listener.callStart(call) }
+        at(1_000) { listener.connectStart(call, addr, Proxy.NO_PROXY) }
+        at(1_025) { listener.secureConnectStart(call) }
+        assertThat(listener.phases().connectMs).isEqualTo(25L)
+        assertThat(listener.phases().tlsMs as Any?).isNull()
+    }
+
+    @Test
     fun retryOfConnectUsesLastAttempt() {
         at(1_000) { listener.callStart(call) }
         at(1_000) { listener.connectStart(call, addr, Proxy.NO_PROXY) }

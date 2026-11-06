@@ -26,14 +26,19 @@ class GatewayProbe(
     private val clock: Clock = SystemClock,
     private val nanoTime: () -> Long = System::nanoTime,
 ) {
-    @Suppress("TooGenericExceptionCaught") // проба не должна ронять прогон; Error и отмена не перехватываются
+    @Suppress("TooGenericExceptionCaught", "ReturnCount", "SwallowedException")
+    // проба не должна ронять прогон; Error и отмена не перехватываются
     suspend fun probe(port: Int = DEFAULT_PORT, timeoutMs: Int = DEFAULT_TIMEOUT_MS): ProbeResult {
         val started = nanoTime()
+        val gateway = try {
+            defaultGateway()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Сбой получения маршрута (например, нет ACCESS_NETWORK_STATE) — не отказ сокета.
+            return result(ProbeError.OTHER, started)
+        } ?: return result(ProbeError.NO_NETWORK, started)
         val failure: Throwable? = try {
-            val gateway = defaultGateway()
-            if (gateway == null) {
-                return result(ProbeError.NO_NETWORK, started)
-            }
             connect(InetSocketAddress(gateway, port), timeoutMs)
             null
         } catch (e: CancellationException) {

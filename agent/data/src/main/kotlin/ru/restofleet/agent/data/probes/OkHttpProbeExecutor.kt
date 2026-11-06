@@ -63,7 +63,7 @@ class OkHttpProbeExecutor(
         val error = if (status != null) {
             ProbeErrorClassifier.fromStatus(status)
         } else {
-            ProbeErrorClassifier.fromThrowable(outcome.exceptionOrNull()!!, networkAvailable())
+            ProbeErrorClassifier.fromThrowable(outcome.exceptionOrNull()!!, isNetworkAvailable())
         }
         return ProbeResult(
             targetId = target.id,
@@ -74,6 +74,14 @@ class OkHttpProbeExecutor(
             phases = listener.phases(),
             ts = clock.nowMillis(),
         )
+    }
+
+    /** Сбой проверки сети не ломает пробу: считаем сеть доступной, класс ошибки определит реальный сбой. */
+    @Suppress("TooGenericExceptionCaught", "SwallowedException")
+    private fun isNetworkAvailable(): Boolean = try {
+        networkAvailable()
+    } catch (e: Exception) {
+        true
     }
 
     private suspend fun execute(call: Call): Int = suspendCancellableCoroutine { cont ->
