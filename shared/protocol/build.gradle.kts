@@ -29,6 +29,10 @@ kotlin {
 }
 
 kover {
+    currentProject {
+        // Вариант для агрегированного CI-гейта: в KMP-модулях тесты и код меряются на jvm-таргете
+        createVariant("ci") { add("jvm") }
+    }
     reports {
         verify {
             rule { minBound(90) }
