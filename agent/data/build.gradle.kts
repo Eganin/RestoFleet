@@ -64,7 +64,10 @@ kover {
     }
 }
 
-// koverVerifyCi (CI-гейт) обязан проверять и 100 % ветвей platform
+// Гарантия 100 % ветвей пакета platform: вариант "platform" существует отдельно, потому что в Kover 0.9 фильтры
+// задаются только на уровне варианта, а не правила. Правило проверяет koverVerifyPlatform; его запускают
+// `check` (значит и `build`) и koverVerifyCi модуля — удалять обе связки нельзя.
+tasks.named("check") { dependsOn("koverVerifyPlatform") }
 tasks.matching { it.name == "koverVerifyCi" }.configureEach { dependsOn("koverVerifyPlatform") }
 
 detekt {

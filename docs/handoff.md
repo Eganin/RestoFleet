@@ -6,7 +6,7 @@
 
 - **Этап:** MVP-A (эмуляторы) · **ветка:** `stage/0-mvp`
 - **План:** `docs/superpowers/plans/2026-11-05-mvp-a.md`
-- **Последняя завершённая задача:** 1.5 agent:data/platform: чистые функции маппинга (7 файлов)
+- **Последняя завершённая задача:** 1.5 fix round 1: check зависит от koverVerifyPlatform, тест округления
 - **Следующая задача:** 1.6 коллекторы R1–R9, R11, R12, R14
 - **Блокеры:** GitHub-remote не настроен (CI заработает после пуша)
 - **Как поднять стенд:** `deploy/README.md` (4 команды + `./test-stand.sh`); нужен `local.properties` с `sdk.dir` для сборки.
@@ -32,3 +32,4 @@
 | 2026-11-06 | 1.3 fix: CollectTelemetry ловит Exception, Error пробрасывается | см. `git log` | agent:domain тесты зелёные, покрытие >=90% |
 | 2026-11-06 | 1.4 Каталог проверок (43 CheckId), RunCapabilityChecks, ExportCapabilityReport | см. `git log` | agent:domain: 16 тестов в задаче, line coverage модуля 97.5%, build/detekt/kover/konsist exit 0 |
 | 2026-11-06 | 1.5 agent:data/platform: чистые функции маппинга (7 файлов) | см. `git log` | тесты agent:data зелёные, ветви platform 50/50 (100%), полная сборка exit 0 |
+| 2026-11-06 | 1.5 fix round 1: check зависит от koverVerifyPlatform, тест округления | см. `git log` | гейт platform проверен мутацией (98% -> FAIL), полная сборка exit 0 |

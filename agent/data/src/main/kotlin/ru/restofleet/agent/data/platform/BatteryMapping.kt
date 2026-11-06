@@ -32,6 +32,14 @@ object BatteryMapping {
     /** Температура в EXTRA_TEMPERATURE отсутствует (getIntExtra с Int.MIN_VALUE по умолчанию). */
     private const val TEMP_ABSENT = Int.MIN_VALUE
 
+    // Map вместо when: when по плотным константам компилируется в tableswitch с «дырами», которые Kover считает ветвями
+    private val SOURCES = mapOf(
+        PLUGGED_AC to PowerSource.AC,
+        PLUGGED_USB to PowerSource.USB,
+        PLUGGED_WIRELESS to PowerSource.WIRELESS,
+        PLUGGED_DOCK to PowerSource.DOCK,
+    )
+
     fun from(level: Int, scale: Int, status: Int, plugged: Int, tempTenths: Int): Reading<BatteryState> {
         if (scale <= 0 || level < 0 || level > scale) {
             return Reading.Unavailable(UnavailableReason.Failed("battery level=$level scale=$scale"))
@@ -46,14 +54,6 @@ object BatteryMapping {
             ),
         )
     }
-
-    // Map вместо when: when по плотным константам компилируется в tableswitch с «дырами», которые Kover считает ветвями
-    private val SOURCES = mapOf(
-        PLUGGED_AC to PowerSource.AC,
-        PLUGGED_USB to PowerSource.USB,
-        PLUGGED_WIRELESS to PowerSource.WIRELESS,
-        PLUGGED_DOCK to PowerSource.DOCK,
-    )
 
     private fun source(plugged: Int): PowerSource = SOURCES[plugged] ?: PowerSource.NONE
 }

@@ -59,4 +59,9 @@ class BatteryMappingTest {
     fun levelIsScaledToPercent() {
         assertThat(available(BatteryMapping.from(50, 200, 3, 0, 250)).levelPct).isEqualTo(25)
     }
+
+    @Test
+    fun levelPercentIsRoundedDown() {
+        assertThat(available(BatteryMapping.from(1, 3, 3, 0, 250)).levelPct).isEqualTo(33)
+    }
 }
