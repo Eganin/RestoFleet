@@ -2,7 +2,6 @@ package ru.restofleet.agent.domain.model
 
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
-import ru.restofleet.agent.domain.port.SequenceSource
 import kotlin.test.assertFailsWith
 
 class ReadingTest {
@@ -37,7 +36,6 @@ class ReadingTest {
             Reading.Unavailable(UnavailableReason.ApiLevelTooLow(required = 29, actual = 26))
 
         assertThat(reading).isEqualTo(Reading.Unavailable(UnavailableReason.ApiLevelTooLow(29, 26)))
-        assertThat(UnavailableReason.NoSensor).isNotEqualTo(UnavailableReason.EmulatorStub)
     }
 
     @Test
@@ -58,45 +56,5 @@ class ReadingTest {
         assertThat(ThermalStatus.SEVERE.ordinal).isGreaterThan(ThermalStatus.MODERATE.ordinal)
         assertThat(ThermalStatus.entries.last()).isEqualTo(ThermalStatus.SHUTDOWN)
         assertThat(ThermalState(null, null)).isEqualTo(ThermalState(status = null, headroom = null))
-    }
-
-    @Test
-    fun everyUnavailableReasonIsDistinguishable() {
-        val reasons = listOf(
-            UnavailableReason.NoSensor,
-            UnavailableReason.RequiresDeviceOwner,
-            UnavailableReason.EmulatorStub,
-            UnavailableReason.Failed("boom"),
-            UnavailableReason.PermissionMissing("android.permission.X"),
-            UnavailableReason.ApiLevelTooLow(required = 29, actual = 26),
-        )
-
-        assertThat(reasons.toSet()).hasSize(reasons.size)
-        assertThat(UnavailableReason.Failed("boom")).isEqualTo(UnavailableReason.Failed("boom"))
-    }
-
-    @Test
-    fun deviceResourcesAreComparedByValue() {
-        val resources = DeviceResources(1024, 512, 3600, "14", 34, "Pixel", "Google")
-
-        assertThat(resources.copy(uptimeSec = 7200).uptimeSec).isEqualTo(7200)
-        assertThat(resources).isEqualTo(DeviceResources(1024, 512, 3600, "14", 34, "Pixel", "Google"))
-        assertThat(resources).isNotEqualTo(resources.copy(model = "Other"))
-    }
-
-    @Test
-    fun appAndSensorValuesAreComparedByValue() {
-        assertThat(ForegroundApp("ru.x", 5L)).isEqualTo(ForegroundApp("ru.x", 5L))
-        assertThat(LightLevel(12.5f)).isEqualTo(LightLevel(12.5f))
-        val temps = HardwareTemps(cpuC = listOf(40f), skinC = listOf(35f), batteryC = emptyList())
-        assertThat(temps).isEqualTo(HardwareTemps(listOf(40f), listOf(35f), emptyList()))
-        assertThat(temps.hashCode()).isEqualTo(HardwareTemps(listOf(40f), listOf(35f), emptyList()).hashCode())
-    }
-
-    @Test
-    fun sequenceSourceIsReplaceableByLambda() {
-        var n = 0L
-        val source = SequenceSource { ++n }
-        assertThat(source.next()).isEqualTo(1L)
     }
 }

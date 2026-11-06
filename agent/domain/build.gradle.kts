@@ -29,6 +29,7 @@ kotlin {
             implementation(libs.junit4)
             implementation(libs.truth)
             implementation(libs.kotlin.test)
+            implementation(libs.kotlinx.coroutines.test)
         }
     }
 }
