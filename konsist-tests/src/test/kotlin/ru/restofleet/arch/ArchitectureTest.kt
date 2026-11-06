@@ -1,33 +1,51 @@
 package ru.restofleet.arch
 
+import com.google.common.truth.Truth.assertWithMessage
 import com.lemonappdev.konsist.api.Konsist
-import com.lemonappdev.konsist.api.ext.list.withNameEndingWith
+import com.lemonappdev.konsist.api.declaration.KoFileDeclaration
 import com.lemonappdev.konsist.api.verify.assertFalse
 import com.lemonappdev.konsist.api.verify.assertTrue
 import org.junit.Test
 
 /**
- * Правило зависимостей Clean Architecture (docs/architecture.md, разд. 3.1).
- * Domain-набор: shared:kernel и domain-модули. shared:protocol — DTO транспорта (слой data), в набор не входит.
+ * Правило зависимостей Clean Architecture (docs/architecture.md, разд. 3.1, 3.2, 4).
+ * Слой определяется путём модуля, а не именем класса: так правило ловит и Reducer, и Store, и Component.
+ *
+ * - domain: `<part>/domain/`, `<feature>-domain/`, `shared/{kernel,shadow,probes}/`;
+ * - presentation: `<part>/presentation/`, `<feature>-ui/`, `console/core/mvi/`;
+ * - composition root: `<part>/app/`, `console/app-<platform>/`, `console/root/`, `<feature>-component/`, пакеты `di`.
+ * `shared:protocol` — DTO транспорта, то есть слой data.
  */
 class ArchitectureTest {
 
-    private val project = Konsist.scopeFromProduction()
+    private val production = Konsist.scopeFromProduction().files
 
-    private val domainFiles = project.files.filter { file ->
-        DOMAIN_ROOTS.any { file.path.contains(it) }
+    private val domainFiles = production.filter { DOMAIN_PATH.containsMatchIn(it.normalizedPath) }
+    private val presentationFiles = production.filter { PRESENTATION_PATH.containsMatchIn(it.normalizedPath) }
+
+    @Test
+    fun domainSetIsNotEmpty() {
+        // Защита от «зелёного» прогона на пустом наборе после переименования или переноса модулей
+        assertWithMessage("domain files found by $DOMAIN_PATH").that(domainFiles).isNotEmpty()
     }
 
     @Test
-    fun domainHasNoFrameworkImports() {
-        domainFiles.assertFalse(testName = "domain imports framework") { file ->
-            file.imports.any { import -> FORBIDDEN_IN_DOMAIN.any { import.name.startsWith(it) } }
+    fun domainHasNoFrameworkOrOuterLayerImports() {
+        domainFiles.assertFalse(testName = "domain imports framework, transport or data") { file ->
+            file.imports.any { import -> isForbiddenInDomain(import.name) }
+        }
+    }
+
+    @Test
+    fun presentationDoesNotImportDataOrTransport() {
+        presentationFiles.assertFalse(testName = "presentation imports data layer or transport DTO") { file ->
+            file.imports.any { import -> isDataLayer(import.name) }
         }
     }
 
     @Test
     fun useCasesExposeSingleOperatorInvoke() {
-        project.classes()
+        Konsist.scopeFromProduction().classes()
             .filter { it.resideInPackage("..usecase..") }
             .assertTrue(testName = "use case has exactly one public operator invoke") { useCase ->
                 val publicFunctions = useCase.functions(includeNested = false, includeLocal = false)
@@ -38,35 +56,34 @@ class ArchitectureTest {
     }
 
     @Test
-    fun viewModelsDoNotImportData() {
-        project.classes()
-            .withNameEndingWith("ViewModel")
-            .assertFalse(testName = "ViewModel imports data layer") { viewModel ->
-                viewModel.containingFile.imports.any { it.name.contains(".data.") }
-            }
-    }
-
-    @Test
-    fun koinComponentOnlyInCompositionRoot() {
-        project.files
-            .filter { file -> COMPOSITION_ROOTS.none { file.path.contains(it) } }
-            .assertFalse(testName = "Koin service locator outside composition root") { file ->
-                file.imports.any { it.name in KOIN_SERVICE_LOCATOR }
+    fun koinOnlyInCompositionRoot() {
+        production
+            .filterNot { COMPOSITION_ROOT_PATH.containsMatchIn(it.normalizedPath) }
+            .assertFalse(testName = "Koin used outside composition root") { file ->
+                val importsKoin = file.imports.any { it.name.startsWith("org.koin.") }
+                val extendsKoinComponent = file.classes(includeNested = true)
+                    .any { cls -> cls.parents().any { it.name == "KoinComponent" } }
+                importsKoin || extendsKoinComponent
             }
     }
 
     private companion object {
-        val DOMAIN_ROOTS = listOf("/shared/kernel/src/", "/agent/domain/src/")
-        val COMPOSITION_ROOTS = listOf("/agent/app/src/")
+        val DOMAIN_PATH = Regex("/(domain|[a-z0-9]+(-[a-z0-9]+)*-domain|shared/(kernel|shadow|probes))/src/")
+        val PRESENTATION_PATH = Regex("/(presentation|[a-z0-9]+(-[a-z0-9]+)*-ui|console/core/mvi)/src/")
+        val COMPOSITION_ROOT_PATH =
+            Regex("(/app/src/|/console/app-[a-z]+/src/|/console/root/src/|-component/src/|/di/)")
+
         val FORBIDDEN_IN_DOMAIN = listOf(
             "android.", "androidx.", "io.ktor.", "org.jetbrains.exposed.", "kotlinx.serialization.",
-            "org.koin.", "com.hivemq.", "okhttp3.", "com.arkivanov.",
+            "org.koin.", "com.hivemq.", "okhttp3.", "com.arkivanov.", "ru.restofleet.shared.protocol",
         )
-        val KOIN_SERVICE_LOCATOR = setOf(
-            "org.koin.core.component.KoinComponent",
-            "org.koin.core.component.get",
-            "org.koin.core.component.inject",
-            "org.koin.java.KoinJavaComponent",
-        )
+
+        fun isDataLayer(name: String): Boolean =
+            name.contains(".data.") || name.startsWith("ru.restofleet.shared.protocol")
+
+        fun isForbiddenInDomain(name: String): Boolean =
+            FORBIDDEN_IN_DOMAIN.any { name.startsWith(it) } || isDataLayer(name)
+
+        val KoFileDeclaration.normalizedPath: String get() = path.replace('\\', '/')
     }
 }
