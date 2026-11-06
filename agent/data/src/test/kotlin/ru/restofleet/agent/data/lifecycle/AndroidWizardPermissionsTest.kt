@@ -46,4 +46,35 @@ class AndroidWizardPermissionsTest {
     fun notificationsEnabledByDefaultOnRobolectric() {
         assertThat(permissions.notificationsEnabled()).isTrue()
     }
+
+    @Test
+    fun defaultModeFallsBackToManifestPermission() {
+        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        shadowOf(appOps).setMode(
+            AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName, AppOpsManager.MODE_DEFAULT,
+        )
+        assertThat(permissions.usageAccessGranted()).isFalse()
+
+        shadowOf(context as android.app.Application).grantPermissions(android.Manifest.permission.PACKAGE_USAGE_STATS)
+        assertThat(permissions.usageAccessGranted()).isTrue()
+    }
+
+    @Test
+    fun ignoredModeIsNotGrantedEvenWithPermission() {
+        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        shadowOf(appOps).setMode(
+            AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName, AppOpsManager.MODE_IGNORED,
+        )
+        shadowOf(context as android.app.Application).grantPermissions(android.Manifest.permission.PACKAGE_USAGE_STATS)
+
+        assertThat(permissions.usageAccessGranted()).isFalse()
+    }
+
+    @Test
+    fun notificationsDisabledIsReported() {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        shadowOf(nm).setNotificationsEnabled(false)
+
+        assertThat(permissions.notificationsEnabled()).isFalse()
+    }
 }

@@ -81,6 +81,18 @@ class HeartbeatLogTest {
     }
 
     @Test
+    fun tornTailRepairIsAtomicAndLeavesNoTempFile() {
+        val file = File(tmp.root, "hb.log")
+        file.writeText("1000\n2000\n30")
+        val log = log(file)
+
+        log.tick(4_000)
+
+        assertThat(File(tmp.root, "hb.log.tmp").exists()).isFalse()
+        assertThat(file.readText()).isEqualTo("1000\n2000\n4000\n")
+    }
+
+    @Test
     fun concurrentAppendsDoNotLoseOrCorruptLines() {
         val log = log(maxLines = 10_000)
         val threads = (1..4).map { t ->

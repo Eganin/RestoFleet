@@ -206,6 +206,29 @@ class LifecycleChecksTest {
         assertThat(r.raw["lastWatchdogDeniedAt"]).isEqualTo("500")
     }
 
+    @Test
+    fun l3OkWhenAnyLaterStartFollowsWatchdogDenial() = runTest {
+        now = 500
+        journal.recordStartDenied("watchdog")
+        now = 900
+        journal.recordStart("manual")
+        val r = run(CheckId.L3)
+
+        assertThat(r.status).isEqualTo(CheckStatus.OK)
+    }
+
+    @Test
+    fun l3LimitedWhenLastLaunchFailedWithNonDenialError() = runTest {
+        now = 500
+        journal.recordStart("manual")
+        now = 900
+        journal.recordStartFailed("watchdog", "SecurityException")
+        val r = run(CheckId.L3)
+
+        assertThat(r.status).isEqualTo(CheckStatus.LIMITED)
+        assertThat(r.raw["lastStartFailureAt"]).isEqualTo("900")
+    }
+
     // ---- L4
 
     @Test

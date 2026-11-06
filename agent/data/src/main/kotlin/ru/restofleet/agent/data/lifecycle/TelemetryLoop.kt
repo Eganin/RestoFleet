@@ -1,6 +1,7 @@
 package ru.restofleet.agent.data.lifecycle
 
 import android.util.Log
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -54,11 +55,17 @@ class TelemetryLoop(
     }
 }
 
-/** Владеет заданием цикла: старт журналируется, только если цикл действительно запущен, а не уже работал. */
+/**
+ * Владеет заданием цикла: старт журналируется, только если цикл действительно запущен, а не уже работал.
+ *
+ * Весь цикл (включая запись журнала и heartbeat — файловый I/O) выполняется на [dispatcher], а не на потоке
+ * вызывающего: [start] только запускает корутину и сразу возвращается (в проде — `Dispatchers.IO`).
+ */
 class AgentCycle(
     private val scope: CoroutineScope,
     private val loop: TelemetryLoop,
     private val journal: LifecycleJournal,
+    private val dispatcher: CoroutineDispatcher,
 ) {
     private var job: Job? = null
 
@@ -68,8 +75,10 @@ class AgentCycle(
     @Synchronized
     fun start(reason: String): Boolean {
         if (isRunning) return false
-        journal.recordStart(reason)
-        job = scope.launch { loop.run() }
+        job = scope.launch(dispatcher) {
+            journal.recordStart(reason)
+            loop.run()
+        }
         return true
     }
 

@@ -13,7 +13,11 @@ import java.nio.file.StandardCopyOption
  * со следующей записью в «валидную» строку. Обрезка делается с запасом ([maxLines] / 10) атомарной заменой
  * файла (tmp + rename), чтобы не переписывать файл на каждом тике.
  */
-internal class LineFile(private val file: File, private val maxLines: Int) {
+internal class LineFile(
+    private val file: File,
+    private val maxLines: Int,
+    private val pinned: (String) -> Boolean = { false },
+) {
     private var count: Int? = null
 
     @Synchronized
@@ -27,7 +31,7 @@ internal class LineFile(private val file: File, private val maxLines: Int) {
     }
 
     @Synchronized
-    fun lines(): List<String> = readComplete().takeLast(maxLines)
+    fun lines(): List<String> = window(readComplete())
 
     private fun readComplete(): List<String> {
         if (!file.exists()) return emptyList()
@@ -37,8 +41,20 @@ internal class LineFile(private val file: File, private val maxLines: Int) {
     }
 
     private fun dropTornTail() {
-        val complete = readComplete()
-        file.writeText(if (complete.isEmpty()) "" else complete.joinToString(separator = "\n", postfix = "\n"))
+        replaceAtomically(readComplete())
+    }
+
+    /** Последние [maxLines] строк; последняя «закреплённая» строка (например boot) сохраняется, даже если старше. */
+    private fun window(all: List<String>): List<String> {
+        val tail = all.takeLast(maxLines)
+        val pin = all.lastOrNull(pinned)
+        return if (pin == null || tail.any(pinned)) tail else listOf(pin) + tail.takeLast(maxLines - 1)
+    }
+
+    private fun replaceAtomically(lines: List<String>) {
+        val tmp = File(file.parentFile, file.name + ".tmp")
+        tmp.writeText(if (lines.isEmpty()) "" else lines.joinToString(separator = "\n", postfix = "\n"))
+        Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
     }
 
     private fun endsMidLine(): Boolean {
@@ -52,10 +68,8 @@ internal class LineFile(private val file: File, private val maxLines: Int) {
     private fun slack() = (maxLines / SLACK_DIVISOR).coerceAtLeast(1)
 
     private fun trim() {
-        val kept = readComplete().takeLast(maxLines)
-        val tmp = File(file.parentFile, file.name + ".tmp")
-        tmp.writeText(kept.joinToString(separator = "\n", postfix = "\n"))
-        Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        val kept = window(readComplete())
+        replaceAtomically(kept)
         count = kept.size
     }
 

@@ -68,4 +68,13 @@ class BootReceiverTest {
         assertThat(reasons).isEmpty()
         assertThat(journal.entries()).isEmpty()
     }
+
+    @Test
+    fun brokenJournalDoesNotPreventAutostart() {
+        loadKoinModules(module { single { LifecycleJournal(tmp.newFolder("dir-as-file"), { 1L }) } })
+
+        receive(Intent.ACTION_BOOT_COMPLETED)
+
+        assertThat(reasons).containsExactly("boot")
+    }
 }

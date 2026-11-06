@@ -6,7 +6,7 @@
 
 - **Этап:** MVP-A (эмуляторы) · **ветка:** `stage/0-mvp`
 - **План:** `docs/superpowers/plans/2026-11-05-mvp-a.md`
-- **Последняя завершённая задача:** 1.8 agent:app — FGS specialUse, автозапуск, сторож, HeartbeatLog, L1–L4
+- **Последняя завершённая задача:** 1.8 fix round 1: диспетчер цикла, best-effort журнал, Koin-фабрика сторожа, L3/boot-pin и minor
 - **Следующая задача:** 1.9 Capability Lab (MVI + JSON-отчёт)
 - **Блокеры:** GitHub-remote не настроен (CI заработает после пуша)
 - **Как поднять стенд:** `deploy/README.md` (4 команды + `./test-stand.sh`); нужен `local.properties` с `sdk.dir` для сборки.
@@ -37,3 +37,4 @@
 | 2026-11-06 | 1.7 проверки доступности P1–P3: HTTPS-пробы (классы ошибок, фазы), проба шлюза, Lab-проверки | см. `git log` | agent:data строки 96,1 %, ветви platform 100 %, agent:domain строки 97,2 %, полная сборка exit 0 |
 | 2026-11-06 | 1.7 fix round 1: классификатор по errno, P1 отдельной проверкой, tcpReachable, TLS-only клиент | см. `git log` | agent:data строки 96,4 %, agent:domain 97,2 %, ветви platform 100 %, полная сборка exit 0 |
 | 2026-11-06 | 1.8 agent:app — FGS specialUse, автозапуск, сторож, HeartbeatLog, L1–L4 | см. `git log` | agent:data строки 97,1 %, agent:app 98,2 %, корень 98,2 %, ветви platform 100 %, полная сборка exit 0; ручная проверка на rf-api36 пройдена |
+| 2026-11-06 | 1.8 fix round 1: диспетчер цикла, best-effort журнал, Koin-фабрика сторожа, L3/boot-pin и minor | см. `git log` | agent:data строки 97,2 %, agent:app 98,3 %, агрегат 98,2 %, ветви platform 100 %, полная сборка exit 0 |

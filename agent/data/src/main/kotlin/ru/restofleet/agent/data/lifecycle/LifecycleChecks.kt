@@ -84,15 +84,19 @@ class LifecycleChecks(
         val scheduled = watchdog.isScheduled()
         val started = journal.lastWatchdogStartAt()
         val denied = journal.lastWatchdogDeniedAt()
+        val lastStart = journal.lastStartAt()
+        val lastFailure = journal.lastStartFailureAt()
         val raw = mapOf(
             "scheduled" to "$scheduled",
             "lastWatchdogStartAt" to (started?.toString() ?: NONE),
             "lastWatchdogDeniedAt" to (denied?.toString() ?: NONE),
+            "lastStartFailureAt" to (lastFailure?.toString() ?: NONE),
         )
         return when {
             !scheduled -> Verdict(CheckStatus.UNAVAILABLE, raw, "watchdog is not scheduled")
-            denied != null && (started == null || denied > started) ->
-                Verdict(CheckStatus.LIMITED, raw, "last watchdog launch was denied by the system")
+            // LIMITED, только если последнее событие запуска — срыв; любой более поздний старт возвращает OK.
+            lastFailure != null && (lastStart == null || lastFailure > lastStart) ->
+                Verdict(CheckStatus.LIMITED, raw, "last launch attempt failed or was denied by the system")
             else -> Verdict(CheckStatus.OK, raw)
         }
     }

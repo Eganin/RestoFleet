@@ -3,9 +3,11 @@ package ru.restofleet.agent
 import android.app.Notification
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.os.Build
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -22,9 +24,11 @@ import org.robolectric.annotation.Config
 import ru.restofleet.agent.data.lifecycle.LifecycleEntry
 import ru.restofleet.agent.data.lifecycle.LifecycleJournal
 import ru.restofleet.agent.data.lifecycle.TelemetryLoop
+import ru.restofleet.agent.di.AGENT_DISPATCHER
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = RestoFleetApp::class)
 class AgentServiceTest {
@@ -41,6 +45,7 @@ class AgentServiceTest {
             module {
                 single { journal }
                 single { TelemetryLoop(30_000, { ticks.incrementAndGet() }) }
+                single<CoroutineDispatcher>(AGENT_DISPATCHER) { UnconfinedTestDispatcher() }
             },
         )
     }
@@ -66,7 +71,6 @@ class AgentServiceTest {
         assertThat(c.get().foregroundServiceType).isEqualTo(ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         val n = shadow.lastForegroundNotification
         assertThat(n.flags and Notification.FLAG_ONGOING_EVENT).isNotEqualTo(0)
-        assertThat(Build.VERSION.SDK_INT).isAtLeast(34)
     }
 
     @Test
@@ -107,5 +111,38 @@ class AgentServiceTest {
             .getSystemService(android.app.NotificationManager::class.java)
         val channel = nm.getNotificationChannel(AgentNotifications.CHANNEL_ID)
         assertThat(channel.importance).isEqualTo(android.app.NotificationManager.IMPORTANCE_LOW)
+    }
+
+    @Test
+    fun startCommandRunsFirstTickOnInjectedDispatcher() {
+        val c = controller().create()
+        c.get().onStartCommand(Intent().putExtra(AgentService.EXTRA_REASON, "boot"), 0, 1)
+
+        assertThat(ticks.get()).isEqualTo(1)
+    }
+
+    @Test
+    fun brokenJournalDoesNotBreakServiceStart() {
+        loadKoinModules(module { single { LifecycleJournal(tmp.newFolder("dir-as-file"), { 1L }) } })
+        val c = controller().create()
+
+        val result = c.get().onStartCommand(Intent().putExtra(AgentService.EXTRA_REASON, "boot"), 0, 1)
+        c.destroy()
+
+        assertThat(result).isEqualTo(android.app.Service.START_STICKY)
+        assertThat(shadowOf(c.get()).lastForegroundNotificationId).isEqualTo(AgentNotifications.NOTIFICATION_ID)
+        assertThat(ticks.get()).isEqualTo(1)
+    }
+
+    @Test
+    @Config(sdk = [29, 33])
+    fun startsInForegroundOnApiBelow34() {
+        val c = controller().create()
+        c.get().onStartCommand(Intent().putExtra(AgentService.EXTRA_REASON, "boot"), 0, 1)
+
+        val shadow = shadowOf(c.get())
+        assertThat(shadow.lastForegroundNotificationId).isEqualTo(AgentNotifications.NOTIFICATION_ID)
+        assertThat(shadow.isLastForegroundNotificationAttached).isTrue()
+        assertThat(shadow.lastForegroundNotification.flags and Notification.FLAG_ONGOING_EVENT).isNotEqualTo(0)
     }
 }

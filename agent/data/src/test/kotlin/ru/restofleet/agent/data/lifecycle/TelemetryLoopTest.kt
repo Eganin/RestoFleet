@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -145,7 +146,7 @@ class TelemetryLoopTest {
     fun cycleStartsOnceAndJournalsRealStartsOnly() = runTest {
         val journal = LifecycleJournal(File(tmp.root, "j"), clock)
         var ticks = 0
-        val cycle = AgentCycle(TestScope(testScheduler), TelemetryLoop(1_000, { ticks++ }), journal)
+        val cycle = cycleOf(TelemetryLoop(1_000, { ticks++ }), journal)
 
         now = 10
         assertThat(cycle.start("boot")).isTrue()
@@ -164,7 +165,7 @@ class TelemetryLoopTest {
     fun cycleStopCancelsLoopAndJournalsStop() = runTest {
         val journal = LifecycleJournal(File(tmp.root, "j"), clock)
         var ticks = 0
-        val cycle = AgentCycle(TestScope(testScheduler), TelemetryLoop(1_000, { ticks++ }), journal)
+        val cycle = cycleOf(TelemetryLoop(1_000, { ticks++ }), journal)
         cycle.start("manual")
         runCurrent()
 
@@ -181,7 +182,7 @@ class TelemetryLoopTest {
     @Test
     fun cycleCanRestartAfterStop() = runTest {
         val journal = LifecycleJournal(File(tmp.root, "j"), clock)
-        val cycle = AgentCycle(TestScope(testScheduler), TelemetryLoop(1_000, {}), journal)
+        val cycle = cycleOf(TelemetryLoop(1_000, {}), journal)
         cycle.start("a")
         cycle.stop()
 
@@ -192,8 +193,35 @@ class TelemetryLoopTest {
     @Test
     fun stopWithoutStartDoesNotJournal() = runTest {
         val journal = LifecycleJournal(File(tmp.root, "j"), clock)
-        AgentCycle(TestScope(testScheduler), TelemetryLoop(1_000, {}), journal).stop()
+        cycleOf(TelemetryLoop(1_000, {}), journal).stop()
 
         assertThat(journal.entries()).isEmpty()
     }
+
+    @Test
+    fun cycleWorkRunsOnInjectedDispatcherNotOnCaller() = runTest {
+        val journal = LifecycleJournal(File(tmp.root, "j"), clock)
+        var ticks = 0
+        val cycle = AgentCycle(
+            TestScope(testScheduler),
+            TelemetryLoop(1_000, { ticks++ }),
+            journal,
+            StandardTestDispatcher(testScheduler),
+        )
+
+        assertThat(cycle.start("boot")).isTrue()
+        // start() вернулся, но ни тик, ни запись журнала на вызывающем потоке не выполнены
+        assertThat(ticks).isEqualTo(0)
+        assertThat(journal.entries()).isEmpty()
+
+        advanceUntilIdleOnce()
+        assertThat(ticks).isEqualTo(1)
+        assertThat(journal.entries().single().reason).isEqualTo("boot")
+        cycle.stop()
+    }
+
+    private fun kotlinx.coroutines.test.TestScope.advanceUntilIdleOnce() = runCurrent()
+
+    private fun TestScope.cycleOf(loop: TelemetryLoop, journal: LifecycleJournal) =
+        AgentCycle(TestScope(testScheduler), loop, journal, StandardTestDispatcher(testScheduler))
 }

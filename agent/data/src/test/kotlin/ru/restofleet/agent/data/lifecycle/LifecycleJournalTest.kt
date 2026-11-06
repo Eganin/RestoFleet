@@ -99,4 +99,57 @@ class LifecycleJournalTest {
 
         assertThat(j.entries().map { it.ts }).containsExactly(48L, 49L, 50L).inOrder()
     }
+
+    @Test
+    fun lastBootSurvivesTrimmingByLaterEntries() {
+        val j = journal(maxLines = 5)
+        at(1) { j.recordBoot() }
+        (2..200).forEach { i -> at(i.toLong()) { j.recordStartDenied("watchdog") } }
+
+        assertThat(j.lastBootAt()).isEqualTo(1L)
+        assertThat(j.entries().size).isAtMost(5)
+        assertThat(j.entries().last().ts).isEqualTo(200L)
+    }
+
+    @Test
+    fun newerBootReplacesPinnedOne() {
+        val j = journal(maxLines = 3)
+        at(1) { j.recordBoot() }
+        (2..30).forEach { i -> at(i.toLong()) { j.recordStartDenied("w") } }
+        at(100) { j.recordBoot() }
+        (101..140).forEach { i -> at(i.toLong()) { j.recordStartDenied("w") } }
+
+        assertThat(j.lastBootAt()).isEqualTo(100L)
+    }
+
+    @Test
+    fun startFailedIsRecordedWithReasonAndCause() {
+        val j = journal()
+        at(7) { j.recordStartFailed("watchdog", "SecurityException") }
+
+        assertThat(j.entries().single())
+            .isEqualTo(LifecycleEntry(LifecycleEntry.Kind.START_FAILED, 7, "watchdog:SecurityException"))
+    }
+
+    @Test
+    fun lastStartAndLastFailureCoverAnyReason() {
+        val j = journal()
+        at(10) { j.recordStart("manual") }
+        at(20) { j.recordStartDenied("boot") }
+        at(30) { j.recordStartFailed("watchdog", "X") }
+
+        assertThat(j.lastStartAt()).isEqualTo(10L)
+        assertThat(j.lastStartFailureAt()).isEqualTo(30L)
+    }
+
+    @Test
+    fun writeFailureIsReportedAndDoesNotThrow() {
+        val errors = mutableListOf<Exception>()
+        val broken = LifecycleJournal(tmp.newFolder("dir-as-file"), clock, onError = { errors += it })
+
+        broken.recordBoot()
+        broken.recordStart("x")
+
+        assertThat(errors).hasSize(2)
+    }
 }
