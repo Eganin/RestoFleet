@@ -31,6 +31,7 @@ dependencies {
     implementation(projects.agent.domain)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.okhttp)
     implementation(platform(libs.koin.bom))
     implementation(libs.koin.android)
 
@@ -40,6 +41,8 @@ dependencies {
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
+    testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.okhttp.tls)
 }
 
 kover {
