@@ -29,9 +29,17 @@ kotlin {
 
 dependencies {
     implementation(projects.agent.domain)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.core.ktx)
+    implementation(platform(libs.koin.bom))
+    implementation(libs.koin.android)
 
     testImplementation(libs.junit4)
     testImplementation(libs.truth)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.turbine)
 }
 
 kover {
@@ -43,6 +51,10 @@ kover {
     }
     reports {
         variant("ci") {
+            // Как в корневом агрегаторе: DI-модули исключены из покрытия (constraints, список исключений)
+            filters {
+                excludes { packages("ru.restofleet.agent.data.di") }
+            }
             verify {
                 rule("Модуль: строки ≥ 90 %") { minBound(90) }
             }

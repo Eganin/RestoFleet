@@ -6,8 +6,8 @@
 
 - **Этап:** MVP-A (эмуляторы) · **ветка:** `stage/0-mvp`
 - **План:** `docs/superpowers/plans/2026-11-05-mvp-a.md`
-- **Последняя завершённая задача:** 1.5 fix round 1: check зависит от koverVerifyPlatform, тест округления
-- **Следующая задача:** 1.6 коллекторы R1–R9, R11, R12, R14
+- **Последняя завершённая задача:** 1.6 agent:data/collectors: R1–R9, R11, R12, R14 + ReadingCheck/SubscriptionCheck + ChecksModule
+- **Следующая задача:** 1.7 проверки доступности P1–P3
 - **Блокеры:** GitHub-remote не настроен (CI заработает после пуша)
 - **Как поднять стенд:** `deploy/README.md` (4 команды + `./test-stand.sh`); нужен `local.properties` с `sdk.dir` для сборки.
 - **Исполнение:** M0 — в основной сессии; M1–M4 — субагенты (исполнитель + ревьюер на задачу).
@@ -33,3 +33,4 @@
 | 2026-11-06 | 1.4 Каталог проверок (43 CheckId), RunCapabilityChecks, ExportCapabilityReport | см. `git log` | agent:domain: 16 тестов в задаче, line coverage модуля 97.5%, build/detekt/kover/konsist exit 0 |
 | 2026-11-06 | 1.5 agent:data/platform: чистые функции маппинга (7 файлов) | см. `git log` | тесты agent:data зелёные, ветви platform 50/50 (100%), полная сборка exit 0 |
 | 2026-11-06 | 1.5 fix round 1: check зависит от koverVerifyPlatform, тест округления | см. `git log` | гейт platform проверен мутацией (98% -> FAIL), полная сборка exit 0 |
+| 2026-11-06 | 1.6 agent:data/collectors: R1–R9, R11, R12, R14 + ReadingCheck/SubscriptionCheck + ChecksModule | см. `git log` | тесты agent:data зелёные (~85), строки модуля 96,7 %, ветви platform 100 %, полная сборка exit 0 |
