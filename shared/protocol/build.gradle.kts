@@ -18,6 +18,7 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            api(projects.shared.kernel)
             implementation(libs.kotlinx.serialization.json)
         }
         jvmTest.dependencies {

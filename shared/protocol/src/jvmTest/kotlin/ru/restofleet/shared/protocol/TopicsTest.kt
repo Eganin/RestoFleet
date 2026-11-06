@@ -3,6 +3,7 @@ package ru.restofleet.shared.protocol
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import org.junit.Test
+import ru.restofleet.shared.kernel.DeviceId
 
 class TopicsTest {
 
@@ -18,20 +19,6 @@ class TopicsTest {
         assertThat(Topics.shadowDesired(id)).isEqualTo("rf/v1/dev/dev-emu-36/shadow/desired")
         assertThat(Topics.cmdReq(id)).isEqualTo("rf/v1/dev/dev-emu-36/cmd/req")
         assertThat(Topics.cmdRes(id)).isEqualTo("rf/v1/dev/dev-emu-36/cmd/res")
-    }
-
-    @Test
-    fun acceptsSafeDeviceIds() {
-        listOf("a", "dev_EMU-01", "x".repeat(64)).forEach {
-            assertWithMessage(it).that(DeviceId.parse(it)?.value).isEqualTo(it)
-        }
-    }
-
-    @Test
-    fun rejectsUnsafeDeviceIds() {
-        listOf("", "a/b", "a+b", "a#", "a b", "x".repeat(65), "дев", "a\u0000").forEach {
-            assertWithMessage(it).that(DeviceId.parse(it)).isNull()
-        }
     }
 
     @Test

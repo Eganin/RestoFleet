@@ -1,5 +1,7 @@
 package ru.restofleet.shared.protocol
 
+import ru.restofleet.shared.kernel.DeviceId
+
 /** Дерево топиков протокола `rf/v1` (ТЗ 7.1). */
 object Topics {
     const val PREFIX = "rf/v1"
