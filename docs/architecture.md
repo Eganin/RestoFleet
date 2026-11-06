@@ -87,7 +87,7 @@ flowchart LR
 | **composition root** | Koin-модули, `Application`/`main`, Decompose-компоненты | — |
 
 - Протокол MQTT (`shared:protocol`) — это **DTO транспорта**, т.е. слой data. Domain о JSON и топиках не знает; мапперы `TelemetryDto ↔ TelemetrySnapshot` — в data.
-- Ошибки: data превращает исключения в `DomainError` (`Result<T, DomainError>`-подобный тип в `core:common`/`shared:kernel`); presentation превращает `DomainError` в UI-сообщение или HTTP-статус.
+- Ошибки: data превращает исключения в `DomainError` (тип `Outcome<T, E>` в `shared:kernel`; имя выбрано, чтобы не затенять `kotlin.Result`); presentation превращает `DomainError` в UI-сообщение или HTTP-статус.
 - Время и случайность — через порты `Clock`, `IdGenerator`: use cases детерминированно тестируются.
 - **Архитектурные тесты:** Konsist (`konsist` в `jvmTest`/`test`) проверяет, что `..domain..` не импортирует `android.*`, `io.ktor.*`, `org.jetbrains.exposed.*`, что use case имеет один публичный `invoke`, что ViewModel не ссылается на data-классы.
 
@@ -98,7 +98,7 @@ flowchart LR
 | Консоль (на фичу) | `<f>-domain` (KMP) | `<f>-data` (KMP: Ktor client, DTO) | `<f>-ui` (Compose MP + MVI) | `<f>-component` (Decompose + Koin) |
 | Агент | `agent:domain` (KMP) | `agent:data` (Android: коллекторы, Room, HiveMQ, OkHttp, DPM) | `agent:presentation` (Compose + MVI) | `agent:app` (Application, Service, Receivers, Koin) |
 | Бэкенд | `server:domain` (JVM) | `server:data` (Exposed, Flyway, HiveMQ, DynSec) | `server:api` (Ktor routes) | `server:app` (`main`, Koin, конфиг, CLI) |
-| Общее | `shared:kernel` (KMP: `DomainError`, `Clock`, `Result`) | `shared:protocol` (KMP: DTO транспорта) | — | — |
+| Общее | `shared:kernel` (KMP: `DomainError`, `Clock`, `Outcome`) | `shared:protocol` (KMP: DTO транспорта) | — | — |
 
 Чистая логика, которую используют несколько частей, живёт в `shared:*` как **domain-код** без зависимостей: `shared:shadow` (delta, версии, merge профилей), `shared:probes` (автомат up↔down, классы ошибок).
 
@@ -111,10 +111,13 @@ restofleet/
 ├─ settings.gradle.kts
 ├─ build.gradle.kts                 только plugins { … apply false } + Kover-агрегатор
 ├─ gradle/libs.versions.toml        версии, библиотеки, плагины, sdk-уровни (compileSdk/minSdk/targetSdk), jvmTarget
-├─ config/detekt.yml
+├─ config/detekt/detekt.yml     переопределения detekt 2 (путь по умолчанию)
+├─ konsist-tests/               архитектурные тесты Konsist (JVM, читают исходники с диска)
+├─ spikes/                      одноразовые спайки (MVP: broker-load), вне Kover
+├─ tools/                       dummy-waiter, emulators/, dev/ (служебные скрипты)
 │
 ├─ shared/                          ── подключают агент, консоль, бэкенд, симулятор
-│  ├─ kernel/      KMP   DomainError, Result, Clock, IdGenerator                        MVP
+│  ├─ kernel/      KMP   DomainError, Outcome, Clock, IdGenerator                       MVP
 │  ├─ protocol/    KMP   DTO MQTT/REST, Topics, RfJson + golden-фикстуры                MVP→К
 │  ├─ shadow/      KMP   delta, версии · merge профилей — Д                              К
 │  └─ probes/      KMP   K-fail автомат up↔down, классификация ошибок, расписание        К
@@ -169,7 +172,7 @@ kotlin {
     jvm()
     sourceSets {
         commonMain.dependencies { implementation(libs.kotlinx.serialization.json) }
-        commonTest.dependencies { implementation(libs.kotlin.test) }
+        jvmTest.dependencies { implementation(libs.junit4); implementation(libs.truth) }   // Truth — только JVM
     }
 }
 ```
@@ -221,7 +224,7 @@ kotlin {
 
 | Слой / что | Чем тестируем | Цель покрытия |
 |---|---|---|
-| domain (use cases, сущности, `shared:*`) | unit, `kotlin.test` + фейки портов; табличные тесты для правил и классификатора | ≥ 90 % |
+| domain (use cases, сущности, `shared:*`) | unit, JUnit 4 + Truth (`src/jvmTest`) + фейки портов; табличные тесты для правил и классификатора | ≥ 90 % |
 | data: мапперы, логика репозиториев | unit с фейковыми источниками | ≥ 80 % |
 | data: Exposed-репозитории, Flyway | интеграционные, Testcontainers PostgreSQL | все запросы |
 | data: MQTT (бэкенд, симулятор) | интеграционные, Testcontainers Mosquitto (DynSec, LWT, retained, expiry) | ключевые сценарии |
@@ -232,7 +235,7 @@ kotlin {
 | DI | `koin-test`: `verify()` для каждого Koin-модуля | все модули |
 | архитектура | Konsist: правило зависимостей, именование | — |
 
-Инструменты: `kotlin.test`, JUnit 5 (JVM-модули), **Mokkery** (моки в KMP `commonTest`), **MockK** (только JVM/Android-модули), Turbine, Robolectric, Testcontainers, Ktor test host, Konsist, **Kover** (агрегированный отчёт в корне, гейт в CI: общий ≥ 80 %, исключения — `@Composable`, `*Module.kt`, `*Activity`, `*Service`, сгенерированное). Разработка — TDD: тест use case пишется до реализации.
+Инструменты: **JUnit 4 + Google Truth** во всех модулях (тесты KMP-модулей — в `src/jvmTest`, т. к. Truth работает только на JVM; `kotlin.test` — только `assertFailsWith`), ручные фейки портов в domain (Mokkery не используется — решение MVP), **MockK** (только JVM/Android-модули), Turbine, Robolectric, Testcontainers, Ktor test host, Konsist, **Kover** (агрегированный отчёт в корне, гейт в CI: общий ≥ 80 % по варианту `ci` — задача `koverVerifyCi`; модуль подключается к гейту через `kover(project)` в корне и свой вариант `ci`; исключения — `@Composable`, `*Module*`, `di/`, `*Activity`, `*Service`, `*Receiver`, `*Worker`, сгенерированное). Разработка — TDD: тест use case пишется до реализации.
 
 ---
 

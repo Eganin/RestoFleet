@@ -36,8 +36,8 @@
 
 ```
 restofleet/
-├─ settings.gradle.kts, build.gradle.kts (plugins apply false + Kover), gradle/libs.versions.toml, config/detekt.yml
-├─ shared/kernel            DomainError, Result, Clock, IdGenerator
+├─ settings.gradle.kts, build.gradle.kts (plugins apply false + Kover), gradle/libs.versions.toml, config/detekt/detekt.yml
+├─ shared/kernel            DomainError, Outcome, Clock, IdGenerator
 ├─ shared/protocol          черновик DTO: status, telemetry, probe, events, cmd/req, cmd/res + фикстуры
 ├─ agent/domain             сущности снимков (BatteryState, ThermalState, NetworkState …), порты:
 │                           TelemetrySource, ProbeExecutor, MessagePublisher, DeviceAdmin, CapabilityProbe;
@@ -60,10 +60,10 @@ restofleet/
 ## 5. Задачи
 
 ### M0. Каркас (1–2 дня)
-- [ ] Монорепо без convention-плагинов: `settings.gradle.kts`, корневой `build.gradle.kts`, `libs.versions.toml` (версии, `android-compileSdk/minSdk=26/targetSdk`, `jvmTarget`), detekt, Konsist.
-- [ ] CI (GitHub Actions): сборка, unit-тесты, Kover-отчёт с гейтом.
-- [ ] `shared:kernel`, черновик `shared:protocol` + golden-фикстуры + round-trip тесты.
-- [ ] `deploy/`: Mosquitto TLS + DynSec + persistence; скрипт CA.
+- [x] Монорепо без convention-плагинов: `settings.gradle.kts`, корневой `build.gradle.kts`, `libs.versions.toml` (версии, `android-compileSdk/minSdk=26/targetSdk`, `jvmTarget`), detekt, Konsist.
+- [x] CI (GitHub Actions): сборка, unit-тесты, Kover-отчёт с гейтом.
+- [x] `shared:kernel`, черновик `shared:protocol` + golden-фикстуры + round-trip тесты.
+- [x] `deploy/`: Mosquitto TLS + DynSec + persistence; скрипт CA.
 
 ### M1. Агент: все считывания (2–3 дня)
 - [ ] `agent:domain`: сущности, порты, `CollectTelemetry`, `RunCapabilityCheck` — тесты первыми.
