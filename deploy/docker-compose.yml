@@ -1,0 +1,40 @@
+# Стенд RestoFleet (MVP): Mosquitto 2.1 — TLS 8883 + Dynamic Security + persistence.
+# Порядок запуска — deploy/README.md.
+name: restofleet
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.1.2-alpine
+    restart: unless-stopped
+    ports:
+      - "8883:8883"
+    environment:
+      DYNSEC_ADMIN_PASSWORD: ${DYNSEC_ADMIN_PASSWORD:?set it in deploy/.env}
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./certs/out:/mosquitto/certs:ro
+      - mosquitto-data:/mosquitto/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          mosquitto_sub -h localhost -p 8883 --cafile /mosquitto/certs/ca.crt
+          -u admin -P "$$DYNSEC_ADMIN_PASSWORD" -t '$$SYS/broker/version' -C 1 -W 3
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+
+  # Однократно: docker compose --profile init run --rm dynsec-init
+  dynsec-init:
+    image: eclipse-mosquitto:2.1.2-alpine
+    profiles: ["init"]
+    environment:
+      DYNSEC_ADMIN_PASSWORD: ${DYNSEC_ADMIN_PASSWORD:?set it in deploy/.env}
+    volumes:
+      - ./mosquitto/init-dynsec.sh:/init-dynsec.sh:ro
+      - mosquitto-data:/mosquitto/data
+    entrypoint: ["/bin/sh", "/init-dynsec.sh"]
+
+volumes:
+  mosquitto-data:
