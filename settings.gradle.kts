@@ -24,4 +24,4 @@ enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 rootProject.name = "restofleet"
 
-include(":shared:kernel", ":shared:protocol")
+include(":shared:kernel", ":shared:protocol", ":konsist-tests")

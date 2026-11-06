@@ -16,11 +16,10 @@ object Topics {
 
     /** deviceId из топика вида `rf/v1/dev/{id}/<suffix>`; для чужих и некорректных топиков — `null`. */
     fun deviceIdOf(topic: String): DeviceId? {
-        if (!topic.startsWith(DEVICE_ROOT)) return null
-        val rest = topic.removePrefix(DEVICE_ROOT)
-        val slash = rest.indexOf('/')
-        if (slash <= 0 || slash == rest.lastIndex) return null
-        return DeviceId.parse(rest.substring(0, slash))
+        val rest = topic.takeIf { it.startsWith(DEVICE_ROOT) }?.removePrefix(DEVICE_ROOT)
+        val slash = rest?.indexOf('/') ?: -1
+        val hasSuffix = rest != null && slash > 0 && slash < rest.lastIndex
+        return if (hasSuffix) DeviceId.parse(rest.substring(0, slash)) else null
     }
 
     private fun device(id: DeviceId, suffix: String) = "$DEVICE_ROOT${id.value}/$suffix"

@@ -35,9 +35,11 @@ class FixtureRoundTripTest {
         "cmd-res" to CommandResultDto.serializer(),
     )
 
-    private val fixtures: List<File> get() = fixturesDir.listFiles { f -> f.extension == "json" }.orEmpty().sortedBy { it.name }
+    private val fixtures: List<File>
+        get() = fixturesDir.listFiles { f -> f.extension == "json" }.orEmpty().sortedBy { it.name }
 
-    private fun serializerFor(file: File): KSerializer<*>? = serializers.firstOrNull { file.name.startsWith(it.first) }?.second
+    private fun serializerFor(file: File): KSerializer<*>? =
+        serializers.firstOrNull { file.name.startsWith(it.first) }?.second
 
     @Test
     fun fixturesArePresent() {
@@ -88,8 +90,12 @@ class FixtureRoundTripTest {
 
     @Test
     fun eventsDecodeToTypedSubclasses() {
-        val event = RfJson.decodeFromString(EventDto.serializer(), File(fixturesDir, "event-probe-state.json").readText())
-        assertThat(event).isEqualTo(ProbeStateEventDto(ts = 1793865700000, target = "api", state = "down", error = "timeout", failures = 3))
+        val source = File(fixturesDir, "event-probe-state.json").readText()
+        val event = RfJson.decodeFromString(EventDto.serializer(), source)
+        val expected = ProbeStateEventDto(
+            ts = 1793865700000, target = "api", state = "down", error = "timeout", failures = 3,
+        )
+        assertThat(event).isEqualTo(expected)
     }
 
     @Test

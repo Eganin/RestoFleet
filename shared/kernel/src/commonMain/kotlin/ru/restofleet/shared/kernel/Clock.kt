@@ -1,6 +1,9 @@
 package ru.restofleet.shared.kernel
 
-/** Порт времени: use cases получают его через конструктор и детерминированно тестируются. Время — epoch millis (как в протоколе). */
+/**
+ * Порт времени: use cases получают его через конструктор и детерминированно тестируются.
+ * Время — epoch millis (как в протоколе).
+ */
 fun interface Clock {
     fun nowMillis(): Long
 }

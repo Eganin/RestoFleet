@@ -16,7 +16,8 @@ data class ProbeResultDto(
     val status: Int? = null,
     /**
      * Класс ошибки: `dns_fail`, `timeout`, `conn_refused`, `tls_error`, `http_4xx`, `http_5xx`, `no_network`,
-     * `local_network_denied`, `other`. Строка, а не enum: неизвестный код от более новой стороны не ломает декодирование.
+     * `local_network_denied`, `other`.
+     * Строка, а не enum: неизвестный код от более новой стороны не ломает декодирование.
      */
     val error: String? = null,
     val totalMs: Long,

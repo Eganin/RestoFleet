@@ -42,7 +42,15 @@ class TopicsTest {
 
     @Test
     fun deviceIdOfForeignOrMalformedTopicIsNull() {
-        listOf("rf/v2/dev/d1/status", "rf/v1/rest/r1/broadcast", "rf/v1/dev/", "rf/v1/dev/a+b/status", "rf/v1/dev/d1").forEach {
+        val topics = listOf(
+            "rf/v2/dev/d1/status",
+            "rf/v1/rest/r1/broadcast",
+            "rf/v1/dev/",
+            "rf/v1/dev/a+b/status",
+            "rf/v1/dev/d1",
+            "rf/v1/dev/d1/",
+        )
+        topics.forEach {
             assertWithMessage(it).that(Topics.deviceIdOf(it)).isNull()
         }
     }

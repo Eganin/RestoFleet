@@ -1,0 +1,20 @@
+# Только переопределения поверх конфигурации detekt по умолчанию (buildUponDefaultConfig = true).
+# Путь — значение по умолчанию detekt, поэтому в модулях указывать его не нужно.
+config:
+  validation: true
+
+complexity:
+  LongParameterList:
+    # Koin constructor injection: use case/adapter может получать много портов
+    allowedConstructorParameters: 10
+
+naming:
+  FunctionNaming:
+    ignoreAnnotated:
+      - 'Composable'
+
+style:
+  MagicNumber:
+    ignorePropertyDeclaration: true
+    ignoreAnnotated:
+      - 'Preview'

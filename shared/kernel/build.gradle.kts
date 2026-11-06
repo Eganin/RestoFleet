@@ -31,3 +31,12 @@ kover {
         }
     }
 }
+
+detekt {
+    buildUponDefaultConfig = true
+}
+
+// В KMP анализ идёт по source set'ам; `detekt` собирает их все (CI вызывает именно его)
+tasks.named("detekt") {
+    dependsOn(tasks.matching { it.name.startsWith("detekt") && it.name.endsWith("SourceSet") && !it.name.startsWith("detektBaseline") })
+}

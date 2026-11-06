@@ -6,8 +6,8 @@
 
 - **Этап:** MVP-A (эмуляторы) · **ветка:** `stage/0-mvp`
 - **План:** `docs/superpowers/plans/2026-11-05-mvp-a.md`
-- **Последняя завершённая задача:** 0.4 shared:protocol — черновик DTO, 15 golden-фикстур, round-trip
-- **Следующая задача:** 0.5 detekt и Konsist
+- **Последняя завершённая задача:** 0.5 detekt 2 и Konsist (:konsist-tests)
+- **Следующая задача:** 0.6 Kover-агрегатор и CI
 - **Блокеры:** Docker Desktop должен быть запущен к задаче 0.7; GitHub-remote не настроен (CI заработает после пуша).
 - **Как поднять стенд:** будет описано в `deploy/README.md` (задача 0.7).
 - **Исполнение:** M0 — в основной сессии; M1–M4 — субагенты (исполнитель + ревьюер на задачу).
@@ -21,3 +21,4 @@
 | 2026-11-06 | 0.2 shared:kernel (Outcome, DomainError, Clock, IdGenerator) | см. `git log` | 12 тестов, покрытие 100 %; нужен `local.properties` с `sdk.dir` (AGP сам ставит платформу 37) |
 | 2026-11-06 | 0.3 shared:protocol — DeviceId, Topics, RfJson | см. `git log` | 6 тестов; небезопасные deviceId (/ + # пробел, >64, не ASCII) отклоняются |
 | 2026-11-06 | 0.4 shared:protocol — черновик DTO, 15 golden-фикстур, round-trip | см. `git log` | 23 теста протокола; покрытие ≥ 90 %; добавлены фикстуры agent_lifecycle и package_changed |
+| 2026-11-06 | 0.5 detekt 2 и Konsist (:konsist-tests) | см. `git log` | detekt чистый (порог длины строки не поднимался); 4 правила Konsist ловят нарушения (проверено мутацией) |

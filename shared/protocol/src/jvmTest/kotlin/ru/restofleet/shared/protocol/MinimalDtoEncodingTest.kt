@@ -2,7 +2,9 @@ package ru.restofleet.shared.protocol
 
 import com.google.common.truth.Truth.assertThat
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Test
 import ru.restofleet.shared.protocol.dto.AgentLifecycleEventDto
 import ru.restofleet.shared.protocol.dto.AppVersionDto
@@ -68,14 +70,15 @@ class MinimalDtoEncodingTest {
     @Test
     fun deviceInfoHasAllFields() {
         val dto = DeviceInfoDto(model = "m", manufacturer = "g", osVersion = "8.0", apiLevel = 26)
-        assertThat(keysOf(DeviceInfoDto.serializer(), dto)).containsExactly("model", "manufacturer", "osVersion", "apiLevel")
+        assertThat(keysOf(DeviceInfoDto.serializer(), dto))
+            .containsExactly("model", "manufacturer", "osVersion", "apiLevel")
     }
 
     @Test
     fun minimalProbeResultHasOnlyRequiredKeys() {
         val report = ProbeReportDto(ts = 1, results = listOf(ProbeResultDto(id = "a", ok = true, totalMs = 3)))
         val json = RfJson.encodeToJsonElement(ProbeReportDto.serializer(), report) as JsonObject
-        val result = (json["results"] as kotlinx.serialization.json.JsonArray).single() as JsonObject
+        val result = (json["results"] as JsonArray).single() as JsonObject
         assertThat(result.keys).containsExactly("id", "ok", "totalMs")
     }
 
@@ -87,8 +90,17 @@ class MinimalDtoEncodingTest {
             NetChangedEventDto(ts = 1, net = NetDto(type = "wifi", validated = true)),
             CapabilityCheckEventDto(ts = 1, checkId = "R1", status = "OK"),
         )
-        val types = events.map { (RfJson.encodeToJsonElement(EventDto.serializer(), it) as JsonObject)["type"].toString() }
-        assertThat(types).containsExactly("\"agent_lifecycle\"", "\"package_changed\"", "\"net_changed\"", "\"capability_check\"").inOrder()
+        val types = events.map {
+            (RfJson.encodeToJsonElement(EventDto.serializer(), it) as JsonObject)["type"]
+        }
+        assertThat(types)
+            .containsExactly(
+                JsonPrimitive("agent_lifecycle"),
+                JsonPrimitive("package_changed"),
+                JsonPrimitive("net_changed"),
+                JsonPrimitive("capability_check"),
+            )
+            .inOrder()
     }
 
     @Test
@@ -107,7 +119,9 @@ class MinimalDtoEncodingTest {
         )
         assertThat(keysOf(ShadowReportedDto.serializer(), reported)).contains("errors")
 
-        val target = ProbeTargetDto(id = "a", type = "http", url = "https://x", intervalSec = 30, timeoutMs = 5_000, failThreshold = 3)
+        val target = ProbeTargetDto(
+            id = "a", type = "http", url = "https://x", intervalSec = 30, timeoutMs = 5_000, failThreshold = 3,
+        )
         assertThat(keysOf(ProbeTargetDto.serializer(), target)).contains("reference")
     }
 
