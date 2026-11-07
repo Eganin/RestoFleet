@@ -6,8 +6,8 @@
 
 - **Этап:** MVP-A (эмуляторы) · **ветка:** `stage/0-mvp`
 - **План:** `docs/superpowers/plans/2026-11-05-mvp-a.md`
-- **Последняя завершённая задача:** 2.1 домен — Capabilities, команды, ExecuteCommand
-- **Следующая задача:** 2.2 тестовое приложение и раздача APK
+- **Последняя завершённая задача:** 2.2 тестовое приложение и раздача APK
+- **Следующая задача:** 2.3 deviceadmin — D1–D6, R10, R13
 - **Блокеры:** GitHub-remote не настроен (CI заработает после пуша)
 - **Как поднять стенд:** `deploy/README.md` (4 команды + `./test-stand.sh`); нужен `local.properties` с `sdk.dir` для сборки.
 - **Исполнение:** M0 — в основной сессии; M1–M4 — субагенты (исполнитель + ревьюер на задачу).
@@ -42,3 +42,4 @@
 | 2026-11-07 | M1: исправления по итоговому ревью вехи (I1–I7) | см. `git log` | тесты: build detekt koverVerifyCi konsist rc=0; domain 99.5%, data 97.5%, aggregate 96.3%; rf-api36: wake lock держится |
 | 2026-11-07 | 1.10 закрытие M1 (отчёт M1.md, handoff) | см. `git log` | M1 закрыт: 495 тестов в проекте (453 в M1), строки 97,0 %; Lab на rf-api36: 43 записи, ok 12 / limited 3 / unavailable 3 / not_checked 25 |
 | 2026-11-07 | 2.1 домен — Capabilities, команды, ExecuteCommand | см. `git log` | 27 новых тестов (11 Capabilities, 16 ExecuteCommand), agent:domain 76 тестов, строки domain 97,2 %, проект 96,9 %, полная сборка rc=0 |
+| 2026-11-07 | 2.2 тестовое приложение и раздача APK | см. `git log` | dummy-waiter 4.13/4.14, apk-host nginx 1.30.6 на 8443; build detekt koverVerifyCi konsist rc=0; test-stand.sh зелёный |
