@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="command_channel_name">Команды RestoFleet</string>
+    <string name="command_message_title">Сообщение от RestoFleet</string>
+    <string name="command_launch_title">Откройте приложение</string>
+    <string name="command_launch_text_package">Нажмите, чтобы открыть %1$s</string>
+    <string name="command_launch_text_url">Нажмите, чтобы открыть адрес: %1$s</string>
+</resources>

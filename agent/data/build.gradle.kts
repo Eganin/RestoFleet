@@ -18,6 +18,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    // AGP 9: ресурсы библиотеки выключены по умолчанию; нужны строки уведомлений команд (res/values/strings.xml)
+    buildFeatures {
+        androidResources = true
+    }
     testOptions {
         unitTests.isIncludeAndroidResources = true
     }

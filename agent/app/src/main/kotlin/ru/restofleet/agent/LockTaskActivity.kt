@@ -4,7 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import ru.restofleet.agent.data.deviceadmin.resolveLockTaskTarget
+import ru.restofleet.agent.data.launch.resolveLaunchTarget
 import ru.restofleet.shared.kernel.Outcome
 
 /**
@@ -27,7 +27,7 @@ class LockTaskActivity : Activity() {
 
     private fun handle(source: Intent) {
         val pkg = source.getStringExtra(EXTRA_PKG)
-        val target = pkg?.let { resolveLockTaskTarget(packageManager, it, source.getStringExtra(EXTRA_URL)) }
+        val target = pkg?.let { resolveLaunchTarget(packageManager, it, source.getStringExtra(EXTRA_URL)) }
         if (target is Outcome.Success) {
             startLockTask()
             startActivity(target.value)

@@ -14,6 +14,19 @@ import org.koin.core.error.NoDefinitionFoundException
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import okhttp3.OkHttpClient
+import ru.restofleet.agent.data.command.AlarmBeeper
+import ru.restofleet.agent.data.command.AndroidAppLauncher
+import ru.restofleet.agent.data.command.AndroidCapabilitiesSource
+import ru.restofleet.agent.data.command.NotificationUserNotifier
+import ru.restofleet.agent.data.lifecycle.DevicePermissions
+import ru.restofleet.agent.data.lifecycle.WizardPermissions
+import ru.restofleet.agent.domain.command.Command
+import ru.restofleet.agent.domain.command.CommandOutcome
+import ru.restofleet.agent.domain.port.AppLauncher
+import ru.restofleet.agent.domain.port.Beeper
+import ru.restofleet.agent.domain.port.CapabilitiesSource
+import ru.restofleet.agent.domain.port.UserNotifier
+import ru.restofleet.agent.domain.usecase.ExecuteCommand
 import ru.restofleet.agent.data.deviceadmin.DpmDeviceAdmin
 import ru.restofleet.agent.data.deviceadmin.LegacyLockTaskEntry
 import ru.restofleet.agent.data.di.ADMIN_COMPONENT
@@ -85,6 +98,22 @@ class KoinGraphTest {
         assertThat(apk.callTimeoutMillis).isEqualTo(600_000)
         val ids = koin.get<List<CapabilityCheck>>(READING_CHECKS).map { it.id }
         assertThat(ids).containsAtLeast(CheckId.R10, CheckId.R13)
+    }
+
+    @Test
+    fun executeCommandResolvesWithAllPortsFromTheRealAdapters() {
+        val koin = GlobalContext.get()
+
+        assertThat(koin.get<UserNotifier>()).isInstanceOf(NotificationUserNotifier::class.java)
+        assertThat(koin.get<AppLauncher>()).isInstanceOf(AndroidAppLauncher::class.java)
+        assertThat(koin.get<Beeper>()).isInstanceOf(AlarmBeeper::class.java)
+        assertThat(koin.get<CapabilitiesSource>()).isInstanceOf(AndroidCapabilitiesSource::class.java)
+        // не Device Owner в Robolectric: команда обычного режима проходит через настоящий граф до портов
+        val outcome = runBlocking { koin.get<ExecuteCommand>()(Command.Reboot) }
+        assertThat(outcome).isEqualTo(CommandOutcome.Unsupported("requires_device_owner"))
+        val ping = runBlocking { koin.get<ExecuteCommand>()(Command.Ping) }
+        assertThat(ping).isInstanceOf(CommandOutcome.Succeeded::class.java)
+        assertThat(koin.get<WizardPermissions>()).isSameInstanceAs(koin.get<DevicePermissions>())
     }
 
     @Test

@@ -26,6 +26,7 @@ import ru.restofleet.agent.data.di.PROBE_CHECKS
 import ru.restofleet.agent.data.di.READING_CHECKS
 import ru.restofleet.agent.data.deviceadmin.LegacyLockTaskEntry
 import ru.restofleet.agent.data.di.checksModule
+import ru.restofleet.agent.data.di.commandModule
 import ru.restofleet.agent.data.di.deviceAdminModule
 import ru.restofleet.agent.data.di.lifecycleModule
 import ru.restofleet.agent.data.lifecycle.ServiceStarter
@@ -36,6 +37,7 @@ import ru.restofleet.agent.domain.capability.CapabilityCheck
 import ru.restofleet.agent.domain.port.CapabilityReportWriter
 import ru.restofleet.agent.domain.port.CheckResultPublisher
 import ru.restofleet.agent.domain.port.DeviceInfoSource
+import ru.restofleet.agent.domain.usecase.ExecuteCommand
 import ru.restofleet.agent.domain.usecase.ExportCapabilityReport
 import ru.restofleet.agent.domain.usecase.GetDeviceInfo
 import ru.restofleet.agent.domain.usecase.PublishCheckResult
@@ -49,7 +51,7 @@ val AGENT_DISPATCHER = named("agentDispatcher")
 
 /** Composition root агента: платформенные части `agent:app` + модули `agent:data`. */
 val appModule: Module = module {
-    includes(checksModule, lifecycleModule, deviceAdminModule)
+    includes(checksModule, lifecycleModule, deviceAdminModule, commandModule)
 
     single<Clock> { SystemClock }
     single<CoroutineDispatcher>(AGENT_DISPATCHER) { Dispatchers.IO }
@@ -77,6 +79,8 @@ val appModule: Module = module {
         RunCapabilityChecks(checks, get())
     }
     single { ExportCapabilityReport(get(), get(), get(), get()) }
+    // Исполнение команд: порты из commandModule и deviceAdminModule (сеть команд — M3)
+    single { ExecuteCommand(get(), get(), get(), get(), get(), get()) }
     single { GetDeviceInfo(get()) }
     single { PublishCheckResult(get()) }
     factory { LabViewModel(get(), get(), get(), get(), get(AGENT_DISPATCHER)) }

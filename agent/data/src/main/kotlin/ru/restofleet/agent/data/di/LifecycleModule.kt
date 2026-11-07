@@ -9,6 +9,7 @@ import ru.restofleet.agent.data.collectors.CapabilityChecksFactory
 import ru.restofleet.agent.data.lifecycle.AndroidCpuWakeLock
 import ru.restofleet.agent.data.lifecycle.AndroidWizardPermissions
 import ru.restofleet.agent.data.lifecycle.CpuWakeLock
+import ru.restofleet.agent.data.lifecycle.DevicePermissions
 import ru.restofleet.agent.data.lifecycle.InMemorySequenceSource
 import ru.restofleet.agent.data.lifecycle.LifecycleChecks
 import ru.restofleet.agent.data.lifecycle.LifecycleStorage
@@ -32,7 +33,8 @@ val lifecycleModule: Module = module {
     single { LifecycleStorage.forContext(androidContext(), get()) }
     single { get<LifecycleStorage>().heartbeatLog() }
     single { get<LifecycleStorage>().journal() }
-    single<WizardPermissions> { AndroidWizardPermissions(androidContext()) }
+    single<DevicePermissions> { AndroidWizardPermissions(androidContext()) }
+    single<WizardPermissions> { get<DevicePermissions>() }
     single<CpuWakeLock> { AndroidCpuWakeLock(androidContext()) }
     single<SequenceSource> { InMemorySequenceSource() }
     single<TelemetrySource> { AndroidTelemetrySource(get(), get(), get(), get(), get(), get()) }
