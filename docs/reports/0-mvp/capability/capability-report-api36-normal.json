@@ -6,19 +6,20 @@
         "mode": "normal",
         "agentVersion": "0.1.0-mvp"
     },
-    "ts": 1793978171020,
+    "ts": 1794031400106,
     "results": [
         {
             "id": "L1",
             "status": "limited",
             "raw": {
-                "samples": "84",
-                "coverageMs": "8435430",
-                "gaps": "2",
-                "maxGapMs": "4302904"
+                "samples": "156",
+                "coverageMs": "61666679",
+                "gaps": "13",
+                "maxGapMs": "14156166",
+                "wakeLock": "held"
             },
-            "note": "heartbeat gaps over 120 s: 2",
-            "ts": 1793978167380
+            "note": "heartbeat gaps over 120 s: 13",
+            "ts": 1794031396430
         },
         {
             "id": "L2",
@@ -29,19 +30,19 @@
                 "delayMs": "82"
             },
             "note": null,
-            "ts": 1793978167381
+            "ts": 1794031396432
         },
         {
             "id": "L3",
-            "status": "ok",
+            "status": "not_checked",
             "raw": {
                 "scheduled": "true",
                 "lastWatchdogStartAt": "none",
                 "lastWatchdogDeniedAt": "none",
                 "lastStartFailureAt": "none"
             },
-            "note": null,
-            "ts": 1793978167388
+            "note": "watchdog has not restarted the agent yet",
+            "ts": 1794031396436
         },
         {
             "id": "L4",
@@ -52,14 +53,14 @@
                 "ignoreBatteryOptimizations": "false"
             },
             "note": "missing: usageAccess, ignoreBatteryOptimizations",
-            "ts": 1793978167389
+            "ts": 1794031396436
         },
         {
             "id": "L5",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978167389
+            "ts": 1794031396436
         },
         {
             "id": "R1",
@@ -70,7 +71,7 @@
                 "source": "AC"
             },
             "note": null,
-            "ts": 1793978167389
+            "ts": 1794031396437
         },
         {
             "id": "R2",
@@ -79,7 +80,7 @@
                 "tempC": "25.0"
             },
             "note": null,
-            "ts": 1793978167390
+            "ts": 1794031396437
         },
         {
             "id": "R3",
@@ -89,7 +90,7 @@
                 "headroom": "0.9033333659172058"
             },
             "note": null,
-            "ts": 1793978167390
+            "ts": 1794031396438
         },
         {
             "id": "R4",
@@ -100,29 +101,29 @@
                 "validated": "true"
             },
             "note": null,
-            "ts": 1793978167391
+            "ts": 1794031396438
         },
         {
             "id": "R5",
             "status": "unavailable",
             "raw": {},
             "note": "PermissionMissing: ACCESS_FINE_LOCATION",
-            "ts": 1793978167393
+            "ts": 1794031396439
         },
         {
             "id": "R6",
             "status": "ok",
             "raw": {
-                "freeStorageMb": "5450",
-                "availMemoryMb": "854",
-                "uptimeSec": "1809",
+                "freeStorageMb": "5447",
+                "availMemoryMb": "825",
+                "uptimeSec": "3925",
                 "os": "16",
                 "api": "36",
                 "model": "Android SDK built for arm64",
                 "manufacturer": "unknown"
             },
             "note": null,
-            "ts": 1793978167394
+            "ts": 1794031396439
         },
         {
             "id": "R7",
@@ -132,14 +133,14 @@
                 "ru.restofleet.dummy.waiter": "not installed"
             },
             "note": null,
-            "ts": 1793978167394
+            "ts": 1794031396440
         },
         {
             "id": "R8",
             "status": "unavailable",
             "raw": {},
             "note": "PermissionMissing: PACKAGE_USAGE_STATS",
-            "ts": 1793978167394
+            "ts": 1794031396440
         },
         {
             "id": "R9",
@@ -148,21 +149,21 @@
                 "lux": "0.0"
             },
             "note": null,
-            "ts": 1793978167406
+            "ts": 1794031396447
         },
         {
             "id": "R10",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978167406
+            "ts": 1794031396447
         },
         {
             "id": "R11",
             "status": "unavailable",
             "raw": {},
             "note": "Failed: missing sensor: significant_motion",
-            "ts": 1793978167406
+            "ts": 1794031396447
         },
         {
             "id": "R12",
@@ -171,14 +172,14 @@
                 "events": "0"
             },
             "note": "subscription registered, no events yet",
-            "ts": 1793978167407
+            "ts": 1794031396447
         },
         {
             "id": "R13",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978167407
+            "ts": 1794031396447
         },
         {
             "id": "R14",
@@ -186,194 +187,194 @@
             "raw": {
                 "events": "1",
                 "last_event": "WIFI validated=true",
-                "last_at": "1793977351478"
+                "last_at": "1794031123023"
             },
             "note": null,
-            "ts": 1793978167407
+            "ts": 1794031396447
         },
         {
             "id": "P1",
             "status": "limited",
             "raw": {
-                "google_204": "expected=ok actual=ok httpStatus=204 totalMs=638",
-                "nonexistent": "expected=dns_fail actual=tls_error httpStatus=- totalMs=1550",
-                "blackhole": "expected=timeout actual=timeout httpStatus=- totalMs=3009",
-                "refused": "expected=conn_refused actual=conn_refused httpStatus=- totalMs=27",
-                "expired_badssl": "expected=tls_error actual=tls_error httpStatus=- totalMs=640",
-                "httpbin_503": "expected=http_5xx actual=http_5xx httpStatus=503 totalMs=925"
+                "google_204": "expected=ok actual=ok httpStatus=204 totalMs=576",
+                "nonexistent": "expected=dns_fail actual=tls_error httpStatus=- totalMs=1472",
+                "blackhole": "expected=timeout actual=timeout httpStatus=- totalMs=3025",
+                "refused": "expected=conn_refused actual=conn_refused httpStatus=- totalMs=10",
+                "expired_badssl": "expected=tls_error actual=tls_error httpStatus=- totalMs=1873",
+                "httpbin_503": "expected=http_5xx actual=http_5xx httpStatus=503 totalMs=826"
             },
             "note": "nonexistent: expected dns_fail, got tls_error",
-            "ts": 1793978170421
+            "ts": 1794031399475
         },
         {
             "id": "P2",
             "status": "ok",
             "raw": {
-                "dnsMs": "5",
-                "connectMs": "7",
-                "tlsMs": "236",
-                "ttfbMs": "586",
-                "totalMs": "587"
+                "dnsMs": "13",
+                "connectMs": "3",
+                "tlsMs": "401",
+                "ttfbMs": "610",
+                "totalMs": "618"
             },
             "note": null,
-            "ts": 1793978171009
+            "ts": 1794031400094
         },
         {
             "id": "P3",
             "status": "ok",
             "raw": {
                 "result": "conn_refused",
-                "totalMs": "9"
+                "totalMs": "10"
             },
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "P4",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "C1",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "C2",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "C3",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "C4",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "D1",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "D2",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "D3",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "D4",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "D5",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "D6",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "D7",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "M1",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "M2",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "M3",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "M4",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "M5",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "M6",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "M7",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "RS1",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         },
         {
             "id": "RS2",
             "status": "not_checked",
             "raw": {},
             "note": null,
-            "ts": 1793978171019
+            "ts": 1794031400105
         }
     ]
 }

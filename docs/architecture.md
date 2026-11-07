@@ -89,6 +89,7 @@ flowchart LR
 - Протокол MQTT (`shared:protocol`) — это **DTO транспорта**, т.е. слой data. Domain о JSON и топиках не знает; мапперы `TelemetryDto ↔ TelemetrySnapshot` — в data.
 - Ошибки: data превращает исключения в `DomainError` (тип `Outcome<T, E>` в `shared:kernel`; имя выбрано, чтобы не затенять `kotlin.Result`); presentation превращает `DomainError` в UI-сообщение или HTTP-статус.
 - Время и случайность — через порты `Clock`, `IdGenerator`: use cases детерминированно тестируются.
+- **Изоляция сбоев на границе** (решения 27, 78, 82): каждое считывание, проверка Lab и тик цикла — в своём `try`. Ловится `Exception`, `Error` пробрасывается. `CancellationException` на границе не пробрасывается вслепую: `currentCoroutineContext().ensureActive()` отделяет настоящую отмену (наружу) от бродячей (внутренний `withTimeout`, `Future.get()` отменённого future) — та считается сбоем одного считывания. У каждого считывания свой таймаут (5 с), блокирующие вызовы идут через `runInterruptible` на IO.
 - **Архитектурные тесты:** Konsist (`konsist` в `jvmTest`/`test`) проверяет, что `..domain..` не импортирует `android.*`, `io.ktor.*`, `org.jetbrains.exposed.*`, что use case имеет один публичный `invoke`, что ViewModel не ссылается на data-классы.
 
 ### 3.2 Как слои раскладываются по частям
@@ -213,7 +214,7 @@ kotlin {
 1. `BaseMviViewModel` реализует `InstanceKeeper.Instance`, свой scope отменяется в `onDestroy`; API идентичен white-label: `uiState: StateFlow`, `effect: Flow`, `onIntent()`, защищённые `reduce()`/`emitEffect()`.
 2. Навигация — вызов `I<F>Router` из `onIntent`, не `Effect`.
 3. Эффекты собирает ровно один подписчик — `ObserveEffects` в `<F>Container`.
-4. `MviStore.dispatch` — только на Main (на Desktop — EDT).
+4. `MviStore.dispatch` — только на Main (на Desktop — EDT); тяжёлая работа ViewModel (проверки, экспорт) идёт через инжектируемый IO-диспетчер, флаги прогресса сбрасываются в `finally`, на scope стоит `CoroutineExceptionHandler` (решения 61, 79, 86).
 5. Только coroutines/Flow; Koin только через конструктор, `KoinComponent` вне composition root запрещён.
 
 Агент использует тот же канон для своих экранов (мастер, статус, Capability Lab) — `core:mvi` подключается как зависимость.
@@ -326,6 +327,13 @@ flowchart TB
 - **Outbox:** события, `shadow/reported`, `cmd/res` сначала пишутся в Room и удаляются по PUBACK — «без потери событий за 24 ч офлайна». Телеметрия и пробы при связи идут сразу (QoS 0), без связи — в буфер.
 - **Capabilities:** доменная матрица «что доступно на этом устройстве» (режим normal/DO, уровень API, выданные разрешения, наличие датчиков). Use case `ExecuteCommand` по ней возвращает `unsupported` с причиной. Матрица заполняется результатами MVP.
 - **Capability Lab** (MVP, остаётся как отладочный экран): по каждому считыванию и DO-действию — статус, сырые значения, кнопка «отправить в MQTT».
+- **Жизненный цикл агента (M1):**
+  - Цикл телеметрии (тик каждые 30 с) крутится в `AgentCycle` на инжектируемом IO-диспетчере, не на Main (решение 61).
+  - Пока цикл работает, держится `PARTIAL_WAKE_LOCK` `RestoFleet:agent` — иначе в suspend тики останавливаются. Владелец замка — последний `Lease`: устаревший цикл не может снять замок нового (решения 81, 88).
+  - `startForeground` вызывается через шов `ForegroundStarter` и защищён: отказ системы пишется в журнал как `start_denied`/`start_failed`, сервис останавливается с `START_NOT_STICKY` (решение 80).
+  - Журнал жизненного цикла и heartbeat — файлы с атомарной починкой оборванного хвоста, запись best effort (решения 49, 62, 63).
+  - L3 = ✅ только после наблюдённого перезапуска сторожем (решение 84).
+- **Отчёт Capability Lab:** JSON (`JsonCapabilityReportWriter`: tmp + `ATOMIC_MOVE`, `.tmp` удаляется в `finally`) пишется во внешний каталог приложения `Android/data/ru.restofleet.agent/files/`; в отчёт не попадают IMEI, MAC и серийный номер (решения 73, 87). «Экспорт» во время «Запустить всё» игнорируется (решение 86).
 
 ---
 

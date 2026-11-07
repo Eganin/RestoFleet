@@ -66,10 +66,10 @@ restofleet/
 - [x] `deploy/`: Mosquitto TLS + DynSec + persistence; скрипт CA.
 
 ### M1. Агент: все считывания (2–3 дня)
-- [ ] `agent:domain`: сущности, порты, `CollectTelemetry`, `RunCapabilityCheck` — тесты первыми.
-- [ ] `agent:data`: коллекторы R1–R14, проверки P1–P4; чистые функции маппинга с unit-тестами.
-- [ ] `agent:app`: FGS `specialUse`, BOOT_COMPLETED, сторож.
-- [ ] `agent:presentation`: Capability Lab (MVI, тесты Reducer/Mapper/ViewModel).
+- [x] `agent:domain`: сущности, порты, `CollectTelemetry`, `RunCapabilityCheck` — тесты первыми.
+- [x] `agent:data`: коллекторы R1–R14, проверки P1–P4; чистые функции маппинга с unit-тестами.
+- [x] `agent:app`: FGS `specialUse`, BOOT_COMPLETED, сторож.
+- [x] `agent:presentation`: Capability Lab (MVI, тесты Reducer/Mapper/ViewModel).
 
 ### M2. Device Owner и команды (1–2 дня)
 - [ ] `AdminReceiver`, `deviceadmin/`: D1–D6; команды C1–C4.
