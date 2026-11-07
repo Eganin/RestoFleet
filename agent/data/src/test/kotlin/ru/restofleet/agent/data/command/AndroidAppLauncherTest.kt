@@ -147,7 +147,7 @@ class AndroidAppLauncherTest {
     }
 
     @Test
-    fun notificationIdsAreSharedBetweenAdaptersOfOneProcessAndDifferAfterRestart() {
+    fun notificationIdsDifferAfterProcessRestart() {
         context.install(pkg)
         val first = launch(null, LaunchStrategy.VIA_NOTIFICATION).value()["notificationId"]
         now += 5_000
