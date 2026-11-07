@@ -28,7 +28,7 @@ import ru.restofleet.agent.data.lifecycle.CpuWakeLock
 import ru.restofleet.agent.data.lifecycle.LifecycleEntry
 import ru.restofleet.agent.data.lifecycle.LifecycleJournal
 import ru.restofleet.agent.data.lifecycle.TelemetryLoop
-import ru.restofleet.agent.di.AGENT_DISPATCHER
+import ru.restofleet.agent.data.di.AGENT_DISPATCHER
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 

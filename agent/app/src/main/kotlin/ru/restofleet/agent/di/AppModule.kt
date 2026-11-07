@@ -7,7 +7,6 @@ import kotlinx.coroutines.Dispatchers
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.workmanager.dsl.workerOf
 import org.koin.core.module.Module
-import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import ru.restofleet.agent.AdminReceiver
 import ru.restofleet.agent.AgentNotifications
@@ -21,6 +20,7 @@ import ru.restofleet.agent.BuildConfig
 import ru.restofleet.agent.WorkManagerWatchdogSchedule
 import ru.restofleet.agent.data.device.AndroidDeviceInfoSource
 import ru.restofleet.agent.data.di.ADMIN_COMPONENT
+import ru.restofleet.agent.data.di.AGENT_DISPATCHER
 import ru.restofleet.agent.data.di.LIFECYCLE_CHECKS
 import ru.restofleet.agent.data.di.PROBE_CHECKS
 import ru.restofleet.agent.data.di.READING_CHECKS
@@ -45,9 +45,6 @@ import ru.restofleet.agent.domain.usecase.RunCapabilityChecks
 import ru.restofleet.agent.presentation.lab.viewmodel.LabViewModel
 import ru.restofleet.shared.kernel.Clock
 import ru.restofleet.shared.kernel.SystemClock
-
-/** Диспетчер цикла телеметрии: весь тик (файловый I/O, сборщики) — вне главного потока. */
-val AGENT_DISPATCHER = named("agentDispatcher")
 
 /** Composition root агента: платформенные части `agent:app` + модули `agent:data`. */
 val appModule: Module = module {

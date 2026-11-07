@@ -12,6 +12,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import ru.restofleet.agent.data.lifecycle.AndroidWizardPermissions
+import ru.restofleet.agent.data.lifecycle.DevicePermissions
 import ru.restofleet.agent.domain.capability.AgentMode
 import ru.restofleet.agent.domain.capability.Capabilities
 import ru.restofleet.agent.domain.capability.Permission
@@ -22,7 +24,13 @@ import ru.restofleet.agent.domain.command.Level
 class NotificationUserNotifierTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private var granted: Set<Permission> = emptySet()
-    private val notifier = NotificationUserNotifier(context) { Capabilities(AgentMode.NORMAL, 34, granted) }
+    private var now = 1_700_000_000_000L
+    private val permissions = AndroidWizardPermissions(context)
+    private val ids = NotificationIds { now }
+    private val notifier = notifier(permissions, ids)
+
+    private fun notifier(permissions: DevicePermissions, ids: NotificationIds) =
+        NotificationUserNotifier(context, { Capabilities(AgentMode.NORMAL, 34, granted) }, permissions, ids)
 
     private fun show(text: String = "Привет", level: Level = Level.INFO) = runBlocking { notifier.show(text, level) }
 
@@ -111,5 +119,38 @@ class NotificationUserNotifierTest {
 
         assertThat(result.errorCode()).isEqualTo("notifications_disabled")
         assertThat(context.posted()).isEmpty()
+    }
+
+    @Test
+    fun theSinglePermissionsPortDecidesWhetherNotificationsAreEnabled() {
+        val off = notifier(FakePermissions(context, notifications = false), ids)
+
+        val result = runBlocking { off.show("x", Level.INFO) }
+
+        assertThat(result.errorCode()).isEqualTo("notifications_disabled")
+        assertThat(context.posted()).isEmpty()
+    }
+
+    @Test
+    fun disabledCommandsChannelFailsInsteadOfSilentlyLosingTheMessage() {
+        context.disableCommandsChannel()
+
+        val result = show()
+
+        assertThat(result.errorCode()).isEqualTo("channel_disabled")
+        assertThat(context.posted()).isEmpty()
+    }
+
+    @Test
+    fun idsDoNotRepeatAfterProcessRestart() {
+        val before = show().value()["notificationId"]
+        // «новый процесс»: другой экземпляр адаптера и счётчика, часы ушли вперёд
+        now += 5_000
+        val after = runBlocking {
+            notifier(permissions, NotificationIds { now }).show("again", Level.INFO)
+        }.value()["notificationId"]
+
+        assertThat(after).isNotEqualTo(before)
+        assertThat(context.posted()).hasSize(2)
     }
 }

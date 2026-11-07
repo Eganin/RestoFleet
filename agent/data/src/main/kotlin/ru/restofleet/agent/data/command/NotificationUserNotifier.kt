@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import ru.restofleet.agent.data.R
+import ru.restofleet.agent.data.lifecycle.DevicePermissions
 import ru.restofleet.agent.domain.capability.Permission
 import ru.restofleet.agent.domain.command.Level
 import ru.restofleet.agent.domain.port.CapabilitiesSource
@@ -20,24 +21,34 @@ import ru.restofleet.shared.kernel.Outcome
 class NotificationUserNotifier(
     private val context: Context,
     private val capabilities: CapabilitiesSource,
+    private val permissions: DevicePermissions,
+    private val ids: NotificationIds,
 ) : UserNotifier {
     override suspend fun show(text: String, level: Level): Outcome<Map<String, String>, DomainError> {
-        if (!CommandNotifications.enabled(context)) return Outcome.Failure(CommandError("notifications_disabled"))
+        val builder = CommandNotifications.builder(context)
+        return when {
+            !permissions.notificationsEnabled() -> Outcome.Failure(CommandError("notifications_disabled"))
+            builder == null -> Outcome.Failure(CommandError("channel_disabled"))
+            else -> Outcome.Success(publish(builder, text, level))
+        }
+    }
+
+    private suspend fun publish(builder: NotificationCompat.Builder, text: String, level: Level): Map<String, String> {
         val fullScreen = if (Permission.FULL_SCREEN_INTENT in capabilities.current().granted) {
             ownLauncherIntent()
         } else {
             null
         }
-        val builder = CommandNotifications.builder(context)
+        builder
             .setContentTitle(context.getString(R.string.command_message_title))
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setCategory(category(level))
             .setPriority(priority(level))
         if (fullScreen != null) builder.setFullScreenIntent(fullScreen, true)
-        val id = CommandNotifications.nextId()
+        val id = ids.next()
         CommandNotifications.post(context, id, builder.build())
-        return Outcome.Success(mapOf("notificationId" to "$id", "fullScreen" to "${fullScreen != null}"))
+        return mapOf("notificationId" to "$id", "fullScreen" to "${fullScreen != null}")
     }
 
     private fun ownLauncherIntent(): PendingIntent? =

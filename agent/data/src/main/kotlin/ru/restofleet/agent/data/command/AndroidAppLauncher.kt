@@ -4,8 +4,10 @@ import android.app.PendingIntent
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import androidx.core.app.NotificationCompat
 import ru.restofleet.agent.data.R
 import ru.restofleet.agent.data.launch.resolveLaunchTarget
+import ru.restofleet.agent.data.lifecycle.DevicePermissions
 import ru.restofleet.agent.domain.capability.LaunchStrategy
 import ru.restofleet.agent.domain.port.AppLauncher
 import ru.restofleet.shared.kernel.DomainError
@@ -19,6 +21,8 @@ import ru.restofleet.shared.kernel.Outcome
  */
 class AndroidAppLauncher(
     private val context: Context,
+    private val permissions: DevicePermissions,
+    private val ids: NotificationIds,
     private val starter: (Intent) -> Unit = { context.startActivity(it) },
 ) : AppLauncher {
     override suspend fun launch(
@@ -36,9 +40,10 @@ class AndroidAppLauncher(
             "package" to pkg,
         )
         return when (strategy) {
-            LaunchStrategy.VIA_NOTIFICATION -> notify(target, pkg, url)
-                ?.let { Outcome.Success(result + ("notificationId" to "$it")) }
-                ?: Outcome.Failure(CommandError("notifications_disabled"))
+            LaunchStrategy.VIA_NOTIFICATION -> when (val posted = notify(target, pkg, url)) {
+                is Outcome.Success -> Outcome.Success(result + ("notificationId" to "${posted.value}"))
+                is Outcome.Failure -> posted
+            }
             LaunchStrategy.DIRECT_OVERLAY, LaunchStrategy.DIRECT_DO -> direct(target) ?: Outcome.Success(result)
         }
     }
@@ -55,10 +60,18 @@ class AndroidAppLauncher(
             Outcome.Failure(CommandError("launch_not_permitted"))
         }
 
-    /** Идентификатор опубликованного уведомления или `null`, если уведомления выключены. */
-    private fun notify(target: Intent, pkg: String, url: String?): Int? {
-        if (!CommandNotifications.enabled(context)) return null
-        val id = CommandNotifications.nextId()
+    /** Идентификатор опубликованного уведомления или причина, по которой его нельзя показать. */
+    private fun notify(target: Intent, pkg: String, url: String?): Outcome<Int, CommandError> {
+        val builder = CommandNotifications.builder(context)
+        return when {
+            !permissions.notificationsEnabled() -> Outcome.Failure(CommandError("notifications_disabled"))
+            builder == null -> Outcome.Failure(CommandError("channel_disabled"))
+            else -> Outcome.Success(publish(builder, target, pkg, url))
+        }
+    }
+
+    private fun publish(builder: NotificationCompat.Builder, target: Intent, pkg: String, url: String?): Int {
+        val id = ids.next()
         val content = PendingIntent.getActivity(
             context,
             id,
@@ -70,7 +83,7 @@ class AndroidAppLauncher(
         } else {
             context.getString(R.string.command_launch_text_package, pkg)
         }
-        val notification = CommandNotifications.builder(context)
+        val notification = builder
             .setContentTitle(context.getString(R.string.command_launch_title))
             .setContentText(text)
             .setContentIntent(content)

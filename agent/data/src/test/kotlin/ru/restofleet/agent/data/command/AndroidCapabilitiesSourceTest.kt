@@ -9,6 +9,7 @@ import android.os.Process
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -99,10 +100,23 @@ class AndroidCapabilitiesSourceTest {
     @Test
     @Config(sdk = [33])
     fun fullScreenIntentBelowApi34FollowsManifestPermission() {
-        api = 33
         assertThat(current().granted).doesNotContain(Permission.FULL_SCREEN_INTENT)
         shadowOf(app).grantPermissions(Manifest.permission.USE_FULL_SCREEN_INTENT)
         assertThat(current().granted).contains(Permission.FULL_SCREEN_INTENT)
+    }
+
+    @Test
+    @Config(sdk = [33])
+    fun notificationsOnApi33FollowTheRuntimePermissionThroughNotificationManager() {
+        assertThat(current().granted).contains(Permission.POST_NOTIFICATIONS)
+        shadowOf(context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager)
+            .setNotificationsEnabled(false)
+        assertThat(current().granted).doesNotContain(Permission.POST_NOTIFICATIONS)
+    }
+
+    @After
+    fun resetShadowState() {
+        FullScreenAwareNotificationManager.allowed = false
     }
 
     @Test

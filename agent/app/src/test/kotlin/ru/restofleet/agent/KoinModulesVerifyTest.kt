@@ -21,6 +21,7 @@ import ru.restofleet.agent.data.di.lifecycleModule
 import ru.restofleet.agent.data.lifecycle.WatchdogSchedule
 import ru.restofleet.agent.di.appModule
 import ru.restofleet.agent.domain.usecase.RunCapabilityChecks
+import kotlinx.coroutines.CoroutineDispatcher
 import ru.restofleet.shared.kernel.Clock
 import java.io.File
 
@@ -68,7 +69,8 @@ class KoinModulesVerifyTest {
     @Test
     fun commandModuleIsCompleteGivenRoleAndPermissions() {
         commandModule.verify(
-            extraTypes = platformTypes + listOf(DeviceOwnerRole::class, DevicePermissions::class),
+            extraTypes = platformTypes +
+                listOf(DeviceOwnerRole::class, DevicePermissions::class, Clock::class, CoroutineDispatcher::class),
         )
     }
 

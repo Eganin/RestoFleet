@@ -13,6 +13,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import ru.restofleet.agent.data.lifecycle.AndroidWizardPermissions
 import ru.restofleet.agent.domain.capability.LaunchStrategy
 
 @RunWith(RobolectricTestRunner::class)
@@ -22,10 +23,14 @@ class AndroidAppLauncherTest {
     private val pkg = "com.android.chrome"
     private val started = mutableListOf<Intent>()
     private var failure: Throwable? = null
-    private val launcher = AndroidAppLauncher(context) { intent ->
+    private var now = 1_700_000_000_000L
+    private val permissions = AndroidWizardPermissions(context)
+    private val ids = NotificationIds { now }
+    private val starter: (Intent) -> Unit = { intent ->
         failure?.let { throw it }
         started += intent
     }
+    private val launcher = AndroidAppLauncher(context, permissions, ids, starter)
 
     private fun launch(url: String?, strategy: LaunchStrategy, l: AndroidAppLauncher = launcher) =
         runBlocking { l.launch(pkg, url, strategy) }
@@ -47,9 +52,10 @@ class AndroidAppLauncherTest {
         assertThat(saved.data.toString()).isEqualTo("https://x.test/menu")
         assertThat(saved.`package`).isEqualTo(pkg)
         assertThat(saved.flags and Intent.FLAG_ACTIVITY_NEW_TASK).isNotEqualTo(0)
+        val id = result["notificationId"]!!.toInt()
+        assertThat(shadowOf(context.notificationManager()).getNotification(id)).isSameInstanceAs(n)
         assertThat(result).containsExactly(
-            "strategy", "VIA_NOTIFICATION", "target", "url", "package", pkg,
-            "notificationId", result["notificationId"],
+            "strategy", "VIA_NOTIFICATION", "target", "url", "package", pkg, "notificationId", "$id",
         )
     }
 
@@ -95,7 +101,7 @@ class AndroidAppLauncherTest {
     fun defaultStarterGoesThroughContextStartActivity() {
         context.install(pkg)
 
-        launch(null, LaunchStrategy.DIRECT_DO, AndroidAppLauncher(context)).value()
+        launch(null, LaunchStrategy.DIRECT_DO, AndroidAppLauncher(context, permissions, ids)).value()
 
         val intent = shadowOf(context as android.app.Application).nextStartedActivity
         assertThat(intent.component).isEqualTo(ComponentName(pkg, "$pkg.Main"))
@@ -119,5 +125,35 @@ class AndroidAppLauncherTest {
         assertThat(launch(null, LaunchStrategy.DIRECT_DO).errorCode()).isEqualTo("activity_not_found")
         failure = SecurityException()
         assertThat(launch(null, LaunchStrategy.DIRECT_OVERLAY).errorCode()).isEqualTo("launch_not_permitted")
+    }
+
+    @Test
+    fun theSinglePermissionsPortDecidesWhetherNotificationsAreEnabled() {
+        context.install(pkg)
+        val off = AndroidAppLauncher(context, FakePermissions(context, notifications = false), ids, starter)
+
+        assertThat(launch(null, LaunchStrategy.VIA_NOTIFICATION, off).errorCode()).isEqualTo("notifications_disabled")
+        assertThat(context.posted()).isEmpty()
+    }
+
+    @Test
+    fun disabledCommandsChannelFailsViaNotification() {
+        context.install(pkg)
+        context.disableCommandsChannel()
+
+        assertThat(launch(null, LaunchStrategy.VIA_NOTIFICATION).errorCode()).isEqualTo("channel_disabled")
+        assertThat(context.posted()).isEmpty()
+        assertThat(launch(null, LaunchStrategy.DIRECT_DO).value()["strategy"]).isEqualTo("DIRECT_DO")
+    }
+
+    @Test
+    fun notificationIdsAreSharedBetweenAdaptersOfOneProcessAndDifferAfterRestart() {
+        context.install(pkg)
+        val first = launch(null, LaunchStrategy.VIA_NOTIFICATION).value()["notificationId"]
+        now += 5_000
+        val restarted = AndroidAppLauncher(context, permissions, NotificationIds { now }, starter)
+        val second = launch(null, LaunchStrategy.VIA_NOTIFICATION, restarted).value()["notificationId"]
+
+        assertThat(second).isNotEqualTo(first)
     }
 }

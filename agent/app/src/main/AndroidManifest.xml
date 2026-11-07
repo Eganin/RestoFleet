@@ -19,9 +19,9 @@
     <uses-permission
         android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
         tools:ignore="BatteryLife" />
-    <!-- C2: запуск Activity из фона на API 29+ разрешён при SYSTEM_ALERT_WINDOW (выдаётся вручную или DO), C1: полноэкранное
-         уведомление. Парковое приложение ресторанной сети, не для Google Play (решение 111). Экспортируемых компонентов
-         эти разрешения не добавляют. -->
+    <!-- C2: запуск Activity из фона на API 29+ разрешён при SYSTEM_ALERT_WINDOW; разрешение выдаётся вручную в настройках
+         (DPM его не выдаёт, решение 101). C1: полноэкранное уведомление. Парковое приложение ресторанной сети, не для
+         Google Play (решение 111). Экспортируемых компонентов эти разрешения не добавляют. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
