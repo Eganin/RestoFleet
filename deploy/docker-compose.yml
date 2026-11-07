@@ -36,7 +36,8 @@ services:
 
   # Раздача APK (D3/R7/R12): https://localhost:8443/waiter-4.N.apk, с эмулятора https://10.0.2.2:8443/...
   # Монтируются только серверный сертификат с ключом (certs/out/broker, без ключа CA) и APK (read-only).
-  # Ключ 600 читает master-процесс nginx (root), worker-процессы ключа не видят.
+  # Ключ 600 читает master-процесс nginx (root) благодаря DAC_READ_SEARCH (на Linux владелец ключа — uid хоста,
+  # без этой capability root в контейнере его не прочитает; решение 96). Worker-процессы ключа не видят.
   apk-host:
     image: nginx:1.30.6-alpine
     restart: unless-stopped
