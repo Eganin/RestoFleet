@@ -6,7 +6,7 @@
 
 - **Этап:** MVP-A (эмуляторы) · **ветка:** `stage/0-mvp`
 - **План:** `docs/superpowers/plans/2026-11-05-mvp-a.md`
-- **Последняя завершённая задача:** 1.9 Capability Lab (MVI, JSON-экспорт, P1 параллельно)
+- **Последняя завершённая задача:** M1: исправления по итоговому ревью вехи (I1–I7)
 - **Следующая задача:** 1.10 закрытие M1 (отчёт M1.md, handoff, 0-mvp.md)
 - **Блокеры:** GitHub-remote не настроен (CI заработает после пуша)
 - **Как поднять стенд:** `deploy/README.md` (4 команды + `./test-stand.sh`); нужен `local.properties` с `sdk.dir` для сборки.
@@ -39,3 +39,4 @@
 | 2026-11-06 | 1.8 agent:app — FGS specialUse, автозапуск, сторож, HeartbeatLog, L1–L4 | см. `git log` | agent:data строки 97,1 %, agent:app 98,2 %, корень 98,2 %, ветви platform 100 %, полная сборка exit 0; ручная проверка на rf-api36 пройдена |
 | 2026-11-06 | 1.8 fix round 1: диспетчер цикла, best-effort журнал, Koin-фабрика сторожа, L3/boot-pin и minor | см. `git log` | agent:data строки 97,2 %, agent:app 98,3 %, агрегат 98,2 %, ветви platform 100 %, полная сборка exit 0 |
 | 2026-11-06 | 1.9 Capability Lab (MVI, JSON-экспорт, P1 параллельно) | см. `git log` | agent:presentation строки 98,6 %, agent:data 97,2 %, агрегат 96,3 %, ветви platform 100 %, полная сборка exit 0; ручная проверка на rf-api36: 43 записи в JSON |
+| 2026-11-07 | M1: исправления по итоговому ревью вехи (I1–I7) | см. `git log` | тесты: build detekt koverVerifyCi konsist rc=0; domain 99.5%, data 97.5%, aggregate 96.3%; rf-api36: wake lock держится |
