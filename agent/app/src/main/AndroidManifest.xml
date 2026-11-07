@@ -77,7 +77,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- WorkManager инициализируется Koin (workManagerFactory) — стандартный инициализатор отключён. -->
+        <!-- WorkManager инициализируется по требованию через RestoFleetApp (Configuration.Provider с KoinWorkerFactory) — стандартный инициализатор отключён. -->
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
