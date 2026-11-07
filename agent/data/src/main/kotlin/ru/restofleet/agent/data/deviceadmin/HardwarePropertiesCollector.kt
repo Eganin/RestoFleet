@@ -16,7 +16,7 @@ import ru.restofleet.agent.domain.model.UnavailableReason
  */
 class HardwarePropertiesCollector(
     private val context: Context,
-    private val isDeviceOwner: () -> Boolean,
+    private val role: DeviceOwnerRole,
     private val fingerprint: String = Build.FINGERPRINT,
     private val hardware: String = Build.HARDWARE,
     private val manager: () -> HardwarePropertiesManager? = {
@@ -25,7 +25,7 @@ class HardwarePropertiesCollector(
 ) {
     @Suppress("SwallowedException") // SecurityException = роль Device Owner потеряна
     fun read(): Reading<HardwareTemps> = guarded {
-        if (!isDeviceOwner()) return@guarded Reading.Unavailable(UnavailableReason.RequiresDeviceOwner)
+        if (!role.isDeviceOwner()) return@guarded Reading.Unavailable(UnavailableReason.RequiresDeviceOwner)
         val hpm = manager()
             ?: return@guarded Reading.Unavailable(UnavailableReason.Failed("no_hardware_properties_service"))
         val temps = try {

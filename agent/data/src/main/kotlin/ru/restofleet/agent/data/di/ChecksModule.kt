@@ -20,6 +20,8 @@ import ru.restofleet.agent.data.collectors.PackageEventsObserver
 import ru.restofleet.agent.data.collectors.ResourceCollector
 import ru.restofleet.agent.data.collectors.SsidCollector
 import ru.restofleet.agent.data.collectors.ThermalCollector
+import ru.restofleet.agent.data.deviceadmin.DeviceOwnerRole
+import ru.restofleet.agent.data.deviceadmin.DpmDeviceOwnerRole
 import ru.restofleet.agent.data.deviceadmin.HardwarePropertiesCollector
 import ru.restofleet.agent.data.deviceadmin.SerialCollector
 import ru.restofleet.agent.data.platform.FreeFallDetector
@@ -53,12 +55,12 @@ val checksModule: Module = module {
     single { MotionCollector(androidContext(), FreeFallDetector()) }
     single { PackageEventsObserver(androidContext()) }
     single { NetworkChangeObserver(androidContext()) }
-    // R10 и R13 нужны права Device Owner: роль проверяется по DevicePolicyManager при каждом чтении
-    single {
+    // Единый источник роли Device Owner для R10 и адаптера DO; проверяется при каждом обращении
+    single<DeviceOwnerRole> {
         val context = androidContext()
-        val dpm = context.getSystemService(DevicePolicyManager::class.java)
-        HardwarePropertiesCollector(context, isDeviceOwner = { dpm.isDeviceOwnerApp(context.packageName) })
+        DpmDeviceOwnerRole(context.getSystemService(DevicePolicyManager::class.java), context.packageName)
     }
+    single { HardwarePropertiesCollector(androidContext(), role = get()) }
     single { SerialCollector() }
 
     single<List<CapabilityCheck>>(READING_CHECKS) {

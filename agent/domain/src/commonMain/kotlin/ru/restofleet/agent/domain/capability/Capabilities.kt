@@ -67,19 +67,19 @@ data class Capabilities(val mode: AgentMode, val apiLevel: Int, val granted: Set
         else -> null
     }
 
-    private companion object {
-        const val NOTIFICATION_PERMISSION_API = 33
-        val BEEP_RANGE_MS = 1L..30_000L
-        val PACKAGE_NAME = Regex("[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+")
-        val SHA256 = Regex("[0-9a-fA-F]{64}")
-        val HOST_LABEL = Regex("[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?")
-        val PORT = Regex("[0-9]{1,5}")
-        val PORT_RANGE = 1..65_535
-        const val MAX_TEXT_LENGTH = 1000
-        const val MAX_PACKAGE_LENGTH = 255
-        const val MAX_URL_LENGTH = 2048
-        const val HTTPS_PREFIX = "https://"
-        const val AUTHORITY_END = "/?#"
+    companion object {
+        private const val NOTIFICATION_PERMISSION_API = 33
+        private val BEEP_RANGE_MS = 1L..30_000L
+        private val PACKAGE_NAME = Regex("[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+")
+        private val SHA256 = Regex("[0-9a-fA-F]{64}")
+        private val HOST_LABEL = Regex("[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?")
+        private val PORT = Regex("[0-9]{1,5}")
+        private val PORT_RANGE = 1..65_535
+        private const val MAX_TEXT_LENGTH = 1000
+        private const val MAX_PACKAGE_LENGTH = 255
+        private const val MAX_URL_LENGTH = 2048
+        private const val HTTPS_PREFIX = "https://"
+        private const val AUTHORITY_END = "/?#"
 
         /**
          * Чистый Kotlin (без java.net): схема строго `https://` в нижнем регистре, длина до 2048, без пробелов и

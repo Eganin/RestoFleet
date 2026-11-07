@@ -65,6 +65,25 @@ class LockTaskLauncherTest {
     }
 
     @Test
+    fun onlyLowercaseHttpsUrlsAreAccepted() {
+        install(withLauncher = true)
+        for (bad in listOf(
+            "intent:#Intent;end", "file:///sdcard/x", "javascript:alert(1)", "http://x.test/", "HTTPS://x.test/",
+            "https://user@x.test/", "https://x.test/a b", "",
+        )) {
+            assertThat(launcher(30).target(pkg, bad))
+                .isEqualTo(Outcome.Failure(DeviceAdminError.Unsupported("invalid_url")))
+        }
+        assertThat(launcher(30).target(pkg, "https://x.test:8443/menu")).isInstanceOf(Outcome.Success::class.java)
+    }
+
+    @Test
+    fun urlIsCheckedBeforeThePackage() {
+        assertThat(launcher(30).target(pkg, "http://x.test/"))
+            .isEqualTo(Outcome.Failure(DeviceAdminError.Unsupported("invalid_url")))
+    }
+
+    @Test
     fun installedWithoutLauncherActivityAndNoUrlHasNoLaunchIntent() {
         install(withLauncher = false)
         assertThat(launcher(30).target(pkg, null))

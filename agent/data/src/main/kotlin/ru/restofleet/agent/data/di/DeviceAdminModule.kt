@@ -14,6 +14,9 @@ import ru.restofleet.agent.data.deviceadmin.PackageInstallerSession
 import ru.restofleet.agent.data.deviceadmin.apkHttpClient
 import ru.restofleet.agent.domain.port.DeviceAdmin
 
+/** Qualifier компонента администратора (`ComponentName` приёмника): его предоставляет `agent:app`. */
+val ADMIN_COMPONENT = named("adminComponent")
+
 /** Qualifier клиента загрузки APK (системный trust store, https→https, жёсткие таймауты). */
 val APK_HTTP_CLIENT = named("apkHttpClient")
 
@@ -31,7 +34,8 @@ val deviceAdminModule: Module = module {
         DpmDeviceAdmin(
             context = context,
             dpm = context.getSystemService(DevicePolicyManager::class.java),
-            admin = get(),
+            admin = get(ADMIN_COMPONENT),
+            role = get(),
             downloader = get(),
             installer = get(),
             lockTask = get(),

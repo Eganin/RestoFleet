@@ -9,6 +9,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import ru.restofleet.agent.data.deviceadmin.DeviceOwnerRole
 import ru.restofleet.agent.data.deviceadmin.HardwarePropertiesCollector
 import ru.restofleet.agent.data.deviceadmin.SerialCollector
 import ru.restofleet.agent.data.platform.ApiLevel
@@ -38,7 +39,7 @@ class CapabilityChecksFactoryRobolectricTest {
             motion = MotionCollector(appContext, FreeFallDetector()),
             packageEvents = PackageEventsObserver(appContext),
             networkChanges = NetworkChangeObserver(appContext, api),
-            hardware = HardwarePropertiesCollector(appContext, isDeviceOwner = { false }),
+            hardware = HardwarePropertiesCollector(appContext, role = DeviceOwnerRole { false }),
             serial = SerialCollector { "SN1234567890" },
             scope = CoroutineScope(job + Dispatchers.Default),
             watched = listOf(appContext.packageName, "com.missing"),

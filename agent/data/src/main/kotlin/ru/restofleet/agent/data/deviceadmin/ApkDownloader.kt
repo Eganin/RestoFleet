@@ -17,6 +17,9 @@ import okhttp3.Response
 import okhttp3.ResponseBody
 import ru.restofleet.shared.kernel.Outcome
 import java.io.File
+import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -33,6 +36,15 @@ class ApkDownloader(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val newName: () -> String = { UUID.randomUUID().toString() },
 ) {
+    /**
+     * Удаляет всё из `cacheDir/apk/`: там лежат только временные файлы загрузчика, а загрузка одна (замок в
+     * `DpmDeviceAdmin`). Нужна, потому что после убийства процесса или перезагрузки посреди загрузки `.part`/`.apk`
+     * (до [maxBytes]) остаются навсегда. Вызывать только под замком установки, до начала загрузки.
+     */
+    fun clearStale() {
+        File(cacheDir, DIR_NAME).listFiles()?.forEach { it.delete() }
+    }
+
     /** Сбой — [DeviceAdminError.DownloadFailed] с причиной `https_required`, `invalid_url`, `http_<код>` и др. */
     suspend fun download(url: String): Outcome<File, DeviceAdminError> {
         val httpUrl = url.toHttpUrlOrNull()
@@ -103,18 +115,11 @@ class ApkDownloader(
 
     /** Копирует тело в [part] с ограничением размера; причина отказа либо `null`. */
     private fun copyBody(body: ResponseBody, part: File): String? =
-        part.outputStream().use { out ->
-            body.byteStream().use { input ->
-                val buffer = ByteArray(BUFFER_SIZE)
-                var total = 0L
-                var rejected: String? = null
-                while (rejected == null) {
-                    val read = input.read(buffer)
-                    if (read < 0) break
-                    total += read
-                    if (total > maxBytes) rejected = "too_large" else out.write(buffer, 0, read)
-                }
-                rejected
+        openForWrite(part).let { opened ->
+            if (opened.error != null) {
+                opened.error
+            } else {
+                opened.stream!!.use { out -> body.byteStream().use { input -> copyLimited(input, out, maxBytes) } }
             }
         }
 
@@ -126,6 +131,41 @@ class ApkDownloader(
         /** Предельный размер APK: 200 МБ. */
         const val MAX_APK_BYTES: Long = 200L * 1024 * 1024
         private const val DIR_NAME = "apk"
-        private const val BUFFER_SIZE = 16 * 1024
     }
 }
+
+private const val BUFFER_SIZE = 16 * 1024
+
+private class Opened(val stream: OutputStream?, val error: String?)
+
+/** Ошибки диска (нет прав или места) — `io:<класс>`, а не `network:`; ошибки чтения из сети остаются сетевыми. */
+@Suppress("SwallowedException") // класс исключения передаётся в причину
+private fun openForWrite(part: File): Opened =
+    try {
+        Opened(part.outputStream(), null)
+    } catch (e: IOException) {
+        Opened(null, "io:${e::class.simpleName}")
+    }
+
+@Suppress("SwallowedException") // класс исключения передаётся в причину
+private fun copyLimited(input: InputStream, out: OutputStream, maxBytes: Long): String? {
+    val buffer = ByteArray(BUFFER_SIZE)
+    var total = 0L
+    var rejected: String? = null
+    while (rejected == null) {
+        val read = input.read(buffer)
+        if (read < 0) break
+        total += read
+        rejected = if (total > maxBytes) "too_large" else write(out, buffer, read)
+    }
+    return rejected
+}
+
+@Suppress("SwallowedException") // класс исключения передаётся в причину
+private fun write(out: OutputStream, buffer: ByteArray, count: Int): String? =
+    try {
+        out.write(buffer, 0, count)
+        null
+    } catch (e: IOException) {
+        "io:${e::class.simpleName}"
+    }

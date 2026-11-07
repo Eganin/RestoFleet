@@ -177,6 +177,64 @@ class ApkDownloaderTest {
     }
 
     @Test
+    fun limitIsTwoHundredMegabytes() {
+        assertThat(ApkDownloader.MAX_APK_BYTES).isEqualTo(200L * 1024 * 1024)
+    }
+
+    @Test
+    fun declaredLengthExactlyAtLimitIsAccepted() {
+        https.enqueue(MockResponse.Builder().body("x".repeat(10)).build())
+        val result = download(https.url("/a").toString(), downloader(maxBytes = 10))
+        assertThat(result).isInstanceOf(Outcome.Success::class.java)
+        assertThat((result as Outcome.Success).value.length()).isEqualTo(10)
+    }
+
+    @Test
+    fun declaredLengthOneByteOverLimitIsRefused() {
+        https.enqueue(MockResponse.Builder().body("x".repeat(11)).build())
+        val result = download(https.url("/a").toString(), downloader(maxBytes = 10))
+        assertThat(failureReason(result)).isEqualTo("too_large")
+        assertThat(filesLeft()).isEmpty()
+    }
+
+    @Test
+    fun diskFailureIsReportedAsIoNotNetwork() {
+        https.enqueue(MockResponse.Builder().body(body).build())
+        // на месте .part — каталог: открыть файл на запись нельзя, как при нехватке прав или места
+        File(apkDir(), "n1.apk.part").mkdirs()
+        val result = download(https.url("/a").toString(), downloader())
+        assertThat(failureReason(result)).isEqualTo("io:FileNotFoundException")
+        assertThat(File(apkDir(), "n1.apk").exists()).isFalse()
+    }
+
+    @Test
+    fun clearStaleRemovesFilesLeftByAKilledProcess() {
+        apkDir().mkdirs()
+        File(apkDir(), "dead.apk.part").writeText("half")
+        File(apkDir(), "dead.apk").writeText("full")
+        downloader().clearStale()
+        assertThat(filesLeft()).isEmpty()
+    }
+
+    @Test
+    fun clearStaleWithoutDirectoryIsHarmless() {
+        downloader().clearStale()
+        assertThat(apkDir().exists()).isFalse()
+    }
+
+    @Test
+    fun downloadAfterClearStaleKeepsItsOwnFile() {
+        apkDir().mkdirs()
+        File(apkDir(), "dead.apk").writeText("full")
+        https.enqueue(MockResponse.Builder().body(body).build())
+        val d = downloader()
+        d.clearStale()
+        val file = (download(https.url("/a").toString(), d) as Outcome.Success).value
+        assertThat(file.readText()).isEqualTo(body)
+        assertThat(filesLeft()).containsExactly(file.name)
+    }
+
+    @Test
     fun cancellationStopsTheCallDeletesTheFileAndIsNotSwallowed() = runBlocking {
         https.enqueue(MockResponse.Builder().body("z".repeat(1000)).onResponseBody(SocketEffect.Stall).build())
         var returned: Any? = null
@@ -190,7 +248,13 @@ class ApkDownloaderTest {
             }
         }
         withContext(Dispatchers.IO) { https.takeRequest(5, TimeUnit.SECONDS) }
-        withContext(Dispatchers.IO) { Thread.sleep(200) } // тело начало записываться в .part
+        // .part создаётся до чтения тела: ждём его появления (а не фиксированную паузу) и фиксируем, что он был
+        val partSeen = withContext(Dispatchers.IO) {
+            val deadline = System.currentTimeMillis() + 5_000
+            while (filesLeft().none { it.endsWith(".part") } && System.currentTimeMillis() < deadline) Thread.sleep(10)
+            filesLeft().any { it.endsWith(".part") }
+        }
+        assertThat(partSeen).isTrue()
         withTimeout(5_000) { job.cancelAndJoin() }
         assertThat(job.isCancelled).isTrue()
         assertThat(returned).isNull() // отмена не превращена в Failure

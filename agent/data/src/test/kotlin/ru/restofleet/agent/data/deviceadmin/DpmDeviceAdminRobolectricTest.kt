@@ -6,6 +6,8 @@ import android.content.ComponentName
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import android.os.HardwarePropertiesManager
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.runBlocking
@@ -15,6 +17,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import ru.restofleet.agent.data.platform.ApiLevel
+import ru.restofleet.agent.domain.model.HardwareTemps
+import ru.restofleet.agent.domain.model.Reading
+import ru.restofleet.agent.domain.model.UnavailableReason
 import ru.restofleet.shared.kernel.Outcome
 
 /** Проверка на реальном `DevicePolicyManager` под Robolectric (`ShadowDevicePolicyManager`). */
@@ -26,9 +31,11 @@ class DpmDeviceAdminRobolectricTest {
     private val admin = ComponentName(context.packageName, "ru.restofleet.agent.AdminReceiver")
 
     private fun sut() = DpmDeviceAdmin(
-        context, dpm, admin, mockk(), mockk(), LockTaskLauncher(context, { _, _ -> error("unused") }),
+        context, dpm, admin, role, mockk(), mockk(), LockTaskLauncher(context, { _, _ -> error("unused") }),
         ApiLevel { 34 },
     )
+
+    private val role = DpmDeviceOwnerRole(dpm, context.packageName)
 
     @Test
     fun roleFollowsTheRealPolicyManager() = blocking {
@@ -36,6 +43,22 @@ class DpmDeviceAdminRobolectricTest {
         assertThat(sut().reboot()).isEqualTo(Outcome.Failure(DeviceAdminError.NotDeviceOwner))
         assertThat(shadowOf(dpm).setDeviceOwner(admin)).isTrue()
         assertThat(sut().isDeviceOwner()).isTrue()
+    }
+
+    @Test
+    fun adapterAndTemperatureCollectorSeeTheRoleThroughOneSource() = blocking {
+        val manager = mockk<HardwarePropertiesManager> {
+            every { getDeviceTemperatures(any(), any()) } returns floatArrayOf(40f)
+        }
+        val collector = HardwarePropertiesCollector(context, role, manager = { manager })
+
+        assertThat(sut().isDeviceOwner()).isFalse()
+        assertThat(collector.read()).isEqualTo(Reading.Unavailable(UnavailableReason.RequiresDeviceOwner))
+
+        shadowOf(dpm).setDeviceOwner(admin)
+
+        assertThat(sut().isDeviceOwner()).isTrue()
+        assertThat(collector.read()).isEqualTo(Reading.Available(HardwareTemps(listOf(40f), listOf(40f), listOf(40f))))
     }
 
     @Test

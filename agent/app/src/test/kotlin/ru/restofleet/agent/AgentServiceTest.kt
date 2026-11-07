@@ -36,6 +36,8 @@ import java.util.concurrent.atomic.AtomicInteger
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = RestoFleetApp::class)
 class AgentServiceTest {
+    @get:Rule val workManagerIsolation = WorkManagerIsolationRule()
+
     @get:Rule val tmp = TemporaryFolder()
 
     private val ticks = AtomicInteger()

@@ -9,9 +9,13 @@ import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verifyOrder
 import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
@@ -22,6 +26,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -49,7 +54,15 @@ class DpmDeviceAdminTest {
     private val lockTask = mockk<LockTaskLauncher>()
 
     private fun sut(api: Int = 34) =
-        DpmDeviceAdmin(context, dpm, admin, downloader, installer, lockTask, { api }, Dispatchers.IO)
+        DpmDeviceAdmin(
+            context, dpm, admin, DeviceOwnerRole { dpm.isDeviceOwnerApp(self) }, downloader, installer, lockTask,
+            { api }, Dispatchers.IO,
+        )
+
+    @Before
+    fun allowCleanup() {
+        every { downloader.clearStale() } just Runs
+    }
 
     private fun owner(isOwner: Boolean) = every { dpm.isDeviceOwnerApp(self) } returns isOwner
 
@@ -224,6 +237,46 @@ class DpmDeviceAdminTest {
         assertThat(device.installApk(url, goodHash)).isEqualTo(Outcome.Success(Unit))
     }
 
+    @Test
+    fun staleFilesAreClearedUnderTheLockBeforeTheDownload() = blocking {
+        owner(true)
+        val file = apk()
+        coEvery { downloader.download(url) } returns Outcome.Success(file)
+        coEvery { installer.install(file) } returns Outcome.Success(Unit)
+        sut().installApk(url, goodHash)
+        coVerifyOrder {
+            downloader.clearStale()
+            downloader.download(url)
+            installer.install(file)
+        }
+    }
+
+    @Test
+    fun refusedInstallsDoNotTouchFilesOfARunningOne() = blocking {
+        owner(true)
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val file = apk()
+        coEvery { downloader.download(url) } returns Outcome.Success(file)
+        coEvery { installer.install(any()) } coAnswers {
+            entered.complete(Unit)
+            release.await()
+            Outcome.Success(Unit)
+        }
+        val device = sut()
+        val first = async(Dispatchers.Default) { device.installApk(url, goodHash) }
+        withTimeout(5_000) { entered.await() }
+
+        device.installApk(url, goodHash) // отказ: install_in_progress
+        owner(false)
+        device.installApk(url, goodHash) // отказ: не DO
+        device.installApk(url, "bad") // отказ: формат SHA-256
+
+        release.complete(Unit)
+        first.await()
+        verify(exactly = 1) { downloader.clearStale() }
+    }
+
     // ---------- lock task ----------
 
     @Test
@@ -253,6 +306,11 @@ class DpmDeviceAdminTest {
         every { lockTask.start(target, "com.android.chrome", "https://x.test/") } returns Outcome.Success(Unit)
         assertThat(sut().startLockTask("com.android.chrome", "https://x.test/")).isEqualTo(Outcome.Success(Unit))
         assertThat(packages.captured.toList()).containsExactly(self, "com.android.chrome").inOrder()
+        // список lock task обязан быть задан до запуска, иначе на API 28+ запуск даст SecurityException
+        verifyOrder {
+            dpm.setLockTaskPackages(admin, any())
+            lockTask.start(target, "com.android.chrome", "https://x.test/")
+        }
     }
 
     @Test
@@ -272,6 +330,22 @@ class DpmDeviceAdminTest {
         every { lockTask.target("p.q", null) } returns Outcome.Success(Intent())
         every { dpm.setLockTaskPackages(admin, any()) } throws SecurityException("not owner")
         assertThat(sut().startLockTask("p.q", null)).isEqualTo(Outcome.Failure(DeviceAdminError.NotDeviceOwner))
+    }
+
+    @Test
+    fun lockTaskWithForeignSchemeNeverStartsAnything() = blocking {
+        owner(true)
+        var started = 0
+        val real = LockTaskLauncher(context, { _, _ -> Intent() }, { 34 }, { _, _ -> started++ })
+        val device = DpmDeviceAdmin(
+            context, dpm, admin, DeviceOwnerRole { dpm.isDeviceOwnerApp(self) }, downloader, installer, real, { 34 },
+        )
+        for (bad in listOf("intent:#Intent;end", "file:///sdcard/x", "javascript:alert(1)", "http://x.test/")) {
+            assertThat(device.startLockTask("com.android.chrome", bad))
+                .isEqualTo(Outcome.Failure(DeviceAdminError.Unsupported("invalid_url")))
+        }
+        assertThat(started).isEqualTo(0)
+        verify(exactly = 0) { dpm.setLockTaskPackages(any(), any()) }
     }
 
     // ---------- permissions ----------

@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.annotation.RequiresApi
 import ru.restofleet.agent.data.platform.ApiLevel
+import ru.restofleet.agent.domain.capability.Capabilities
 import ru.restofleet.shared.kernel.Outcome
 
 /**
@@ -58,17 +59,27 @@ class LockTaskLauncher(
 }
 
 /**
- * Intent целевого приложения: `ACTION_VIEW` с адресом, ограниченный пакетом [pkg], либо его стандартный launch-intent.
+ * Intent целевого приложения: `ACTION_VIEW` с адресом (только https), ограниченный пакетом [pkg], либо его
+ * стандартный launch-intent.
  * Общая для [LockTaskLauncher] и `LockTaskActivity`, чтобы intent не передавался между ними вложенным extra.
  */
 fun resolveLockTaskTarget(pm: PackageManager, pkg: String, url: String?): Outcome<Intent, DeviceAdminError> {
-    if (!isInstalled(pm, pkg)) return Outcome.Failure(DeviceAdminError.Unsupported("package_not_installed"))
-    val intent = if (url != null) {
-        Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage(pkg)
-    } else {
-        pm.getLaunchIntentForPackage(pkg)
+    val rejected = when {
+        // Та же проверка, что в domain (`Capabilities.check`): только https, схема в нижнем регистре, без userinfo
+        url != null && !Capabilities.isHttpsUrl(url) -> "invalid_url"
+        !isInstalled(pm, pkg) -> "package_not_installed"
+        else -> null
     }
-    return intent?.let { Outcome.Success(it) } ?: Outcome.Failure(DeviceAdminError.Unsupported("no_launch_intent"))
+    val intent = when {
+        rejected != null -> null
+        url != null -> Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage(pkg)
+        else -> pm.getLaunchIntentForPackage(pkg)
+    }
+    return when {
+        rejected != null -> Outcome.Failure(DeviceAdminError.Unsupported(rejected))
+        intent == null -> Outcome.Failure(DeviceAdminError.Unsupported("no_launch_intent"))
+        else -> Outcome.Success(intent)
+    }
 }
 
 // getPackageInfo(String, Int) работает на всех API; перегрузка с флагами появилась только в 33

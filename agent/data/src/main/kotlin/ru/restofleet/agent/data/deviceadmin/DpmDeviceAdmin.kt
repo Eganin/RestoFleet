@@ -24,6 +24,7 @@ class DpmDeviceAdmin(
     private val context: Context,
     private val dpm: DevicePolicyManager,
     private val admin: ComponentName,
+    private val role: DeviceOwnerRole,
     private val downloader: ApkDownloader,
     private val installer: PackageInstallerSession,
     private val lockTask: LockTaskLauncher,
@@ -34,7 +35,7 @@ class DpmDeviceAdmin(
     private val installLock = Mutex()
     private val self: String get() = context.packageName
 
-    override suspend fun isDeviceOwner(): Boolean = dpm.isDeviceOwnerApp(self)
+    override suspend fun isDeviceOwner(): Boolean = role.isDeviceOwner()
 
     @Suppress("SwallowedException") // тип исключения и есть причина отказа
     override suspend fun reboot(): Outcome<Unit, DomainError> {
@@ -54,6 +55,8 @@ class DpmDeviceAdmin(
         !Sha256Verifier.isValid(sha256) -> Outcome.Failure(DeviceAdminError.Unsupported("invalid_sha256"))
         !installLock.tryLock() -> Outcome.Failure(DeviceAdminError.Unsupported("install_in_progress"))
         else -> try {
+            // Под замком установка одна, поэтому в apk/ остались только файлы прошлого, убитого процесса
+            downloader.clearStale()
             downloadVerifyInstall(url, sha256)
         } finally {
             installLock.unlock()

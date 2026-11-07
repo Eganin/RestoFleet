@@ -54,6 +54,10 @@ class AdminReceiverManifestTest {
         val info = context.packageManager.getActivityInfo(ComponentName(context, LockTaskActivity::class.java), 0)
         assertThat(info.exported).isFalse()
         assertThat(info.launchMode).isEqualTo(android.content.pm.ActivityInfo.LAUNCH_SINGLE_TASK)
+        // lockTaskLaunchMode скрыт из SDK (@hide), читаем отражением; 3 = if_whitelisted (ActivityInfo, android-36:
+        // LOCK_TASK_LAUNCH_MODE_IF_ALLOWLISTED = 3; в 34 константа называлась IF_WHITELISTED)
+        val mode = android.content.pm.ActivityInfo::class.java.getField("lockTaskLaunchMode").getInt(info)
+        assertThat(mode).isEqualTo(3)
     }
 
     @Test

@@ -8,12 +8,15 @@ import android.content.pm.PackageInstaller
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -25,6 +28,11 @@ import ru.restofleet.shared.kernel.Outcome
 import java.io.File
 import kotlin.coroutines.cancellation.CancellationException
 
+/**
+ * Без реального времени: установка идёт на `StandardTestDispatcher` (виртуальные часы, в том числе для таймаута
+ * 120 с), широковещательное сообщение доставляется детерминированно через `idle()` главного looper.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class AndroidPackageInstallerSessionTest {
@@ -34,88 +42,93 @@ class AndroidPackageInstallerSessionTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val installer = context.packageManager.packageInstaller
     private val action = "ru.restofleet.test.INSTALL_RESULT"
-    private val scope = CoroutineScope(Dispatchers.Default)
+    private val baselineReceivers = shadowOf(context as Application).registeredReceivers.size
 
     private fun apk(): File = tmp.newFile().also { it.writeBytes(ByteArray(1024) { i -> i.toByte() }) }
 
-    private fun session(timeoutMs: Long = 10_000) =
-        AndroidPackageInstallerSession(context, Dispatchers.IO, timeoutMs) { action }
+    private fun TestScope.session(timeoutMs: Long = AndroidPackageInstallerSession.INSTALL_TIMEOUT_MS) =
+        AndroidPackageInstallerSession(context, testDispatcher(), timeoutMs) { action }
 
-    private fun idle() = shadowOf(Looper.getMainLooper()).idle()
-
-    private val baselineReceivers = shadowOf(context as Application).registeredReceivers.size
+    private fun TestScope.testDispatcher(): CoroutineDispatcher = StandardTestDispatcher(testScheduler)
 
     private fun receivers() = shadowOf(context as Application).registeredReceivers.size - baselineReceivers
 
-    /** Крутит главный looper (доставка broadcast), пока [block] не вернёт значение. */
-    private fun <T : Any> pumpUntil(timeoutMs: Long = 10_000, block: () -> T?): T {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
-            idle()
-            block()?.let { return it }
-            Thread.sleep(10)
-        }
-        error("не дождались условия")
-    }
-
-    private fun <T> await(job: Deferred<T>): T {
-        pumpUntil { if (job.isCompleted) true else null }
-        return runBlocking { job.await() }
-    }
-
-    private fun sessionId(): Int = pumpUntil { installer.mySessions.firstOrNull()?.sessionId }
-
-    /** Имитирует итог системы: broadcast на наш PendingIntent (после commit; до него приёмник уже зарегистрирован). */
-    private fun deliver(status: Int, message: String?) {
-        context.sendBroadcast(
-            Intent(action).setPackage(context.packageName)
-                .putExtra(PackageInstaller.EXTRA_STATUS, status)
-                .putExtra(PackageInstaller.EXTRA_STATUS_MESSAGE, message),
-        )
-        idle()
+    /** Система присылает итог на наш PendingIntent; приёмник динамический, доставка — на главном looper. */
+    private fun deliver(status: Int?, message: String? = null) {
+        val intent = Intent(action).setPackage(context.packageName)
+        if (status != null) intent.putExtra(PackageInstaller.EXTRA_STATUS, status)
+        if (message != null) intent.putExtra(PackageInstaller.EXTRA_STATUS_MESSAGE, message)
+        context.sendBroadcast(intent)
+        shadowOf(Looper.getMainLooper()).idle()
     }
 
     @Test
-    fun committedSessionReportingSuccessIsSuccess() {
-        val job = scope.async { session().install(apk()) }
-        sessionId()
-        pumpUntil {
-            deliver(PackageInstaller.STATUS_SUCCESS, null)
-            if (job.isCompleted) true else null
-        }
-        assertThat(await(job)).isEqualTo(Outcome.Success(Unit))
+    fun committedSessionReportingSuccessIsSuccess() = runTest {
+        val job = async { session().install(apk()) }
+        runCurrent()
+        assertThat(installer.mySessions).hasSize(1)
+
+        deliver(PackageInstaller.STATUS_SUCCESS)
+        runCurrent()
+
+        assertThat(job.await()).isEqualTo(Outcome.Success(Unit))
     }
 
     @Test
-    fun systemFailureStatusIsMappedAndSessionIsAbandoned() {
-        val job = scope.async { session().install(apk()) }
-        sessionId()
-        pumpUntil {
-            deliver(PackageInstaller.STATUS_FAILURE_ABORTED, "INSTALL_FAILED_ABORTED")
-            if (job.isCompleted) true else null
-        }
-        assertThat(await(job)).isEqualTo(Outcome.Failure(DeviceAdminError.InstallFailed(3, "INSTALL_FAILED_ABORTED")))
+    fun systemFailureStatusIsMappedAndSessionIsAbandoned() = runTest {
+        val job = async { session().install(apk()) }
+        runCurrent()
+
+        deliver(PackageInstaller.STATUS_FAILURE_ABORTED, "INSTALL_FAILED_ABORTED")
+        runCurrent()
+
+        assertThat(job.await()).isEqualTo(Outcome.Failure(DeviceAdminError.InstallFailed(3, "INSTALL_FAILED_ABORTED")))
         assertThat(installer.mySessions).isEmpty()
         assertThat(receivers()).isEqualTo(0)
     }
 
     @Test
-    fun pendingUserActionIsAFailureForDeviceOwner() {
-        val job = scope.async { session().install(apk()) }
-        sessionId()
-        pumpUntil {
-            deliver(PackageInstaller.STATUS_PENDING_USER_ACTION, "confirm")
-            if (job.isCompleted) true else null
-        }
-        assertThat(await(job))
+    fun pendingUserActionIsAFailureForDeviceOwner() = runTest {
+        val job = async { session().install(apk()) }
+        runCurrent()
+
+        deliver(PackageInstaller.STATUS_PENDING_USER_ACTION, "confirm")
+        runCurrent()
+
+        assertThat(job.await())
             .isEqualTo(Outcome.Failure(DeviceAdminError.InstallFailed(-1, "pending_user_action")))
         assertThat(installer.mySessions).isEmpty()
     }
 
     @Test
-    fun noAnswerWithinTimeoutIsTimeoutFailureAndSessionIsAbandoned() {
-        val job = scope.async { session(timeoutMs = 300).install(apk()) }
-        assertThat(await(job)).isEqualTo(
+    fun messageWithoutStatusIsIgnoredAndTheNextRealStatusIsAccepted() = runTest {
+        val job = async { session().install(apk()) }
+        runCurrent()
+
+        deliver(status = null, message = "progress")
+        runCurrent()
+        assertThat(job.isCompleted).isFalse()
+        assertThat(receivers()).isEqualTo(1)
+
+        deliver(PackageInstaller.STATUS_SUCCESS)
+        runCurrent()
+        assertThat(job.await()).isEqualTo(Outcome.Success(Unit))
+    }
+
+    @Test
+    fun noAnswerForTheDefaultTimeoutIsTimeoutFailureAndSessionIsAbandoned() = runTest {
+        val job = async { session().install(apk()) }
+        runCurrent()
+
+        advanceTimeBy(AndroidPackageInstallerSession.INSTALL_TIMEOUT_MS - 1)
+        runCurrent()
+        assertThat(job.isCompleted).isFalse()
+
+        advanceTimeBy(2)
+        runCurrent()
+
+        assertThat(AndroidPackageInstallerSession.INSTALL_TIMEOUT_MS).isEqualTo(120_000L)
+        assertThat(job.await()).isEqualTo(
             Outcome.Failure(DeviceAdminError.InstallFailed(InstallStatusMapper.TIMEOUT, "timeout")),
         )
         assertThat(installer.mySessions).isEmpty()
@@ -123,9 +136,11 @@ class AndroidPackageInstallerSessionTest {
     }
 
     @Test
-    fun unreadableApkIsAnExceptionFailureAndSessionIsAbandoned() {
-        val job = scope.async { session().install(File(tmp.root, "missing.apk")) }
-        assertThat(await(job)).isEqualTo(
+    fun unreadableApkIsAnExceptionFailureAndSessionIsAbandoned() = runTest {
+        val job = async { session().install(File(tmp.root, "missing.apk")) }
+        runCurrent()
+
+        assertThat(job.await()).isEqualTo(
             Outcome.Failure(DeviceAdminError.InstallFailed(InstallStatusMapper.EXCEPTION, "FileNotFoundException")),
         )
         assertThat(installer.mySessions).isEmpty()
@@ -133,10 +148,10 @@ class AndroidPackageInstallerSessionTest {
     }
 
     @Test
-    fun cancellationAbandonsTheSessionAndIsNotSwallowed() {
+    fun cancellationAbandonsTheSessionAndIsNotSwallowed() = runTest {
         var returned: Any? = null
         var thrown: Throwable? = null
-        val job = scope.async {
+        val job = async {
             try {
                 returned = session().install(apk())
             } catch (e: Throwable) {
@@ -144,8 +159,11 @@ class AndroidPackageInstallerSessionTest {
                 throw e
             }
         }
-        sessionId()
-        runBlocking { job.cancelAndJoin() }
+        runCurrent()
+        assertThat(installer.mySessions).hasSize(1)
+
+        job.cancelAndJoin()
+
         assertThat(job.isCancelled).isTrue()
         assertThat(returned).isNull() // отмена не превращена в Failure
         assertThat(thrown).isInstanceOf(CancellationException::class.java)
@@ -154,36 +172,40 @@ class AndroidPackageInstallerSessionTest {
     }
 
     @Test
-    fun resultIntentIsBoundToOwnPackageAndMutable() {
-        val job = scope.async { session(timeoutMs = 3_000).install(apk()) }
-        val id = sessionId()
+    fun resultIntentIsBoundToOwnPackageAndMutable() = runTest {
+        val job = async { session().install(apk()) }
+        runCurrent()
+        val id = installer.mySessions.single().sessionId
         val probe = Intent(action).setPackage(context.packageName)
-        val pending = pumpUntil {
-            PendingIntent.getBroadcast(context, id, probe, PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_MUTABLE)
-        }
+
+        val pending = PendingIntent.getBroadcast(
+            context, id, probe, PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_MUTABLE,
+        )
+
+        assertThat(pending).isNotNull()
         val shadow = shadowOf(pending)
         assertThat(shadow.isBroadcastIntent).isTrue()
         assertThat(shadow.flags and PendingIntent.FLAG_MUTABLE).isNotEqualTo(0)
         assertThat(shadow.savedIntents.single().`package`).isEqualTo(context.packageName)
         assertThat(shadow.savedIntents.single().component).isNull()
         assertThat(shadow.savedIntents.single().action).isEqualTo(action)
-        await(job)
+        job.cancelAndJoin()
     }
 
     @Test
-    fun defaultActionsAreUniquePerInstall() {
+    fun defaultActionsAreUniquePerInstall() = runTest {
         val actions = mutableSetOf<String>()
         repeat(2) {
-            val job = scope.async { AndroidPackageInstallerSession(context, Dispatchers.IO, 300L).install(apk()) }
-            pumpUntil {
-                shadowOf(context as Application).registeredReceivers
-                    .mapNotNull { it.intentFilter.getAction(0) }
-                    .firstOrNull { it.startsWith("ru.restofleet.agent.INSTALL_RESULT.") }
-                    ?.also { actions += it }
+            val job = async {
+                AndroidPackageInstallerSession(context, testDispatcher()).install(apk())
             }
-            await(job)
+            runCurrent()
+            shadowOf(context as Application).registeredReceivers
+                .mapNotNull { it.intentFilter.getAction(0) }
+                .filter { it.startsWith("ru.restofleet.agent.INSTALL_RESULT.") }
+                .forEach { actions += it }
+            job.cancelAndJoin()
         }
         assertThat(actions).hasSize(2)
-        assertThat(actions.all { it.startsWith("ru.restofleet.agent.INSTALL_RESULT.") }).isTrue()
     }
 }

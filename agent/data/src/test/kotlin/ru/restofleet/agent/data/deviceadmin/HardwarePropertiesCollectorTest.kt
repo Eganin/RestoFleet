@@ -37,7 +37,7 @@ class HardwarePropertiesCollectorTest {
         fingerprint: String = real,
         hardware: String = "qcom",
         manager: () -> HardwarePropertiesManager?,
-    ) = HardwarePropertiesCollector(context, { owner }, fingerprint, hardware, manager)
+    ) = HardwarePropertiesCollector(context, DeviceOwnerRole { owner }, fingerprint, hardware, manager)
 
     @Test
     fun withoutDeviceOwnerTheManagerIsNeverTouched() {

@@ -10,6 +10,7 @@ import org.junit.Test
 import org.koin.test.verify.definition
 import org.koin.test.verify.injectedParameters
 import org.koin.test.verify.verify
+import ru.restofleet.agent.data.deviceadmin.DeviceOwnerRole
 import ru.restofleet.agent.data.deviceadmin.LegacyLockTaskEntry
 import ru.restofleet.agent.data.di.checksModule
 import ru.restofleet.agent.data.di.deviceAdminModule
@@ -57,7 +58,8 @@ class KoinModulesVerifyTest {
     fun deviceAdminModuleIsCompleteGivenAppPorts() {
         // ComponentName и LegacyLockTaskEntry — классы app, их предоставляет appModule
         deviceAdminModule.verify(
-            extraTypes = platformTypes + listOf(ComponentName::class, LegacyLockTaskEntry::class),
+            extraTypes = platformTypes +
+                listOf(ComponentName::class, LegacyLockTaskEntry::class, DeviceOwnerRole::class),
         )
     }
 

@@ -3,6 +3,7 @@ package ru.restofleet.agent
 import com.google.common.truth.Truth.assertThat
 import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.core.context.loadKoinModules
@@ -16,6 +17,8 @@ import ru.restofleet.agent.data.lifecycle.ServiceStarter
 @RunWith(RobolectricTestRunner::class)
 @Config(application = RestoFleetApp::class)
 class MainActivityTest {
+    @get:Rule val workManagerIsolation = WorkManagerIsolationRule()
+
     private val reasons = mutableListOf<String>()
 
     @Before

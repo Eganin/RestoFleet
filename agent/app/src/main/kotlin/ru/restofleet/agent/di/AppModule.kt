@@ -20,6 +20,7 @@ import ru.restofleet.agent.WatchdogWorker
 import ru.restofleet.agent.BuildConfig
 import ru.restofleet.agent.WorkManagerWatchdogSchedule
 import ru.restofleet.agent.data.device.AndroidDeviceInfoSource
+import ru.restofleet.agent.data.di.ADMIN_COMPONENT
 import ru.restofleet.agent.data.di.LIFECYCLE_CHECKS
 import ru.restofleet.agent.data.di.PROBE_CHECKS
 import ru.restofleet.agent.data.di.READING_CHECKS
@@ -61,7 +62,7 @@ val appModule: Module = module {
     workerOf(::WatchdogWorker)
 
     // Device Owner: компонент администратора и вход lock task для API 26–27 — классы app, нужные адаптеру из data
-    single { ComponentName(androidContext(), AdminReceiver::class.java) }
+    single(ADMIN_COMPONENT) { ComponentName(androidContext(), AdminReceiver::class.java) }
     single { LegacyLockTaskEntry { pkg, url -> LockTaskActivity.intent(androidContext(), pkg, url) } }
 
     // Capability Lab: все проверки каталога (L, R, P; остальные группы пока дают NOT_CHECKED), отчёт и публикация

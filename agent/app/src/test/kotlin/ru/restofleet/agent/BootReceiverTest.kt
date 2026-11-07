@@ -21,6 +21,8 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 @Config(application = RestoFleetApp::class)
 class BootReceiverTest {
+    @get:Rule val workManagerIsolation = WorkManagerIsolationRule()
+
     @get:Rule val tmp = TemporaryFolder()
 
     private val reasons = mutableListOf<String>()

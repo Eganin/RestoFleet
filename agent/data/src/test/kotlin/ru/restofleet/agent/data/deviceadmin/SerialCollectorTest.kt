@@ -6,6 +6,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowBuild
+import ru.restofleet.agent.data.platform.ApiLevel
 import ru.restofleet.agent.domain.model.Reading
 import ru.restofleet.agent.domain.model.UnavailableReason
 
@@ -29,10 +30,23 @@ class SerialCollectorTest {
         assertThat(SerialCollector { "  " }.read()).isEqualTo(serialUnknown)
     }
 
+    private fun denied(api: Int) =
+        SerialCollector(ApiLevel { api }) { throw SecurityException("requires READ_PRIVILEGED_PHONE_STATE") }.read()
+
     @Test
-    fun securityExceptionIsMissingPermission() {
-        val reading = SerialCollector { throw SecurityException("requires READ_PRIVILEGED_PHONE_STATE") }.read()
-        assertThat(reading).isEqualTo(Reading.Unavailable(UnavailableReason.PermissionMissing("READ_PHONE_STATE")))
+    fun securityExceptionOnApi26To28IsMissingReadPhoneState() {
+        for (api in 26..28) {
+            assertThat(denied(api))
+                .isEqualTo(Reading.Unavailable(UnavailableReason.PermissionMissing("READ_PHONE_STATE")))
+        }
+    }
+
+    @Test
+    fun securityExceptionOnApi29PlusMeansNotDeviceOwner() {
+        // с API 29 разрешение READ_PHONE_STATE не помогает: серийный номер отдаётся только Device Owner
+        for (api in listOf(29, 34, 37)) {
+            assertThat(denied(api)).isEqualTo(Reading.Unavailable(UnavailableReason.RequiresDeviceOwner))
+        }
     }
 
     @Test

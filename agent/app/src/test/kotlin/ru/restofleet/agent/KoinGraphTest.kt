@@ -4,15 +4,19 @@ import com.google.common.truth.Truth.assertThat
 import android.content.ComponentName
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertThrows
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.core.context.GlobalContext
 import org.koin.core.context.stopKoin
+import org.koin.core.error.NoDefinitionFoundException
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import okhttp3.OkHttpClient
 import ru.restofleet.agent.data.deviceadmin.DpmDeviceAdmin
 import ru.restofleet.agent.data.deviceadmin.LegacyLockTaskEntry
+import ru.restofleet.agent.data.di.ADMIN_COMPONENT
 import ru.restofleet.agent.data.di.APK_HTTP_CLIENT
 import ru.restofleet.agent.data.di.LIFECYCLE_CHECKS
 import ru.restofleet.agent.data.di.PROBE_HTTP_CLIENT
@@ -40,6 +44,8 @@ import ru.restofleet.shared.kernel.Outcome
 @RunWith(RobolectricTestRunner::class)
 @Config(application = RestoFleetApp::class)
 class KoinGraphTest {
+    @get:Rule val workManagerIsolation = WorkManagerIsolationRule()
+
     @After
     fun tearDown() = stopKoin()
 
@@ -67,8 +73,10 @@ class KoinGraphTest {
         val koin = GlobalContext.get()
 
         assertThat(koin.get<DeviceAdmin>()).isInstanceOf(DpmDeviceAdmin::class.java)
-        assertThat(koin.get<ComponentName>())
+        assertThat(koin.get<ComponentName>(ADMIN_COMPONENT))
             .isEqualTo(ComponentName("ru.restofleet.agent", "ru.restofleet.agent.AdminReceiver"))
+        // без qualifier'а платформенный ComponentName в графе не регистрируется: чужой single его не подменит
+        assertThrows(NoDefinitionFoundException::class.java) { koin.get<ComponentName>() }
         val probe = koin.get<OkHttpClient>(PROBE_HTTP_CLIENT)
         val apk = koin.get<OkHttpClient>(APK_HTTP_CLIENT)
         assertThat(apk).isNotSameInstanceAs(probe)

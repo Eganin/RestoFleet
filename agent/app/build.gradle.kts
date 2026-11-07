@@ -71,6 +71,16 @@ dependencies {
     testImplementation(libs.koin.test.junit4)
 }
 
+// Каждый тестовый класс — в своём JVM. Robolectric (native runtime) в каждом sandbox, то есть при каждой смене
+// SDK/конфигурации, копирует и загружает собственную копию librobolectric-nativeruntime (DefaultNativeRuntimeLoader.
+// loadLibrary: System.load из загрузчика sandbox). Если в одном JVM нативку уже загрузил другой sandbox
+// (AgentServiceTest на API 29/33), следующий sandbox (API 34 в WatchdogSchedulerTest) падает с
+// UnsatisfiedLinkError на SQLiteConnectionNatives.nativeOpen; от порядка классов зависит, упадёт ли тест.
+// Изоляция по классам делает прогон детерминированным (решение 106). Kover и `build`/`check` не затронуты.
+tasks.withType<Test>().configureEach {
+    forkEvery = 1
+}
+
 kover {
     currentProject {
         createVariant("ci") { add("debug") }

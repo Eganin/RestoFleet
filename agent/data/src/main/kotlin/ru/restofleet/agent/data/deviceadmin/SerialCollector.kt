@@ -3,6 +3,7 @@ package ru.restofleet.agent.data.deviceadmin
 import android.annotation.SuppressLint
 import android.os.Build
 import ru.restofleet.agent.data.collectors.guarded
+import ru.restofleet.agent.data.platform.ApiLevel
 import ru.restofleet.agent.domain.model.Reading
 import ru.restofleet.agent.domain.model.UnavailableReason
 
@@ -13,6 +14,7 @@ import ru.restofleet.agent.domain.model.UnavailableReason
  * Полное значение наружу не логируется; в Lab и отчёт оно попадает только в маске (см. `CheckValues.maskSerial`).
  */
 class SerialCollector(
+    private val apiLevel: ApiLevel = ApiLevel.Device,
     @SuppressLint("HardwareIds", "MissingPermission") // доступ подтверждается ролью DO, а не манифестом
     private val getSerial: () -> String = { Build.getSerial() },
 ) {
@@ -21,7 +23,14 @@ class SerialCollector(
         val serial = try {
             getSerial()
         } catch (e: SecurityException) {
-            return@guarded Reading.Unavailable(UnavailableReason.PermissionMissing(PERMISSION))
+            // С API 29 по javadoc Build.getSerial() доступен только Device Owner: выдача READ_PHONE_STATE не поможет
+            return@guarded Reading.Unavailable(
+                if (apiLevel.current() >= DEVICE_OWNER_ONLY_API) {
+                    UnavailableReason.RequiresDeviceOwner
+                } else {
+                    UnavailableReason.PermissionMissing(PERMISSION)
+                },
+            )
         }
         if (serial.isBlank() || serial == Build.UNKNOWN) {
             Reading.Unavailable(UnavailableReason.Failed("serial_unknown"))
@@ -32,5 +41,6 @@ class SerialCollector(
 
     private companion object {
         const val PERMISSION = "READ_PHONE_STATE"
+        const val DEVICE_OWNER_ONLY_API = 29
     }
 }
