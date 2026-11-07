@@ -32,7 +32,7 @@ class TelemetryLoopTest {
     @Test
     fun loopTicksImmediatelyThenEveryInterval() = runTest {
         var ticks = 0
-        val loop = TelemetryLoop(intervalMs = 30_000, tick = { ticks++ }, wakeLock = wakeLock)
+        val loop = TelemetryLoop(intervalMs = 30_000, tick = { ticks++ })
         val job = launch { loop.run() }
 
         runCurrent()
@@ -56,8 +56,7 @@ class TelemetryLoopTest {
                 ticks++
                 if (ticks == 1) error("boom")
             },
-            onError = { errors += it.message.orEmpty() },
-            wakeLock = wakeLock,
+            onError = { errors += it.message.orEmpty() }
         )
         val job = launch { loop.run() }
 
@@ -71,7 +70,7 @@ class TelemetryLoopTest {
 
     @Test
     fun errorIsNotSwallowed() = runTest {
-        val loop = TelemetryLoop(intervalMs = 1_000, tick = { throw OutOfMemoryError("oom") }, wakeLock = wakeLock)
+        val loop = TelemetryLoop(intervalMs = 1_000, tick = { throw OutOfMemoryError("oom") })
         var thrown: Throwable? = null
         val job = launch {
             try {
@@ -93,8 +92,7 @@ class TelemetryLoopTest {
         val loop = TelemetryLoop(
             intervalMs = 1_000,
             tick = { if (++ticks == 1) throw CancellationException("stray") },
-            onError = { errors += it },
-            wakeLock = wakeLock,
+            onError = { errors += it }
         )
         val job = launch { loop.run() }
 
@@ -114,8 +112,7 @@ class TelemetryLoopTest {
         val loop = TelemetryLoop(
             intervalMs = 1_000,
             tick = { ticks++; awaitCancellation() },
-            onError = { errors += it },
-            wakeLock = wakeLock,
+            onError = { errors += it }
         )
         val job = launch { loop.run() }
         runCurrent()
@@ -140,8 +137,7 @@ class TelemetryLoopTest {
                 job.cancel()
                 throw CancellationException("cancelled by caller")
             },
-            onError = { errors += it },
-            wakeLock = wakeLock,
+            onError = { errors += it }
         )
         job = launch { loop.run() }
         advanceTimeBy(5_000)
@@ -199,7 +195,7 @@ class TelemetryLoopTest {
     fun cycleStartsOnceAndJournalsRealStartsOnly() = runTest {
         val journal = LifecycleJournal(File(tmp.root, "j"), clock)
         var ticks = 0
-        val cycle = cycleOf(TelemetryLoop(1_000, { ticks++ }, wakeLock = wakeLock), journal)
+        val cycle = cycleOf(TelemetryLoop(1_000, { ticks++ }), journal)
 
         now = 10
         assertThat(cycle.start("boot")).isTrue()
@@ -218,7 +214,7 @@ class TelemetryLoopTest {
     fun cycleStopCancelsLoopAndJournalsStop() = runTest {
         val journal = LifecycleJournal(File(tmp.root, "j"), clock)
         var ticks = 0
-        val cycle = cycleOf(TelemetryLoop(1_000, { ticks++ }, wakeLock = wakeLock), journal)
+        val cycle = cycleOf(TelemetryLoop(1_000, { ticks++ }), journal)
         cycle.start("manual")
         runCurrent()
 
@@ -235,7 +231,7 @@ class TelemetryLoopTest {
     @Test
     fun cycleCanRestartAfterStop() = runTest {
         val journal = LifecycleJournal(File(tmp.root, "j"), clock)
-        val cycle = cycleOf(TelemetryLoop(1_000, {}, wakeLock = wakeLock), journal)
+        val cycle = cycleOf(TelemetryLoop(1_000, {}), journal)
         cycle.start("a")
         cycle.stop()
 
@@ -246,7 +242,7 @@ class TelemetryLoopTest {
     @Test
     fun stopWithoutStartDoesNotJournal() = runTest {
         val journal = LifecycleJournal(File(tmp.root, "j"), clock)
-        cycleOf(TelemetryLoop(1_000, {}, wakeLock = wakeLock), journal).stop()
+        cycleOf(TelemetryLoop(1_000, {}), journal).stop()
 
         assertThat(journal.entries()).isEmpty()
     }
@@ -257,7 +253,7 @@ class TelemetryLoopTest {
         var ticks = 0
         val cycle = AgentCycle(
             TestScope(testScheduler),
-            TelemetryLoop(1_000, { ticks++ }, wakeLock = wakeLock),
+            TelemetryLoop(1_000, { ticks++ }),
             journal,
             StandardTestDispatcher(testScheduler),
             wakeLock,
@@ -275,30 +271,29 @@ class TelemetryLoopTest {
     }
 
     @Test
-    fun loopRenewsWakeLockOnEveryTick() = runTest {
-        val loop = TelemetryLoop(intervalMs = 1_000, tick = {}, wakeLock = wakeLock)
-        val job = launch { loop.run() }
+    fun loopRenewsItsLeaseOnEveryTick() = runTest {
+        val t = TelemetryLoop.WAKE_LOCK_TIMEOUT_MS
+        val loop = TelemetryLoop(intervalMs = 1_000, tick = {})
+        val job = launch { loop.run(wakeLock.acquire(t)) }
 
         runCurrent()
-        assertThat(wakeLock.events).containsExactly("hold(${TelemetryLoop.WAKE_LOCK_TIMEOUT_MS})")
+        assertThat(wakeLock.events).containsExactly("acquire($t)", "renew($t)").inOrder()
         advanceTimeBy(2_000)
         runCurrent()
 
-        assertThat(wakeLock.events).hasSize(3)
-        assertThat(wakeLock.events.toSet()).containsExactly("hold(${TelemetryLoop.WAKE_LOCK_TIMEOUT_MS})")
+        assertThat(wakeLock.events).hasSize(4)
         job.cancel()
     }
 
     @Test
-    fun loopReleasesWakeLockWhenItIsCancelled() = runTest {
-        val job = launch { TelemetryLoop(intervalMs = 1_000, tick = {}, wakeLock = wakeLock).run() }
+    fun loopWithoutLeaseDoesNotTouchWakeLock() = runTest {
+        val job = launch { TelemetryLoop(intervalMs = 1_000, tick = {}).run() }
         runCurrent()
-        assertThat(wakeLock.isHeld).isTrue()
+        advanceTimeBy(2_000)
+        runCurrent()
 
+        assertThat(wakeLock.events).isEmpty()
         job.cancel()
-        runCurrent()
-
-        assertThat(wakeLock.isHeld).isFalse()
     }
 
     @Test
@@ -309,7 +304,7 @@ class TelemetryLoopTest {
     @Test
     fun cycleHoldsWakeLockFromStartAndReleasesItOnStop() = runTest {
         val journal = LifecycleJournal(File(tmp.root, "j"), clock)
-        val cycle = cycleOf(TelemetryLoop(1_000, {}, wakeLock = wakeLock), journal)
+        val cycle = cycleOf(TelemetryLoop(1_000, {}), journal)
 
         cycle.start("boot")
         // удержан синхронно в start(), до того как корутина цикла получила управление
@@ -324,7 +319,7 @@ class TelemetryLoopTest {
     @Test
     fun repeatedStartDoesNotTouchWakeLock() = runTest {
         val journal = LifecycleJournal(File(tmp.root, "j"), clock)
-        val cycle = cycleOf(TelemetryLoop(1_000, {}, wakeLock = wakeLock), journal)
+        val cycle = cycleOf(TelemetryLoop(1_000, {}), journal)
         cycle.start("boot")
         val before = wakeLock.events.size
 
@@ -336,7 +331,7 @@ class TelemetryLoopTest {
 
     @Test
     fun stopWithoutStartDoesNotReleaseWakeLock() = runTest {
-        cycleOf(TelemetryLoop(1_000, {}, wakeLock = wakeLock), LifecycleJournal(File(tmp.root, "j"), clock)).stop()
+        cycleOf(TelemetryLoop(1_000, {}), LifecycleJournal(File(tmp.root, "j"), clock)).stop()
 
         assertThat(wakeLock.events).isEmpty()
     }

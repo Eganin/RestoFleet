@@ -48,7 +48,7 @@ class AgentServiceTest {
         loadKoinModules(
             module {
                 single { journal }
-                single { TelemetryLoop(30_000, { ticks.incrementAndGet() }, get()) }
+                single { TelemetryLoop(30_000, { ticks.incrementAndGet() }) }
                 single<CoroutineDispatcher>(AGENT_DISPATCHER) { UnconfinedTestDispatcher() }
             },
         )

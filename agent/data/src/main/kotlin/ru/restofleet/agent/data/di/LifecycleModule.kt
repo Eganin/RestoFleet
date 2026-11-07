@@ -38,7 +38,7 @@ val lifecycleModule: Module = module {
     single<TelemetrySource> { AndroidTelemetrySource(get(), get(), get(), get(), get(), get()) }
     single { CollectTelemetry(get(), get(), get()) }
     single { TelemetryTick(get(), get(), CapabilityChecksFactory.DEFAULT_WATCHED) }
-    single { TelemetryLoop(TELEMETRY_INTERVAL_MS, tick = { get<TelemetryTick>().invoke() }, wakeLock = get()) }
+    single { TelemetryLoop(TELEMETRY_INTERVAL_MS, tick = { get<TelemetryTick>().invoke() }) }
     single<List<CapabilityCheck>>(LIFECYCLE_CHECKS) {
         LifecycleChecks(get(), get(), get(), get(), get(), get()).create()
     }

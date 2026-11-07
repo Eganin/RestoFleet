@@ -68,7 +68,7 @@ class LifecycleChecksTest {
     fun l1RawReportsWakeLockState() = runTest {
         assertThat(run(CheckId.L1).raw["wakeLock"]).isEqualTo("not_held")
 
-        wakeLock.hold(1_000)
+        wakeLock.acquire(1_000)
 
         assertThat(run(CheckId.L1).raw["wakeLock"]).isEqualTo("held")
     }

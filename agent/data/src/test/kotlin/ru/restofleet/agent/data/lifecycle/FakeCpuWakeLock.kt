@@ -1,18 +1,26 @@
 package ru.restofleet.agent.data.lifecycle
 
-/** Фейк wake lock: пишет события `hold(<timeout>)`/`release` по порядку. */
+/** Фейк с той же семантикой владения, что у `AndroidCpuWakeLock`; события пишет по порядку. */
 class FakeCpuWakeLock : CpuWakeLock {
     val events = mutableListOf<String>()
-    override var isHeld: Boolean = false
-        private set
+    private var owner: CpuWakeLock.Lease? = null
+    override val isHeld: Boolean get() = owner != null
 
-    override fun hold(timeoutMs: Long) {
-        isHeld = true
-        events += "hold($timeoutMs)"
-    }
+    override fun acquire(timeoutMs: Long): CpuWakeLock.Lease {
+        val lease = object : CpuWakeLock.Lease {
+            override fun renew(timeoutMs: Long) {
+                if (owner === this) events += "renew($timeoutMs)"
+            }
 
-    override fun release() {
-        isHeld = false
-        events += "release"
+            override fun release() {
+                if (owner === this) {
+                    owner = null
+                    events += "release"
+                }
+            }
+        }
+        owner = lease
+        events += "acquire($timeoutMs)"
+        return lease
     }
 }
