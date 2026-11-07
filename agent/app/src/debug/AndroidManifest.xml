@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        Только debug: testOnly позволяет снять Device Owner командой `dpm remove-active-admin` без сброса устройства.
+        В release этого атрибута нет — снять DO с боевого планшета без сброса нельзя.
+    -->
+    <application android:testOnly="true" />
+</manifest>

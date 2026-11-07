@@ -1,6 +1,7 @@
 package ru.restofleet.agent
 
 import com.google.common.truth.Truth.assertThat
+import android.content.ComponentName
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Test
@@ -9,7 +10,12 @@ import org.koin.core.context.GlobalContext
 import org.koin.core.context.stopKoin
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import okhttp3.OkHttpClient
+import ru.restofleet.agent.data.deviceadmin.DpmDeviceAdmin
+import ru.restofleet.agent.data.deviceadmin.LegacyLockTaskEntry
+import ru.restofleet.agent.data.di.APK_HTTP_CLIENT
 import ru.restofleet.agent.data.di.LIFECYCLE_CHECKS
+import ru.restofleet.agent.data.di.PROBE_HTTP_CLIENT
 import ru.restofleet.agent.data.di.PROBE_CHECKS
 import ru.restofleet.agent.data.di.READING_CHECKS
 import ru.restofleet.agent.data.lifecycle.AndroidCpuWakeLock
@@ -23,6 +29,7 @@ import ru.restofleet.agent.domain.capability.CheckId
 import ru.restofleet.agent.domain.capability.CheckResult
 import ru.restofleet.agent.domain.capability.CheckStatus
 import ru.restofleet.agent.domain.error.MqttNotConfigured
+import ru.restofleet.agent.domain.port.DeviceAdmin
 import ru.restofleet.agent.domain.port.CapabilityReportWriter
 import ru.restofleet.agent.domain.usecase.CollectTelemetry
 import ru.restofleet.agent.domain.usecase.ExportCapabilityReport
@@ -53,6 +60,33 @@ class KoinGraphTest {
         assertThat(lifecycle.map { it.id.name }).containsExactly("L1", "L2", "L3", "L4").inOrder()
         assertThat(koin.get<List<CapabilityCheck>>(READING_CHECKS)).isNotEmpty()
         assertThat(koin.get<List<CapabilityCheck>>(PROBE_CHECKS)).isNotEmpty()
+    }
+
+    @Test
+    fun deviceAdminGraphResolvesWithAppPortsAndQualifiedClients() {
+        val koin = GlobalContext.get()
+
+        assertThat(koin.get<DeviceAdmin>()).isInstanceOf(DpmDeviceAdmin::class.java)
+        assertThat(koin.get<ComponentName>())
+            .isEqualTo(ComponentName("ru.restofleet.agent", "ru.restofleet.agent.AdminReceiver"))
+        val probe = koin.get<OkHttpClient>(PROBE_HTTP_CLIENT)
+        val apk = koin.get<OkHttpClient>(APK_HTTP_CLIENT)
+        assertThat(apk).isNotSameInstanceAs(probe)
+        assertThat(probe.followRedirects).isTrue() // клиент проб без изменений поведения: настройки OkHttp по умолчанию
+        assertThat(apk.followSslRedirects).isFalse()
+        assertThat(apk.callTimeoutMillis).isEqualTo(600_000)
+        val ids = koin.get<List<CapabilityCheck>>(READING_CHECKS).map { it.id }
+        assertThat(ids).containsAtLeast(CheckId.R10, CheckId.R13)
+    }
+
+    @Test
+    fun legacyLockTaskEntryPointsAtLockTaskActivityWithoutNestedIntent() {
+        val intent = GlobalContext.get().get<LegacyLockTaskEntry>().intent("com.android.chrome", "https://x.test/")
+
+        assertThat(intent.component?.className).isEqualTo(LockTaskActivity::class.java.name)
+        assertThat(intent.getStringExtra("pkg")).isEqualTo("com.android.chrome")
+        assertThat(intent.getStringExtra("url")).isEqualTo("https://x.test/")
+        assertThat(intent.extras!!.keySet()).containsExactly("pkg", "url")
     }
 
     @Test

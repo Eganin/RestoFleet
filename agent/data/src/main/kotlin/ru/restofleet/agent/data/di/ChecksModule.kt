@@ -3,6 +3,7 @@ package ru.restofleet.agent.data.di
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import android.app.admin.DevicePolicyManager
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.Module
 import org.koin.core.qualifier.named
@@ -19,6 +20,8 @@ import ru.restofleet.agent.data.collectors.PackageEventsObserver
 import ru.restofleet.agent.data.collectors.ResourceCollector
 import ru.restofleet.agent.data.collectors.SsidCollector
 import ru.restofleet.agent.data.collectors.ThermalCollector
+import ru.restofleet.agent.data.deviceadmin.HardwarePropertiesCollector
+import ru.restofleet.agent.data.deviceadmin.SerialCollector
 import ru.restofleet.agent.data.platform.FreeFallDetector
 import ru.restofleet.agent.data.probes.GatewayProbe
 import ru.restofleet.agent.data.probes.NetworkAvailability
@@ -28,11 +31,14 @@ import ru.restofleet.agent.data.probes.productionProbeClient
 import ru.restofleet.agent.domain.capability.CapabilityCheck
 import ru.restofleet.agent.domain.port.ProbeExecutor
 
-/** Qualifier списка проверок R1–R9, R11, R12, R14. */
+/** Qualifier списка проверок R1–R14. */
 val READING_CHECKS = named("readingChecks")
 
 /** Qualifier списка проверок доступности P1–P3. */
 val PROBE_CHECKS = named("probeChecks")
+
+/** Qualifier клиента HTTPS-проб P1–P3 (TLS-only, системный trust store). */
+val PROBE_HTTP_CLIENT = named("probeHttpClient")
 
 /** Проводка Koin для проверок Capability Lab (считывания и пробы); логика — в фабриках. Нужен `Clock`. */
 val checksModule: Module = module {
@@ -47,6 +53,13 @@ val checksModule: Module = module {
     single { MotionCollector(androidContext(), FreeFallDetector()) }
     single { PackageEventsObserver(androidContext()) }
     single { NetworkChangeObserver(androidContext()) }
+    // R10 и R13 нужны права Device Owner: роль проверяется по DevicePolicyManager при каждом чтении
+    single {
+        val context = androidContext()
+        val dpm = context.getSystemService(DevicePolicyManager::class.java)
+        HardwarePropertiesCollector(context, isDeviceOwner = { dpm.isDeviceOwnerApp(context.packageName) })
+    }
+    single { SerialCollector() }
 
     single<List<CapabilityCheck>>(READING_CHECKS) {
         CapabilityChecksFactory(
@@ -62,17 +75,19 @@ val checksModule: Module = module {
             motion = get(),
             packageEvents = get(),
             networkChanges = get(),
+            hardware = get(),
+            serial = get(),
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
         ).create()
     }
 
-    // Продакшн-клиент проб (TLS-only, системный trust store) собирается вне di.
-    single { productionProbeClient() }
+    // Продакшн-клиент проб (TLS-only, системный trust store) собирается вне di; qualifier отделяет его от APK-клиента.
+    single(PROBE_HTTP_CLIENT) { productionProbeClient() }
     single { NetworkAvailability(androidContext()) }
     single { GatewayProbe(androidContext(), clock = get()) }
     single<ProbeExecutor> {
         val availability = get<NetworkAvailability>()
-        OkHttpProbeExecutor(get(), get(), availability::isAvailable)
+        OkHttpProbeExecutor(get(PROBE_HTTP_CLIENT), get(), availability::isAvailable)
     }
     single<List<CapabilityCheck>>(PROBE_CHECKS) {
         val gateway = get<GatewayProbe>()

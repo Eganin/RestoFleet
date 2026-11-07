@@ -2,11 +2,14 @@ package ru.restofleet.agent.data.collectors
 
 import kotlinx.coroutines.CoroutineScope
 import ru.restofleet.agent.domain.capability.CapabilityCheck
+import ru.restofleet.agent.data.deviceadmin.HardwarePropertiesCollector
+import ru.restofleet.agent.data.deviceadmin.SerialCollector
 import ru.restofleet.agent.domain.capability.CheckId
 import ru.restofleet.agent.domain.model.AppVersion
 import ru.restofleet.agent.domain.model.BatteryState
 import ru.restofleet.agent.domain.model.DeviceResources
 import ru.restofleet.agent.domain.model.ForegroundApp
+import ru.restofleet.agent.domain.model.HardwareTemps
 import ru.restofleet.agent.domain.model.NetworkState
 import ru.restofleet.agent.domain.model.Reading
 import ru.restofleet.agent.domain.model.ThermalState
@@ -46,6 +49,19 @@ internal object CheckValues {
 
     fun foregroundRaw(app: ForegroundApp) = mapOf("pkg" to app.pkg, "since" to "${app.sinceMillis}")
 
+    fun hardwareTempsRaw(t: HardwareTemps) = mapOf(
+        "cpuC" to t.cpuC.joinToString(","),
+        "skinC" to t.skinC.joinToString(","),
+        "batteryC" to t.batteryC.joinToString(","),
+    )
+
+    /** R13: серийный номер в raw Lab и отчёте маскируется; полное значение — только в телеметрии (M3). */
+    fun maskSerial(serial: String): String =
+        if (serial.length > SERIAL_VISIBLE) "$SERIAL_MASK${serial.takeLast(SERIAL_VISIBLE)}" else SERIAL_MASK
+
+    private const val SERIAL_MASK = "****"
+    private const val SERIAL_VISIBLE = 4
+
     /** R11 доступен, только если есть оба датчика; причина называет отсутствующие. */
     fun motionSupport(significant: Boolean, accelerometer: Boolean): Reading<Map<String, String>> {
         val missing = listOfNotNull(
@@ -60,7 +76,7 @@ internal object CheckValues {
     }
 }
 
-/** Собирает проверки Lab R1–R9, R11, R12, R14 поверх коллекторов; Koin-модуль только передаёт зависимости. */
+/** Собирает проверки Lab R1–R14 поверх коллекторов; Koin-модуль только передаёт зависимости. */
 @Suppress("LongParameterList") // по одному коллектору на показатель
 class CapabilityChecksFactory(
     private val clock: Clock,
@@ -75,6 +91,8 @@ class CapabilityChecksFactory(
     private val motion: MotionCollector,
     private val packageEvents: PackageEventsObserver,
     private val networkChanges: NetworkChangeObserver,
+    private val hardware: HardwarePropertiesCollector,
+    private val serial: SerialCollector,
     private val scope: CoroutineScope,
     private val watched: List<String> = DEFAULT_WATCHED,
 ) {
@@ -88,6 +106,7 @@ class CapabilityChecksFactory(
         ReadingCheck(CheckId.R7, clock, { appVersions.read(watched) }) { CheckValues.appsRaw(watched, it) },
         ReadingCheck(CheckId.R8, clock, { foreground.read() }, CheckValues::foregroundRaw),
         ReadingCheck(CheckId.R9, clock, { light.read() }) { mapOf("lux" to "${it.lux}") },
+        ReadingCheck(CheckId.R10, clock, { hardware.read() }, CheckValues::hardwareTempsRaw),
         ReadingCheck(
             CheckId.R11,
             clock,
@@ -96,6 +115,7 @@ class CapabilityChecksFactory(
         SubscriptionCheck(CheckId.R12, clock, packageEvents.events(watched.toSet()), scope) {
             "${it.pkg} ${it.change} ${it.versionCode}"
         },
+        ReadingCheck(CheckId.R13, clock, { serial.read() }) { mapOf("serial" to CheckValues.maskSerial(it)) },
         SubscriptionCheck(CheckId.R14, clock, networkChanges.changes(), scope) {
             "${it.type} validated=${it.validated}"
         },

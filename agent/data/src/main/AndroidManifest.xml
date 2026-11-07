@@ -14,9 +14,17 @@
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
 
-    <!-- R7/R12: видимость пакетов на Android 11+ -->
+    <!-- R13: Build.getSerial() (адаптер Device Owner выдаёт разрешение сам себе; объявлено, иначе выдавать нечего) -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
+    <!-- R7/R12: видимость пакетов на Android 11+; D4: пакет для lock task приходит в команде, поэтому видны все
+         приложения с лаунчером (иначе getPackageInfo для них бросит NameNotFoundException) -->
     <queries>
         <package android:name="com.android.chrome" />
         <package android:name="ru.restofleet.dummy.waiter" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
     </queries>
 </manifest>

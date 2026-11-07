@@ -66,6 +66,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.androidx.work.testing)
     testImplementation(libs.mockk)
+    testImplementation(libs.okhttp)
     testImplementation(libs.koin.test)
     testImplementation(libs.koin.test.junit4)
 }

@@ -1,5 +1,6 @@
 package ru.restofleet.agent.di
 
+import android.content.ComponentName
 import androidx.work.WorkManager
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -8,9 +9,11 @@ import org.koin.androidx.workmanager.dsl.workerOf
 import org.koin.core.module.Module
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
+import ru.restofleet.agent.AdminReceiver
 import ru.restofleet.agent.AgentNotifications
 import ru.restofleet.agent.AndroidServiceStarter
 import ru.restofleet.agent.ForegroundStarter
+import ru.restofleet.agent.LockTaskActivity
 import ru.restofleet.agent.ServiceCompatForegroundStarter
 import ru.restofleet.agent.SettingsIntents
 import ru.restofleet.agent.WatchdogWorker
@@ -20,7 +23,9 @@ import ru.restofleet.agent.data.device.AndroidDeviceInfoSource
 import ru.restofleet.agent.data.di.LIFECYCLE_CHECKS
 import ru.restofleet.agent.data.di.PROBE_CHECKS
 import ru.restofleet.agent.data.di.READING_CHECKS
+import ru.restofleet.agent.data.deviceadmin.LegacyLockTaskEntry
 import ru.restofleet.agent.data.di.checksModule
+import ru.restofleet.agent.data.di.deviceAdminModule
 import ru.restofleet.agent.data.di.lifecycleModule
 import ru.restofleet.agent.data.lifecycle.ServiceStarter
 import ru.restofleet.agent.data.lifecycle.WatchdogSchedule
@@ -43,7 +48,7 @@ val AGENT_DISPATCHER = named("agentDispatcher")
 
 /** Composition root агента: платформенные части `agent:app` + модули `agent:data`. */
 val appModule: Module = module {
-    includes(checksModule, lifecycleModule)
+    includes(checksModule, lifecycleModule, deviceAdminModule)
 
     single<Clock> { SystemClock }
     single<CoroutineDispatcher>(AGENT_DISPATCHER) { Dispatchers.IO }
@@ -54,6 +59,10 @@ val appModule: Module = module {
     single<ForegroundStarter> { ServiceCompatForegroundStarter() }
     single { SettingsIntents(androidContext().packageName) }
     workerOf(::WatchdogWorker)
+
+    // Device Owner: компонент администратора и вход lock task для API 26–27 — классы app, нужные адаптеру из data
+    single { ComponentName(androidContext(), AdminReceiver::class.java) }
+    single { LegacyLockTaskEntry { pkg, url -> LockTaskActivity.intent(androidContext(), pkg, url) } }
 
     // Capability Lab: все проверки каталога (L, R, P; остальные группы пока дают NOT_CHECKED), отчёт и публикация
     single<DeviceInfoSource> { AndroidDeviceInfoSource(androidContext(), BuildConfig.VERSION_NAME) }

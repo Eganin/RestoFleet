@@ -6,6 +6,7 @@ import ru.restofleet.agent.domain.model.AppVersion
 import ru.restofleet.agent.domain.model.BatteryState
 import ru.restofleet.agent.domain.model.DeviceResources
 import ru.restofleet.agent.domain.model.ForegroundApp
+import ru.restofleet.agent.domain.model.HardwareTemps
 import ru.restofleet.agent.domain.model.NetworkState
 import ru.restofleet.agent.domain.model.NetworkType
 import ru.restofleet.agent.domain.model.PowerSource
@@ -65,6 +66,25 @@ class CapabilityChecksFactoryTest {
     fun appsRawMarksMissingPackages() {
         val raw = CheckValues.appsRaw(listOf("a", "b"), listOf(AppVersion("a", "1.2", 12)))
         assertThat(raw).containsExactly("a", "1.2 (12)", "b", "not installed")
+    }
+
+    @Test
+    fun maskSerialKeepsOnlyLastFourCharacters() {
+        assertThat(CheckValues.maskSerial("ABCDEF123456")).isEqualTo("****3456")
+        assertThat(CheckValues.maskSerial("12345")).isEqualTo("****2345")
+    }
+
+    @Test
+    fun maskSerialHidesShortValuesCompletely() {
+        assertThat(CheckValues.maskSerial("1234")).isEqualTo("****")
+        assertThat(CheckValues.maskSerial("12")).isEqualTo("****")
+        assertThat(CheckValues.maskSerial("")).isEqualTo("****")
+    }
+
+    @Test
+    fun hardwareTempsRaw() {
+        val raw = CheckValues.hardwareTempsRaw(HardwareTemps(listOf(40.5f, 41f), emptyList(), listOf(28f)))
+        assertThat(raw).containsExactly("cpuC", "40.5,41.0", "skinC", "", "batteryC", "28.0")
     }
 
     @Test
