@@ -120,11 +120,20 @@ class CapabilitiesTest {
             "", "http://kitchen/", "intent://x#Intent;end", "file:///sdcard/a", "javascript:alert(1)",
             "content://x/y", "https://", "https:///path", "https://:443/", "https://?q=1", "https://#f",
             "https://kitchen/a b", "https:/kitchen", "kitchen.local", " https://kitchen/",
-            "https://user@kitchen/", "https://ki tchen/",
+            "https://user@kitchen/", "https://ki tchen/", "HTTPS://kitchen/", "Https://kitchen/",
+            "https://user:pw@evil/", "https://kitchen:443@evil/", "https://a:b@evil/", "https://kitchen:@evil",
+            "https://kitchen:abc/", "https://host:abc", "https://kitchen:70000/", "https://kitchen:65536",
+            "https://kitchen:99999999", "https://kitchen:0", "https://kitchen:/x", "https://kitchen:80:90/",
+            "https://kitchen:80x", "https://kitchen:80@evil", "https://.", "https://..", "https://-",
+            "https://a..b", "https://-a.b", "https://a-.b", "https://a.b.", "https://.a", "https://_a",
+            "https://" + "a".repeat(2048),
         )
         val valid = listOf(
-            "https://kitchen.local/station", "HTTPS://Kitchen.local", "https://10.0.0.5:8443/a?b=1#c",
-            "https://kitchen", "https://kitchen?x=1", "https://kitchen#x",
+            "https://kitchen.local/station", "https://Kitchen.local", "https://10.0.0.5:8443/a?b=1#c",
+            "https://kitchen", "https://kitchen?x=1", "https://kitchen#x", "https://kitchen:65535",
+            "https://kitchen:1/x", "https://kitchen:00080?q", "https://xn--80a-b.local/", "https://a-b.c-d.e1",
+            "https://10.0.2.2:8443", "https://kitchen:8443#f",
+            "https://a.b/" + "x".repeat(2048 - "https://a.b/".length),
         )
         val owner = Capabilities(AgentMode.DEVICE_OWNER, 34, emptySet())
         val pkg = "ru.restofleet.kiosk"
@@ -182,6 +191,32 @@ class CapabilitiesTest {
                 Command.Beep(30_001) to "invalid_duration",
                 Command.Beep(Long.MAX_VALUE) to "invalid_duration",
             ),
+        )
+    }
+
+    @Test
+    fun lengthLimitsAreEnforced() {
+        val caps = Capabilities(AgentMode.DEVICE_OWNER, 34, setOf(Permission.POST_NOTIFICATIONS))
+        val pkg255 = "a." + "b".repeat(253)
+        val longPath = "x".repeat(2048 - "https://a.b/".length + 1)
+
+        assertChecks(
+            caps,
+            listOf(
+                Command.LaunchApp(pkg255, null) to null,
+                Command.LaunchApp(pkg255 + "b", null) to "invalid_package",
+                Command.LockTask(pkg255 + "b", null) to "invalid_package",
+                Command.LaunchApp("a.b", "https://a.b/$longPath") to "invalid_url",
+                Command.InstallApk("https://a.b/$longPath", sha) to "invalid_url",
+                Command.ShowMessage("x".repeat(1000), Level.INFO) to null,
+                Command.ShowMessage("x".repeat(1001), Level.INFO) to "text_too_long",
+                Command.ShowMessage(" ".repeat(1001), Level.INFO) to "empty_text",
+            ),
+        )
+        // длина текста проверяется раньше разрешения на уведомления
+        assertChecks(
+            Capabilities(AgentMode.NORMAL, 34, emptySet()),
+            listOf(Command.ShowMessage("x".repeat(1001), Level.INFO) to "text_too_long"),
         )
     }
 }

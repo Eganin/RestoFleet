@@ -1,7 +1,7 @@
 package ru.restofleet.agent.domain.usecase
 
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -202,7 +202,7 @@ class ExecuteCommandTest {
         var outcome: Result<CommandOutcome>? = null
         outer = launch { outcome = runCatching { execute(Command.Beep(100)) } }
 
-        advanceUntilIdle()
+        runCurrent()
 
         assertThat(outcome!!.exceptionOrNull()).isInstanceOf(CancellationException::class.java)
     }

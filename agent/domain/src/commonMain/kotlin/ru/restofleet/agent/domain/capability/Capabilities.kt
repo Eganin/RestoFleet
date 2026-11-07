@@ -42,6 +42,7 @@ data class Capabilities(val mode: AgentMode, val apiLevel: Int, val granted: Set
 
     private fun checkShowMessage(command: Command.ShowMessage): String? = when {
         command.text.isBlank() -> "empty_text"
+        command.text.length > MAX_TEXT_LENGTH -> "text_too_long"
         notificationsDenied() -> "notifications_denied"
         else -> null
     }
@@ -61,7 +62,7 @@ data class Capabilities(val mode: AgentMode, val apiLevel: Int, val granted: Set
     }
 
     private fun checkTarget(pkg: String, url: String?): String? = when {
-        !PACKAGE_NAME.matches(pkg) -> "invalid_package"
+        pkg.length > MAX_PACKAGE_LENGTH || !PACKAGE_NAME.matches(pkg) -> "invalid_package"
         url != null && !isHttpsUrl(url) -> "invalid_url"
         else -> null
     }
@@ -71,19 +72,30 @@ data class Capabilities(val mode: AgentMode, val apiLevel: Int, val granted: Set
         val BEEP_RANGE_MS = 1L..30_000L
         val PACKAGE_NAME = Regex("[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+")
         val SHA256 = Regex("[0-9a-fA-F]{64}")
-        val HOST = Regex("[a-zA-Z0-9.-]+")
+        val HOST_LABEL = Regex("[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?")
+        val PORT = Regex("[0-9]{1,5}")
+        val PORT_RANGE = 1..65_535
+        const val MAX_TEXT_LENGTH = 1000
+        const val MAX_PACKAGE_LENGTH = 255
+        const val MAX_URL_LENGTH = 2048
         const val HTTPS_PREFIX = "https://"
-        const val HOST_END = "/?#:"
+        const val AUTHORITY_END = "/?#"
 
         /**
-         * Чистый Kotlin (без java.net): только `https`, непустой хост из `[A-Za-z0-9.-]`,
-         * без пробелов и управляющих символов.
+         * Чистый Kotlin (без java.net): схема строго `https://` в нижнем регистре, длина до 2048, без пробелов и
+         * управляющих символов. Authority (до `/ ? #`) = хост из непустых DNS-меток `[A-Za-z0-9-]` (метка не
+         * начинается и не кончается `-`) и необязательный `:порт` (1–5 цифр, 1..65535). Любое другое содержимое
+         * authority (userinfo, `@`, IPv6, второй `:`) отвергается.
          */
         fun isHttpsUrl(url: String): Boolean {
-            val hasPrefix = url.startsWith(HTTPS_PREFIX, ignoreCase = true)
-            val clean = url.none { it.isWhitespace() || it.isISOControl() }
-            val host = url.drop(HTTPS_PREFIX.length).takeWhile { it !in HOST_END }
-            return hasPrefix && clean && HOST.matches(host)
+            val plain = url.length <= MAX_URL_LENGTH && url.none { it.isWhitespace() || it.isISOControl() }
+            if (!plain || !url.startsWith(HTTPS_PREFIX)) return false
+            val authority = url.drop(HTTPS_PREFIX.length).takeWhile { it !in AUTHORITY_END }
+            val port = if (':' in authority) authority.substringAfter(':') else null
+            return authority.substringBefore(':').split('.').all { HOST_LABEL.matches(it) } &&
+                (port == null || isPort(port))
         }
+
+        private fun isPort(port: String): Boolean = PORT.matches(port) && port.toInt() in PORT_RANGE
     }
 }
