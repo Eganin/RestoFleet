@@ -60,8 +60,19 @@ case "$(code "$apk_url/")" in 403|404) ;; *) fail "GET / is a listing or 200" ;;
 if acurl -D - -o /dev/null "$apk_url/waiter-4.13.apk" | grep -qiE '^server:.*[0-9]+\.[0-9]+'; then fail "nginx version is exposed in Server header"; fi
 [ "$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' http://localhost:8443/ || true)" != 200 ] || fail "plain HTTP on the TLS port returned 200"
 if nc -z -w 2 localhost 80 2>/dev/null; then fail "port 80 is open"; fi
-# TLS 1.1 не принимается (если локальный curl/OpenSSL его вообще умеет, иначе проверка пропускается)
-if acurl --tlsv1.0 --tls-max 1.1 -o /dev/null "$apk_url/waiter-4.13.apk" 2>/dev/null; then fail "TLS 1.1 accepted"; fi
+# TLS 1.1 не принимается: считаем отказом только alert по версии протокола (rc=35), а не любую ошибку curl
+set +e
+tls11_out="$(acurl --tlsv1.0 --tls-max 1.1 -o /dev/null "$apk_url/waiter-4.13.apk" 2>&1)"; tls11_rc=$?
+set -e
+case "$tls11_rc" in
+  0) fail "TLS 1.1 accepted" ;;
+  35) grep -qi 'protocol version' <<<"$tls11_out" || fail "TLS 1.1 handshake failed, but not by protocol version: $tls11_out" ;;
+  4|2) echo "SKIP: curl cannot do TLS 1.1 (rc=$tls11_rc), TLS 1.1 is checked only through nginx -T" ;;
+  *) fail "TLS 1.1 check inconclusive (curl rc=$tls11_rc): $tls11_out" ;;
+esac
+# Независимо от клиента: действующая конфигурация nginx разрешает только TLS 1.2 и 1.3
+[ "$(docker compose exec -T apk-host nginx -T 2>/dev/null | grep -E '^\s*ssl_protocols' | tr -s ' \t' ' ' | sed 's/^ //')" = "ssl_protocols TLSv1.2 TLSv1.3;" ] \
+  || fail "nginx ssl_protocols is not exactly 'TLSv1.2 TLSv1.3'"
 acurl --tlsv1.2 --tls-max 1.2 -o /dev/null "$apk_url/waiter-4.13.apk" || fail "TLS 1.2 is not accepted"
 # Ключ CA не попадает в контейнер, ключ сервера недоступен на запись
 if docker compose exec -T apk-host sh -c 'find / \( -path /proc -o -path /sys \) -prune -o -name "ca.key" -print 2>/dev/null | grep -q .'; then

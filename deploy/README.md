@@ -44,7 +44,7 @@ curl --cacert certs/out/ca.crt https://localhost:8443/waiter-4.13.apk -o /tmp/x
 
 Адреса: с хоста `https://localhost:8443/waiter-4.13.apk`, из эмулятора `https://10.0.2.2:8443/waiter-4.13.apk`, с реального устройства `https://<LAN-IP>:8443/...` (IP должен быть в SAN, см. выше). Рядом отдаётся `waiter-4.13.apk.sha256` в формате `sha256sum`.
 
-Ограничения хоста: только GET/HEAD (остальное 403), только `*.apk` и `*.sha256`, всё прочее и листинг каталога — 404, TLS 1.2+, порта 80 нет, `deploy/apk` смонтирован read-only, контейнер `read_only` и без лишних capabilities. В контейнер монтируется только `certs/out/broker/` (ключа CA там нет); ключ сервера с правами 600 читает master-процесс nginx (root), worker-процессы его не видят.
+Ограничения хоста: только GET/HEAD (остальное 403), только `*.apk` и `*.sha256`, всё прочее и листинг каталога — 404, TLS 1.2+, порта 80 нет, `deploy/apk` смонтирован read-only, контейнер `read_only` и без лишних capabilities. В контейнер монтируется только `certs/out/broker/` (ключа CA там нет); ключ сервера с правами 600 читает master-процесс nginx (root) через `DAC_READ_SEARCH`, worker-процессы его не видят.
 
 Агент должен доверять CA стенда **только в debug-сборке**: через `network_security_config` с `<debug-overrides>` (делают задачи 2.3/2.5, не этот стенд). В release-сборке CA стенда не доверяется.
 
