@@ -3,7 +3,10 @@ package ru.restofleet.agent.domain.usecase
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runTest
@@ -140,6 +143,24 @@ class CollectTelemetryTest {
         job.cancel()
 
         assertFailsWith<CancellationException> { job.await() }
+    }
+
+    @Test
+    fun cancellationOfCallerInsideReadingStopsCollectionInInvokeItself() = runTest {
+        var networkReads = 0
+        lateinit var outer: Job
+        source.batteryResult = {
+            outer.cancel()
+            throw CancellationException("cancelled by caller") // без suspend-точки: вернуть/бросить можно сразу
+        }
+        source.networkResult = { networkReads++; Reading.Available(FakeTelemetrySource.NETWORK) }
+        var outcome: Result<*>? = null
+        outer = launch { outcome = runCatching { collect(emptyList()) } }
+
+        advanceUntilIdle()
+
+        assertThat(outcome!!.exceptionOrNull()).isInstanceOf(CancellationException::class.java)
+        assertThat(networkReads).isEqualTo(0)
     }
 
     @Test

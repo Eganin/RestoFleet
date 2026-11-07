@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -68,6 +69,7 @@ class LabViewModelTest {
         private val publisherOutcome: () -> Outcome<Unit, DomainError> = { Outcome.Failure(MqttNotConfigured) },
         private val writerGate: CompletableDeferred<Unit>? = null,
         runClock: Clock = clock,
+        handler: CoroutineExceptionHandler = CoroutineExceptionHandler { _, _ -> },
     ) {
         var writes = 0
         val published = mutableListOf<CheckResult>()
@@ -89,7 +91,7 @@ class LabViewModelTest {
             ),
             getDeviceInfo = GetDeviceInfo { device },
             io = dispatcher,
-            scope = CoroutineScope(SupervisorJob() + dispatcher),
+            scope = CoroutineScope(SupervisorJob() + dispatcher + handler),
         )
     }
 
@@ -440,5 +442,43 @@ class LabViewModelTest {
         scope.launch(Dispatchers.Unconfined) { throw IllegalStateException("late") }.join()
 
         assertThat(logged.single()).hasMessageThat().isEqualTo("late")
+    }
+
+    @Test
+    fun errorFromExportResetsProgressAndIsNotSwallowed() = runTest {
+        val unhandled = mutableListOf<Throwable>()
+        val f = Fixture(
+            this,
+            writerOutcome = { throw OutOfMemoryError("oom") },
+            handler = CoroutineExceptionHandler { _, e -> unhandled += e },
+        )
+
+        f.vm.onIntent(User.Export)
+        advanceUntilIdle()
+
+        assertThat(f.vm.uiState.value.isExporting).isFalse()
+        assertThat(unhandled.single()).isInstanceOf(OutOfMemoryError::class.java)
+    }
+
+    @Test
+    fun errorFromCheckInRunAllResetsFlagsAndIsNotSwallowed() = runTest {
+        val unhandled = mutableListOf<Throwable>()
+        val checks = listOf(
+            FakeCheck(CheckId.R1, CheckStatus.OK, failure = OutOfMemoryError("oom")),
+            FakeCheck(CheckId.R2, CheckStatus.OK),
+        )
+        val f = Fixture(
+            this,
+            checks = checks,
+            handler = CoroutineExceptionHandler { _, e -> unhandled += e },
+        )
+
+        f.vm.onIntent(User.RunAll)
+        advanceUntilIdle()
+
+        val state = f.vm.uiState.value
+        assertThat(state.isRunningAll).isFalse()
+        assertThat(state.rows.none { it.isRunning }).isTrue()
+        assertThat(unhandled.single()).isInstanceOf(OutOfMemoryError::class.java)
     }
 }

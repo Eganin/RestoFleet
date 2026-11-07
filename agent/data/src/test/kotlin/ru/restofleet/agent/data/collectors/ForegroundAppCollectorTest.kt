@@ -161,6 +161,19 @@ class ForegroundAppCollectorTest {
     }
 
     @Test
+    fun secondQueryIsIncrementalNotFromBootAgain() {
+        setMode(AppOpsManager.MODE_ALLOWED)
+        device(uptimeMs = 90_000_000, nowMs = 100_000_000) // загрузка в 10_000_000
+        assertThat(collector.read()).isInstanceOf(Reading.Unavailable::class.java)
+
+        device(uptimeMs = 90_000_000 + 10_000, nowMs = 100_000_000 + 10_000)
+        // старше нахлёста (60 с) от прошлого запроса, но после загрузки: окно «от загрузки» его бы увидело
+        shadowOf(usm).addEvent("old", 100_000_000 - 120_000, UsageEvents.Event.ACTIVITY_RESUMED)
+
+        assertThat(collector.read()).isInstanceOf(Reading.Unavailable::class.java)
+    }
+
+    @Test
     fun missingPermissionDoesNotAdvanceTheQueryWindow() {
         device(uptimeMs = 90_000_000, nowMs = 100_000_000)
         setMode(AppOpsManager.MODE_ERRORED)

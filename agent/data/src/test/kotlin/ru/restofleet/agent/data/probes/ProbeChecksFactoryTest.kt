@@ -3,7 +3,10 @@ package ru.restofleet.agent.data.probes
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -145,6 +148,22 @@ class ProbeChecksFactoryTest {
         job.cancel()
 
         assertThat(runCatching { job.await() }.exceptionOrNull()).isInstanceOf(CancellationException::class.java)
+    }
+
+    @Test
+    fun p1CancellationOfCallerInsideProbeIsRethrownByRunItself() = runTest {
+        lateinit var outer: Job
+        val exec = ProbeExecutor {
+            outer.cancel()
+            throw CancellationException("cancelled by caller")
+        }
+        val p1 = ProbeChecksFactory(Clock { TS }, exec) { gatewayResult(null) }.create().first { it.id == CheckId.P1 }
+        var outcome: Result<*>? = null
+        outer = launch { outcome = runCatching { p1.run() } }
+
+        advanceUntilIdle()
+
+        assertThat(outcome!!.exceptionOrNull()).isInstanceOf(CancellationException::class.java)
     }
 
     @Test

@@ -3,7 +3,10 @@ package ru.restofleet.agent.domain.usecase
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
@@ -174,6 +177,29 @@ class RunCapabilityChecksTest {
 
         assertThat(results.map { it.status }).containsExactly(CheckStatus.UNAVAILABLE, CheckStatus.OK).inOrder()
         assertThat(results.first().note).isEqualTo("stray")
+    }
+
+    @Test
+    fun cancellationOfCallerInsideCheckStopsTheRunInInvokeItself() = runTest {
+        var secondRuns = 0
+        lateinit var outer: Job
+        val run = RunCapabilityChecks(
+            listOf(
+                check(CheckId.L1) {
+                    outer.cancel()
+                    throw kotlin.coroutines.cancellation.CancellationException("cancelled by caller")
+                },
+                check(CheckId.L2) { secondRuns++; ok(CheckId.L2) },
+            ),
+            clock,
+        )
+        var outcome: Result<*>? = null
+        outer = launch { outcome = runCatching { run(setOf(CheckId.L1, CheckId.L2)) } }
+
+        advanceUntilIdle()
+
+        assertThat(outcome!!.exceptionOrNull()).isInstanceOf(kotlinx.coroutines.CancellationException::class.java)
+        assertThat(secondRuns).isEqualTo(0)
     }
 
     @Test
