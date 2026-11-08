@@ -34,6 +34,7 @@ kotlin {
 
 dependencies {
     implementation(projects.agent.domain)
+    implementation(projects.shared.protocol)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.serialization.json)
@@ -84,6 +85,13 @@ kover {
             }
         }
     }
+}
+
+tasks.withType<Test>().configureEach {
+    // Golden-фикстуры протокола лежат в docs/ и являются частью контракта (архитектура, разд. 7)
+    val fixtures = rootProject.layout.projectDirectory.dir("docs/protocol/fixtures")
+    inputs.dir(fixtures).withPropertyName("protocolFixtures")
+    systemProperty("fixturesDir", fixtures.asFile.absolutePath)
 }
 
 // Гарантия 100 % ветвей пакета platform: вариант "platform" существует отдельно, потому что в Kover 0.9 фильтры
