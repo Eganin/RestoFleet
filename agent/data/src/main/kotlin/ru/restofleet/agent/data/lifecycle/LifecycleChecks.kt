@@ -19,7 +19,7 @@ interface WizardPermissions {
     fun ignoringBatteryOptimizations(): Boolean
 }
 
-/** Проверки группы LIFECYCLE L1–L4; L5 — задача 3.5. */
+/** Проверки группы LIFECYCLE L1–L4; L5 (`CredentialsCheck`) — в пакете `credentials`. */
 class LifecycleChecks(
     private val clock: Clock,
     private val heartbeat: HeartbeatLog,

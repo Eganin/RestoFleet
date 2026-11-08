@@ -41,6 +41,7 @@ import ru.restofleet.agent.domain.port.CapabilityReportWriter
 import ru.restofleet.agent.domain.port.CheckResultJournal
 import ru.restofleet.agent.domain.port.CheckResultPublisher
 import ru.restofleet.agent.domain.port.DeviceInfoSource
+import ru.restofleet.agent.domain.usecase.ConfigureBrokerCredentials
 import ru.restofleet.agent.domain.usecase.ExecuteCommand
 import ru.restofleet.agent.domain.usecase.ExportCapabilityReport
 import ru.restofleet.agent.domain.usecase.FetchApkChecksum
@@ -94,6 +95,8 @@ val appModule: Module = module {
     single { FetchApkChecksum(get()) }
     single { GetDeviceInfo(get()) }
     single { PublishCheckResult(get()) }
+    // Приём учётки брокера (debug-ресивер DevConfigReceiver; в release use case просто не вызывается)
+    single { ConfigureBrokerCredentials(get()) }
     factory { LabViewModel(get(), get(), get(), get(), get(), get(AGENT_DISPATCHER)) }
     factory { DeviceOwnerViewModel(get(), get(), get(), get(), get(), get(), get(AGENT_DISPATCHER)) }
 }

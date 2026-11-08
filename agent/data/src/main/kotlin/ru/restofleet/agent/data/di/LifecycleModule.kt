@@ -6,6 +6,7 @@ import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import ru.restofleet.agent.data.collectors.AndroidTelemetrySource
 import ru.restofleet.agent.data.collectors.CapabilityChecksFactory
+import ru.restofleet.agent.data.credentials.CredentialsCheck
 import ru.restofleet.agent.data.lifecycle.AndroidCpuWakeLock
 import ru.restofleet.agent.data.lifecycle.AndroidWizardPermissions
 import ru.restofleet.agent.data.lifecycle.CpuWakeLock
@@ -22,11 +23,11 @@ import ru.restofleet.agent.domain.port.SequenceSource
 import ru.restofleet.agent.domain.port.TelemetrySource
 import ru.restofleet.agent.domain.usecase.CollectTelemetry
 
-/** Qualifier списка проверок жизненного цикла L1–L4. */
+/** Qualifier списка проверок жизненного цикла L1–L5. */
 val LIFECYCLE_CHECKS = named("lifecycleChecks")
 
 /**
- * Проводка Koin для цикла агента и проверок L1–L4; логика — в классах пакета `lifecycle`.
+ * Проводка Koin для цикла агента и проверок L1–L5; логика — в классах пакета `lifecycle`.
  * Нужны извне: `Clock`, `WatchdogSchedule` и коллекторы из [checksModule].
  */
 val lifecycleModule: Module = module {
@@ -42,6 +43,6 @@ val lifecycleModule: Module = module {
     single { TelemetryTick(get(), get(), CapabilityChecksFactory.DEFAULT_WATCHED) }
     single { TelemetryLoop(TELEMETRY_INTERVAL_MS, tick = { get<TelemetryTick>().invoke() }) }
     single<List<CapabilityCheck>>(LIFECYCLE_CHECKS) {
-        LifecycleChecks(get(), get(), get(), get(), get(), get()).create()
+        LifecycleChecks(get(), get(), get(), get(), get(), get()).create() + CredentialsCheck(get(), get())
     }
 }

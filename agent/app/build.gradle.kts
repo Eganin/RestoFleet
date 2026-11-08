@@ -86,8 +86,11 @@ abstract class GenerateStandTrustTask : DefaultTask() {
     }
 }
 
-/** Падает, если в смёрженном манифесте есть `networkSecurityConfig`: в release CA стенда не доверяется. */
-abstract class VerifyNoNetworkSecurityConfigTask : DefaultTask() {
+/**
+ * Падает, если в смёрженном release-манифесте осталась отладочная поверхность: `networkSecurityConfig` (CA стенда не
+ * доверяется) или `DevConfigReceiver` и его действие `DEV_CONFIG` (приём учётки брокера по adb, только debug).
+ */
+abstract class VerifyNoDebugSurfaceTask : DefaultTask() {
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val mergedManifest: RegularFileProperty
@@ -96,6 +99,8 @@ abstract class VerifyNoNetworkSecurityConfigTask : DefaultTask() {
     fun verify() {
         val text = mergedManifest.get().asFile.readText()
         check("networkSecurityConfig" !in text) { "release manifest must not declare networkSecurityConfig" }
+        check("DevConfigReceiver" !in text) { "release manifest must not declare DevConfigReceiver" }
+        check("DEV_CONFIG" !in text) { "release manifest must not declare the DEV_CONFIG action" }
     }
 }
 
@@ -112,8 +117,8 @@ androidComponents {
         variant.sources.res?.addGeneratedSourceDirectory(generate, GenerateStandTrustTask::outputDir)
     }
     onVariants(selector().withBuildType("release")) { variant ->
-        val verify = tasks.register<VerifyNoNetworkSecurityConfigTask>(
-            "verify${variant.name.replaceFirstChar { it.uppercase() }}NoNetworkSecurityConfig",
+        val verify = tasks.register<VerifyNoDebugSurfaceTask>(
+            "verify${variant.name.replaceFirstChar { it.uppercase() }}NoDebugSurface",
         ) {
             mergedManifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
         }

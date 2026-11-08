@@ -13,7 +13,7 @@ import org.xmlpull.v1.XmlPullParser
 /**
  * Доверие к CA стенда только в debug. Сгенерированный `xml/network_security_config` разбирается как есть; ожидание
  * «CA есть» приходит из сборки (`standCaPresent`: есть ли `deploy/certs/out/ca.crt`, либо путь из `-PstandCaPath`).
- * Release-часть (нет атрибута и ресурсов) проверяют `verifyReleaseNoNetworkSecurityConfig` и `aapt2 dump` APK.
+ * Release-часть (нет атрибута и ресурсов) проверяют `verifyReleaseNoDebugSurface` и `aapt2 dump` APK.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = android.app.Application::class)

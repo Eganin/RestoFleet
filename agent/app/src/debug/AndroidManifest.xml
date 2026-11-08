@@ -7,9 +7,24 @@
     -->
     <!--
         Только debug: доверие к CA стенда (APK-хост, брокер). Файл xml/network_security_config генерируется в
-        build/generated/ задачей generate<Variant>StandTrust; в release атрибута нет (проверяет verifyReleaseNoNetworkSecurityConfig).
+        build/generated/ задачей generate<Variant>StandTrust; в release атрибута нет (проверяет verifyReleaseNoDebugSurface).
     -->
     <application
         android:networkSecurityConfig="@xml/network_security_config"
-        android:testOnly="true" />
+        android:testOnly="true">
+
+        <!--
+            Только debug: учётка брокера приходит командой adb (`am broadcast -a ru.restofleet.agent.DEV_CONFIG ...`).
+            Экспортирован, но защищён разрешением DUMP: его держит только оболочка adb, обычные приложения — нет.
+            В release ресивера нет (проверяет verifyReleaseNoDebugSurface). В MVP-B учётку заменит QR (D7).
+        -->
+        <receiver
+            android:name=".DevConfigReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="ru.restofleet.agent.DEV_CONFIG" />
+            </intent-filter>
+        </receiver>
+    </application>
 </manifest>

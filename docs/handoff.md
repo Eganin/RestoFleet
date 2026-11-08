@@ -6,8 +6,8 @@
 
 - **Этап:** MVP-A (эмуляторы) · **ветка:** `stage/0-mvp`
 - **План:** `docs/superpowers/plans/2026-11-05-mvp-a.md`
-- **Последняя завершённая задача:** 3.4 домен сессии: PublishOrBuffer, FlushOutbox, HandleIncomingCommand (at-most-once, таймауты), ApplyDesiredShadow, порт PayloadEncoder
-- **Следующая задача:** 3.5 учётка устройства: Keystore (L5) и adb-конфиг
+- **Последняя завершённая задача:** 3.5 учётка устройства: Keystore (L5), CredentialStore, debug-ресивер DevConfigReceiver (DUMP)
+- **Следующая задача:** 3.6 MQTT-сессия (BrokerSession)
 - **Блокеры:** GitHub-remote не настроен (CI заработает после пуша)
 - **Как поднять стенд:** `deploy/README.md` (4 команды + `./test-stand.sh`); нужен `local.properties` с `sdk.dir` для сборки.
 - **Исполнение:** M0 — в основной сессии; M1–M4 — субагенты (исполнитель + ревьюер на задачу).
@@ -52,3 +52,4 @@
 | 2026-11-09 | 3.2 домен MQTT: порты MessagePublisher/BrokerSession/Outbox/ProcessedCommands/ShadowStore, модели, мапперы domain↔протокол по golden-фикстурам | см. `git log` | мапперы 40 тестов (+9 domain), agent:data 518 тестов, строки: data 97,8 %, domain 98,5 %, проект 97,4 %, полная сборка rc=0; решения 123-127 |
 | 2026-11-09 | 3.3 хранилище: Room Outbox (10 000, FIFO по приоритету) и журнал ProcessedCommands (200), storageModule | см. `git log` | agent:data 538 тестов, строки проекта 98,1 %, 3 прогона --rerun rc=0, полная сборка rc=0; решения 128-130 |
 | 2026-11-09 | 3.4 домен сессии: PublishOrBuffer, FlushOutbox, HandleIncomingCommand (at-most-once, таймауты), ApplyDesiredShadow, порт PayloadEncoder | см. `git log` | agent:domain 158 тестов (54 новых), строки domain 95,5 %, проект 96,3 %, полная сборка rc=0; мутанты: mark после execute, удаление пачкой, без Mutex убиты; решения 131-135 |
+| 2026-11-09 | 3.5 учётка устройства: Keystore (L5), CredentialStore, debug-ресивер DevConfigReceiver (DUMP) | см. `git log` | agent:domain +ConfigureBrokerCredentials, 3 прогона --rerun app/data rc=0, полная сборка rc=0; строки проекта 96,1 %; L5 на rf-api36 ok до и после reboot; решения 136-139 |

@@ -3,6 +3,7 @@ package ru.restofleet.agent
 import android.app.Application
 import android.content.ComponentName
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Parcel
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.CoroutineScope
@@ -33,6 +34,7 @@ class KoinModulesVerifyTest {
         Application::class,
         WorkerParameters::class,
         File::class,
+        SharedPreferences::class, // prefs учётки брокера берутся у контекста в лямбде
         FreeFallDetector::class,
         Function1::class, // лямбды tick/onError/log с значениями по умолчанию
         Function0::class, // isDeviceOwner коллектора R10 передаётся лямбдой из composition root
@@ -82,6 +84,6 @@ class KoinModulesVerifyTest {
 
     @Test
     fun storageModuleIsComplete() {
-        storageModule.verify(extraTypes = platformTypes)
+        storageModule.verify(extraTypes = platformTypes + CoroutineDispatcher::class)
     }
 }
