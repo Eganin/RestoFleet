@@ -4,10 +4,13 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import ru.restofleet.agent.domain.capability.AgentMode
+import ru.restofleet.agent.domain.capability.CapabilityCheck
 import ru.restofleet.agent.domain.capability.CapabilityReport
 import ru.restofleet.agent.domain.capability.CheckId
+import ru.restofleet.agent.domain.capability.CheckResult
 import ru.restofleet.agent.domain.capability.CheckStatus
 import ru.restofleet.agent.domain.capability.DeviceInfo
+import ru.restofleet.agent.domain.fake.FakeCheckResultJournal
 import ru.restofleet.agent.domain.port.CapabilityReportWriter
 import ru.restofleet.agent.domain.port.DeviceInfoSource
 import ru.restofleet.shared.kernel.Clock
@@ -29,7 +32,7 @@ class ExportCapabilityReportTest {
             Outcome.Success("/sdcard/report.json")
         }
 
-        val outcome = ExportCapabilityReport(run, { device }, writer, clock)()
+        val outcome = ExportCapabilityReport(run, { device }, writer, clock, FakeCheckResultJournal())()
 
         assertThat(outcome).isEqualTo(Outcome.Success("/sdcard/report.json"))
         val report = captured!!
@@ -44,9 +47,49 @@ class ExportCapabilityReportTest {
         val error: DomainError = UnexpectedError("disk full")
         val writer = CapabilityReportWriter { Outcome.Failure(error) }
 
-        val outcome = ExportCapabilityReport(run, DeviceInfoSource { device }, writer, clock)()
+        val export = ExportCapabilityReport(run, DeviceInfoSource { device }, writer, clock, FakeCheckResultJournal())
+        val outcome = export()
 
         assertThat(outcome).isEqualTo(Outcome.Failure(error))
+    }
+
+    @Test
+    fun manuallyRunChecksFromTheJournalReplaceNotCheckedOnes() = runTest {
+        val journal = FakeCheckResultJournal()
+        val c4 = CheckResult(CheckId.C4, CheckStatus.OK, mapOf("ringerMode" to "silent"), null, 5L)
+        journal.record(c4)
+        var captured: CapabilityReport? = null
+        val writer = CapabilityReportWriter {
+            captured = it
+            Outcome.Success("/r.json")
+        }
+
+        ExportCapabilityReport(run, { device }, writer, clock, journal)()
+
+        val results = captured!!.results
+        assertThat(results).hasSize(CheckId.entries.size)
+        assertThat(results.first { it.id == CheckId.C4 }).isEqualTo(c4)
+        assertThat(results.first { it.id == CheckId.C1 }.status).isEqualTo(CheckStatus.NOT_CHECKED)
+    }
+
+    @Test
+    fun journalNeverOverridesAResultThatTheRunProduced() = runTest {
+        val produced = CheckResult(CheckId.R1, CheckStatus.OK, emptyMap(), null, 7L)
+        val check = object : CapabilityCheck {
+            override val id = CheckId.R1
+            override suspend fun run() = produced
+        }
+        val journal = FakeCheckResultJournal()
+        journal.record(CheckResult(CheckId.R1, CheckStatus.UNAVAILABLE, emptyMap(), "stale", 1L))
+        var captured: CapabilityReport? = null
+        val writer = CapabilityReportWriter {
+            captured = it
+            Outcome.Success("/r.json")
+        }
+
+        ExportCapabilityReport(RunCapabilityChecks(listOf(check), clock), { device }, writer, clock, journal)()
+
+        assertThat(captured!!.results.first { it.id == CheckId.R1 }).isEqualTo(produced)
     }
 
     private companion object {

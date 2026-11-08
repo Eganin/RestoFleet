@@ -5,5 +5,11 @@
         Только debug: testOnly позволяет снять Device Owner командой `dpm remove-active-admin` без сброса устройства.
         В release этого атрибута нет — снять DO с боевого планшета без сброса нельзя.
     -->
-    <application android:testOnly="true" />
+    <!--
+        Только debug: доверие к CA стенда (APK-хост, брокер). Файл xml/network_security_config генерируется в
+        build/generated/ задачей generate<Variant>StandTrust; в release атрибута нет (проверяет verifyReleaseNoNetworkSecurityConfig).
+    -->
+    <application
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:testOnly="true" />
 </manifest>

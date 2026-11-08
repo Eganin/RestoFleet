@@ -17,4 +17,6 @@ sealed interface LabAction : MviAction {
     data class ResultsArrived(val results: List<CheckResult>) : LabAction
     data class FilterSelected(val filter: LabFilter) : LabAction
     data class ExportingChanged(val isExporting: Boolean) : LabAction
+    data class CommandPackageChanged(val text: String) : LabAction
+    data class CommandUrlChanged(val text: String) : LabAction
 }

@@ -51,6 +51,16 @@ import ru.restofleet.agent.domain.port.CapabilityReportWriter
 import ru.restofleet.agent.domain.usecase.CollectTelemetry
 import ru.restofleet.agent.domain.usecase.ExportCapabilityReport
 import ru.restofleet.agent.domain.usecase.PublishCheckResult
+import ru.restofleet.agent.data.deviceadmin.HttpApkChecksumSource
+import ru.restofleet.agent.data.di.DEVICE_OWNER_CHECKS
+import ru.restofleet.agent.data.report.InMemoryCheckResultJournal
+import ru.restofleet.agent.domain.port.ApkChecksumSource
+import ru.restofleet.agent.domain.port.CheckResultJournal
+import ru.restofleet.agent.domain.usecase.FetchApkChecksum
+import ru.restofleet.agent.domain.usecase.GrantSelfPermissions
+import ru.restofleet.agent.domain.usecase.RunCapabilityChecks
+import ru.restofleet.agent.domain.usecase.RunCommandCheck
+import ru.restofleet.agent.presentation.deviceowner.viewmodel.DeviceOwnerViewModel
 import ru.restofleet.agent.presentation.lab.viewmodel.LabViewModel
 import ru.restofleet.shared.kernel.Outcome
 
@@ -136,5 +146,25 @@ class KoinGraphTest {
         val result = CheckResult(CheckId.R1, CheckStatus.OK, emptyMap(), null, 1L)
         val outcome = runBlocking { koin.get<PublishCheckResult>()(result) }
         assertThat(outcome).isEqualTo(Outcome.Failure(MqttNotConfigured))
+    }
+
+    @Test
+    fun deviceOwnerGraphResolvesD1CheckChecksumSourceAndSharedJournal() {
+        val koin = GlobalContext.get()
+
+        assertThat(koin.get<DeviceOwnerViewModel>()).isNotNull()
+        assertThat(koin.get<ApkChecksumSource>()).isInstanceOf(HttpApkChecksumSource::class.java)
+        assertThat(koin.get<List<CapabilityCheck>>(DEVICE_OWNER_CHECKS).map { it.id }).containsExactly(CheckId.D1)
+        // D1 считает общий RunCapabilityChecks: в Robolectric приложение — не Device Owner
+        val d1 = runBlocking { koin.get<RunCapabilityChecks>()(setOf(CheckId.D1)).single() }
+        assertThat(d1.status).isEqualTo(CheckStatus.UNAVAILABLE)
+        assertThat(d1.note).isEqualTo("not_device_owner")
+        // команды как проверки пишут в тот же журнал, который читает экспорт отчёта
+        val d2 = runBlocking { koin.get<RunCommandCheck>()(CheckId.D2, Command.Reboot) }
+        assertThat(d2.status).isEqualTo(CheckStatus.NOT_APPLICABLE)
+        assertThat(koin.get<CheckResultJournal>().recorded()).containsEntry(CheckId.D2, d2)
+        assertThat(koin.get<CheckResultJournal>()).isInstanceOf(InMemoryCheckResultJournal::class.java)
+        assertThat(koin.get<GrantSelfPermissions>()).isNotNull()
+        assertThat(koin.get<FetchApkChecksum>()).isNotNull()
     }
 }

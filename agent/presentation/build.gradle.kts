@@ -63,7 +63,11 @@ kover {
                     classes(
                         "*.lab.LabScreenKt*", "*.lab.LabContainerKt*", "*.lab.view.section.CheckRowKt*",
                         "*.lab.view.section.FilterTabsKt*", "*.lab.view.section.LabActionsKt*",
-                        "*.common.ObserveEffectsKt*", "*ComposableSingletons*",
+                        "*.lab.view.section.CommandsSectionKt*",
+                        "*.deviceowner.DeviceOwnerScreenKt*", "*.deviceowner.DeviceOwnerContainerKt*",
+                        "*.deviceowner.view.section.DeviceOwnerHeaderKt*",
+                        "*.deviceowner.view.section.DeviceOwnerRowKt*", "*.deviceowner.view.section.ApkSectionKt*",
+                        "*.common.ObserveEffectsKt*", "*.common.BadgeMarkKt*", "*ComposableSingletons*",
                     )
                 }
             }

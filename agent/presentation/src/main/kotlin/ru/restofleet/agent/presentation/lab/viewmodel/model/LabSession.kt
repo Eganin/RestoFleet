@@ -16,4 +16,9 @@ data class LabSession(
     val device: DeviceInfo? = null,
     val isRunningAll: Boolean = false,
     val isExporting: Boolean = false,
+    val commandPackage: String = DEFAULT_COMMAND_PACKAGE,
+    val commandUrl: String = "",
 ) : MviState
+
+/** Целевое приложение по умолчанию для C2/C3 — тестовый `tools:dummy-waiter` (Chrome на образе может отсутствовать). */
+const val DEFAULT_COMMAND_PACKAGE = "ru.restofleet.dummy.waiter"

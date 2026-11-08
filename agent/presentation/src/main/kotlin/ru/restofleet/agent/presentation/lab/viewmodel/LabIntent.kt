@@ -1,5 +1,6 @@
 package ru.restofleet.agent.presentation.lab.viewmodel
 
+import ru.restofleet.agent.presentation.lab.viewmodel.model.LabCommand
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabFilter
 import ru.restofleet.agent.presentation.lab.viewmodel.model.SettingsTarget
 import ru.restofleet.agent.domain.capability.CheckId
@@ -13,5 +14,8 @@ sealed interface LabIntent : MviIntent {
         data object Export : User
         data class SendToMqtt(val id: CheckId) : User
         data class OpenSettings(val target: SettingsTarget) : User
+        data class EditCommandPackage(val text: String) : User
+        data class EditCommandUrl(val text: String) : User
+        data class RunCommand(val command: LabCommand) : User
     }
 }

@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
+import ru.restofleet.agent.presentation.common.Badge
 import ru.restofleet.agent.presentation.lab.viewmodel.LabEffect.OpenSystemSettings
 import ru.restofleet.agent.presentation.lab.viewmodel.LabEffect.ShowMessage
 import ru.restofleet.agent.presentation.lab.viewmodel.LabIntent.User
@@ -33,6 +34,9 @@ import ru.restofleet.agent.domain.usecase.ExportCapabilityReport
 import ru.restofleet.agent.domain.usecase.GetDeviceInfo
 import ru.restofleet.agent.domain.usecase.PublishCheckResult
 import ru.restofleet.agent.domain.usecase.RunCapabilityChecks
+import ru.restofleet.agent.domain.usecase.RunCommandCheck
+import ru.restofleet.agent.presentation.support.CommandPorts
+import ru.restofleet.agent.presentation.support.MemoryJournal
 import ru.restofleet.shared.kernel.Clock
 import ru.restofleet.shared.kernel.DomainError
 import ru.restofleet.shared.kernel.Outcome
@@ -72,6 +76,8 @@ class LabViewModelTest {
         handler: CoroutineExceptionHandler = CoroutineExceptionHandler { _, _ -> },
     ) {
         var writes = 0
+        val ports = CommandPorts()
+        val journal = MemoryJournal()
         val published = mutableListOf<CheckResult>()
         private val dispatcher = StandardTestDispatcher(scope.testScheduler)
         private val run = RunCapabilityChecks(checks, runClock)
@@ -82,7 +88,7 @@ class LabViewModelTest {
         }
         val vm = LabViewModel(
             runChecks = run,
-            exportReport = ExportCapabilityReport(run, { device }, writer, clock),
+            exportReport = ExportCapabilityReport(run, { device }, writer, clock, journal),
             publishResult = PublishCheckResult(
                 CheckResultPublisher {
                     published += it
@@ -90,6 +96,7 @@ class LabViewModelTest {
                 },
             ),
             getDeviceInfo = GetDeviceInfo { device },
+            runCommand = RunCommandCheck(ports.executeCommand(), journal, clock),
             io = dispatcher,
             scope = CoroutineScope(SupervisorJob() + dispatcher + handler),
         )
@@ -114,7 +121,7 @@ class LabViewModelTest {
             f.vm.onIntent(User.RunAll)
             val started = awaitItem()
             assertThat(started.isRunningAll).isTrue()
-            assertThat(started.rows.all { it.isRunning }).isTrue()
+            assertThat(started.rows.filter { it.id !in setOf("C1", "C2", "C3", "C4") }.all { it.isRunning }).isTrue()
 
             advanceUntilIdle()
             val done = expectMostRecentItem()
@@ -123,7 +130,9 @@ class LabViewModelTest {
             assertThat(done.rows.first { it.id == "R1" }.badge).isEqualTo(Badge.OK)
             assertThat(done.rows.first { it.id == "R2" }.badge).isEqualTo(Badge.FAIL)
             assertThat(done.rows.first { it.id == "R3" }.badge).isEqualTo(Badge.NA)
-            assertThat(done.rows.none { it.badge == Badge.PENDING }).isTrue()
+            // C1–C4 run only by their buttons, so RunAll leaves those rows untouched
+            assertThat(done.rows.filter { it.badge == Badge.PENDING }.map { it.id })
+                .containsExactly("C1", "C2", "C3", "C4")
         }
     }
 

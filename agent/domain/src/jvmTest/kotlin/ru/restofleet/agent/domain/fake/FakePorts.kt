@@ -1,9 +1,12 @@
 package ru.restofleet.agent.domain.fake
 
+import ru.restofleet.agent.domain.capability.CheckId
+import ru.restofleet.agent.domain.capability.CheckResult
 import ru.restofleet.agent.domain.capability.LaunchStrategy
 import ru.restofleet.agent.domain.command.Level
 import ru.restofleet.agent.domain.port.AppLauncher
 import ru.restofleet.agent.domain.port.Beeper
+import ru.restofleet.agent.domain.port.CheckResultJournal
 import ru.restofleet.agent.domain.port.DeviceAdmin
 import ru.restofleet.agent.domain.port.UserNotifier
 import ru.restofleet.shared.kernel.DomainError
@@ -36,7 +39,13 @@ class FakeDeviceAdmin : DeviceAdmin {
         return lockResult()
     }
 
-    override suspend fun grantSelfPermissions(): Map<String, Boolean> = emptyMap()
+    var grantResult: Map<String, Boolean> = emptyMap()
+    var grantCalls = 0
+
+    override suspend fun grantSelfPermissions(): Map<String, Boolean> {
+        grantCalls++
+        return grantResult
+    }
 }
 
 class FakeUserNotifier : UserNotifier {
@@ -69,4 +78,14 @@ class FakeBeeper : Beeper {
         calls += durationMs
         return result()
     }
+}
+
+class FakeCheckResultJournal : CheckResultJournal {
+    val records = mutableListOf<CheckResult>()
+
+    override fun record(result: CheckResult) {
+        records += result
+    }
+
+    override fun recorded(): Map<CheckId, CheckResult> = records.associateBy { it.id }
 }

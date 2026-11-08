@@ -31,5 +31,7 @@ class LabReducer : Reducer<LabAction, LabSession> {
         }
         is FilterSelected -> if (action.filter == state.filter) state else state.copy(filter = action.filter)
         is ExportingChanged -> state.copy(isExporting = action.isExporting)
+        is LabAction.CommandPackageChanged -> state.copy(commandPackage = action.text)
+        is LabAction.CommandUrlChanged -> state.copy(commandUrl = action.text)
     }
 }

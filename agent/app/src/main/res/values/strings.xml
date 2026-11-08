@@ -8,4 +8,6 @@
     <string name="notification_channel_name">Работа агента</string>
     <string name="notification_title">RestoFleet Agent</string>
     <string name="notification_text">Мониторинг состояния устройства</string>
+    <string name="tab_lab">Lab</string>
+    <string name="tab_device_owner">Device Owner</string>
 </resources>

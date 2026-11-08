@@ -2,7 +2,8 @@ package ru.restofleet.agent.presentation.lab.viewmodel.mapper
 
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
-import ru.restofleet.agent.presentation.lab.viewmodel.Badge
+import ru.restofleet.agent.presentation.common.Badge
+import ru.restofleet.agent.presentation.lab.viewmodel.model.LabCommand
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabFilter
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabSession
 import ru.restofleet.agent.presentation.lab.viewmodel.model.SettingsTarget
@@ -164,5 +165,39 @@ class LabUiStateMapperTest {
             SettingsTarget.BATTERY_OPTIMIZATION,
         ).inOrder()
         assertThat(rows.getValue("L3").settingsTargets).isEmpty()
+    }
+
+    @Test
+    fun commandsSectionShowsFieldsAndFourButtonsOnTheAllTab() {
+        val commands = mapper.map(LabSession(commandPackage = "a.b", commandUrl = "https://h")).commands!!
+
+        assertThat(commands.pkg).isEqualTo("a.b")
+        assertThat(commands.url).isEqualTo("https://h")
+        assertThat(commands.buttons.map { it.command }).containsExactly(
+            LabCommand.SHOW_MESSAGE, LabCommand.LAUNCH_APP, LabCommand.LAUNCH_APP_DELAYED, LabCommand.BEEP,
+        ).inOrder()
+        assertThat(commands.buttons.none { it.isRunning }).isTrue()
+    }
+
+    @Test
+    fun commandsSectionDefaultsToTheDummyWaiterAndEmptyUrl() {
+        val commands = mapper.map(LabSession()).commands!!
+
+        assertThat(commands.pkg).isEqualTo("ru.restofleet.dummy.waiter")
+        assertThat(commands.url).isEmpty()
+    }
+
+    @Test
+    fun runningCommandMarksOnlyItsButton() {
+        val commands = mapper.map(LabSession(running = setOf(CheckId.C3))).commands!!
+
+        assertThat(commands.buttons.filter { it.isRunning }.map { it.command })
+            .containsExactly(LabCommand.LAUNCH_APP_DELAYED)
+    }
+
+    @Test
+    fun commandsSectionIsHiddenOnOtherTabs() {
+        assertThat(mapper.map(LabSession(filter = LabFilter.PROBLEMS)).commands).isNull()
+        assertThat(mapper.map(LabSession(filter = LabFilter.DEVICE_OWNER)).commands).isNull()
     }
 }

@@ -37,11 +37,13 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.component.inject
 import ru.restofleet.agent.data.lifecycle.ServiceStarter
+import ru.restofleet.agent.presentation.deviceowner.DeviceOwnerContainer
+import ru.restofleet.agent.presentation.deviceowner.viewmodel.DeviceOwnerViewModel
 import ru.restofleet.agent.presentation.lab.LabContainer
 import ru.restofleet.agent.presentation.lab.viewmodel.LabViewModel
 import ru.restofleet.agent.presentation.lab.viewmodel.model.SettingsTarget
 
-/** Верхняя полоса (версия, запрос уведомлений, ручной запуск агента) и Capability Lab. */
+/** Верхняя полоса (версия, запрос уведомлений, ручной запуск агента), вкладки Lab и Device Owner. */
 class MainActivity : ComponentActivity(), KoinComponent {
     private val starter: ServiceStarter by inject()
     private val settingsIntents: SettingsIntents by inject()
@@ -50,7 +52,8 @@ class MainActivity : ComponentActivity(), KoinComponent {
         super.onCreate(savedInstanceState)
         starter.ensureRunning(REASON_ACTIVITY)
         // ViewModel живёт в InstanceKeeper (переживает поворот экрана); onDestroy вызывается при окончательном закрытии
-        val lab = instanceKeeper().getOrCreate { get<LabViewModel>() }
+        val lab = instanceKeeper().getOrCreate(LabViewModel::class) { get<LabViewModel>() }
+        val deviceOwner = instanceKeeper().getOrCreate(DeviceOwnerViewModel::class) { get<DeviceOwnerViewModel>() }
         setContent {
             MaterialTheme {
                 Surface(Modifier.fillMaxSize()) {
@@ -60,7 +63,11 @@ class MainActivity : ComponentActivity(), KoinComponent {
                             notificationsGranted = ::notificationsGranted,
                             onStart = { starter.ensureRunning(REASON_MANUAL) },
                         )
-                        LabContainer(lab, onOpenSettings = ::openSettings)
+                        AgentTabHost(
+                            lab = { LabContainer(lab, onOpenSettings = ::openSettings) },
+                            deviceOwner = { DeviceOwnerContainer(deviceOwner) },
+                            modifier = Modifier.weight(1f),
+                        )
                     }
                 }
             }

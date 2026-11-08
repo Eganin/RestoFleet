@@ -23,6 +23,7 @@ import ru.restofleet.agent.domain.capability.CheckResult
 import ru.restofleet.agent.domain.capability.CheckStatus
 import ru.restofleet.agent.domain.capability.DeviceInfo
 import ru.restofleet.agent.presentation.lab.view.section.CheckRow
+import ru.restofleet.agent.presentation.lab.view.section.CommandsSection
 import ru.restofleet.agent.presentation.lab.view.section.FilterTabs
 import ru.restofleet.agent.presentation.lab.view.section.LabActions
 import ru.restofleet.agent.presentation.lab.viewmodel.LabIntent
@@ -55,6 +56,12 @@ fun LabScreen(
             )
             FilterTabs(uiState.tabs, onIntent)
             LazyColumn(Modifier.weight(1f).padding(top = 8.dp)) {
+                uiState.commands?.let { commands ->
+                    item(key = "commands") {
+                        CommandsSection(commands, onIntent)
+                        HorizontalDivider()
+                    }
+                }
                 items(uiState.rows, key = { it.id }) { row ->
                     CheckRow(row, onIntent)
                     HorizontalDivider()

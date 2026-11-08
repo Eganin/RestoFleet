@@ -2,11 +2,10 @@ package ru.restofleet.agent.presentation.lab.viewmodel.mapper
 
 import androidx.annotation.StringRes
 import ru.restofleet.agent.presentation.R
+import ru.restofleet.agent.presentation.common.StringSpec
 import ru.restofleet.agent.presentation.lab.viewmodel.LabMessage
+import ru.restofleet.agent.presentation.lab.viewmodel.model.LabCommand
 import ru.restofleet.agent.presentation.lab.viewmodel.model.SettingsTarget
-
-/** Строковый ресурс и его аргументы: чистая функция выбора, сам `getString` остаётся в UI. */
-data class StringSpec(@param:StringRes val res: Int, val args: List<String> = emptyList())
 
 /** Какой ресурс и с какими аргументами показать для сообщения Lab. */
 fun LabMessage.toStringSpec(): StringSpec = when (this) {
@@ -22,4 +21,12 @@ fun SettingsTarget.labelRes(): Int = when (this) {
     SettingsTarget.NOTIFICATIONS -> R.string.lab_settings_notifications
     SettingsTarget.USAGE_ACCESS -> R.string.lab_settings_usage_access
     SettingsTarget.BATTERY_OPTIMIZATION -> R.string.lab_settings_battery_optimization
+}
+
+@StringRes
+fun LabCommand.labelRes(): Int = when (this) {
+    LabCommand.SHOW_MESSAGE -> R.string.lab_command_show_message
+    LabCommand.LAUNCH_APP -> R.string.lab_command_launch_app
+    LabCommand.LAUNCH_APP_DELAYED -> R.string.lab_command_launch_app_delayed
+    LabCommand.BEEP -> R.string.lab_command_beep
 }

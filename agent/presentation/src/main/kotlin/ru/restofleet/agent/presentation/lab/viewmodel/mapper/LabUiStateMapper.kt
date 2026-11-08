@@ -2,12 +2,16 @@ package ru.restofleet.agent.presentation.lab.viewmodel.mapper
 
 import ru.restofleet.agent.domain.capability.CheckGroup
 import ru.restofleet.agent.domain.capability.CheckId
-import ru.restofleet.agent.domain.capability.CheckResult
 import ru.restofleet.agent.domain.capability.CheckStatus
-import ru.restofleet.agent.presentation.lab.viewmodel.Badge
+import ru.restofleet.agent.presentation.common.Badge
+import ru.restofleet.agent.presentation.common.summaryText
+import ru.restofleet.agent.presentation.common.toBadge
 import ru.restofleet.agent.presentation.lab.viewmodel.CheckRowUi
+import ru.restofleet.agent.presentation.lab.viewmodel.CommandButtonUi
+import ru.restofleet.agent.presentation.lab.viewmodel.CommandsUi
 import ru.restofleet.agent.presentation.lab.viewmodel.LabUiState
 import ru.restofleet.agent.presentation.lab.viewmodel.TabUi
+import ru.restofleet.agent.presentation.lab.viewmodel.model.LabCommand
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabFilter
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabSession
 import ru.restofleet.agent.presentation.lab.viewmodel.model.SettingsTarget
@@ -25,8 +29,20 @@ class LabUiStateMapper {
             rows = visible.map { row(it, session) },
             isRunningAll = session.isRunningAll,
             isExporting = session.isExporting,
+            commands = commands(session),
         )
     }
+
+    private fun commands(session: LabSession): CommandsUi? =
+        if (session.filter == LabFilter.ALL) {
+            CommandsUi(
+                pkg = session.commandPackage,
+                url = session.commandUrl,
+                buttons = LabCommand.entries.map { CommandButtonUi(it, it.checkId in session.running) },
+            )
+        } else {
+            null
+        }
 
     private fun matches(id: CheckId, session: LabSession): Boolean = when (session.filter) {
         LabFilter.ALL -> true
@@ -49,23 +65,13 @@ class LabUiStateMapper {
         return CheckRowUi(
             id = id.name,
             title = "${id.name} ${id.title}",
-            badge = result?.let { badge(it.status) } ?: Badge.PENDING,
-            summary = result?.let(::summary) ?: PENDING_SUMMARY,
+            badge = result?.status?.toBadge() ?: Badge.PENDING,
+            summary = result?.summaryText() ?: PENDING_SUMMARY,
             isRunning = id in session.running,
             canSend = result != null,
             settingsTargets = if (id == CheckId.L4) SettingsTarget.entries else emptyList(),
         )
     }
-
-    private fun badge(status: CheckStatus): Badge = when (status) {
-        CheckStatus.OK -> Badge.OK
-        CheckStatus.LIMITED -> Badge.WARN
-        CheckStatus.UNAVAILABLE -> Badge.FAIL
-        CheckStatus.NOT_APPLICABLE, CheckStatus.NOT_CHECKED -> Badge.NA
-    }
-
-    private fun summary(result: CheckResult): String =
-        result.note ?: result.raw.entries.joinToString(" · ") { (key, value) -> "$key $value" }
 
     private companion object {
         const val HEADER = "Capability Lab"

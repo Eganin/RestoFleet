@@ -8,14 +8,21 @@ import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import ru.restofleet.agent.data.deviceadmin.AndroidPackageInstallerSession
 import ru.restofleet.agent.data.deviceadmin.ApkDownloader
+import ru.restofleet.agent.data.deviceadmin.DeviceOwnerCheck
 import ru.restofleet.agent.data.deviceadmin.DpmDeviceAdmin
+import ru.restofleet.agent.data.deviceadmin.HttpApkChecksumSource
 import ru.restofleet.agent.data.deviceadmin.LockTaskLauncher
 import ru.restofleet.agent.data.deviceadmin.PackageInstallerSession
 import ru.restofleet.agent.data.deviceadmin.apkHttpClient
+import ru.restofleet.agent.domain.capability.CapabilityCheck
+import ru.restofleet.agent.domain.port.ApkChecksumSource
 import ru.restofleet.agent.domain.port.DeviceAdmin
 
 /** Qualifier компонента администратора (`ComponentName` приёмника): его предоставляет `agent:app`. */
 val ADMIN_COMPONENT = named("adminComponent")
+
+/** Qualifier списка проверок Device Owner, которые считает `RunCapabilityChecks` (D1). */
+val DEVICE_OWNER_CHECKS = named("deviceOwnerChecks")
 
 /** Qualifier клиента загрузки APK (системный trust store, https→https, жёсткие таймауты). */
 val APK_HTTP_CLIENT = named("apkHttpClient")
@@ -26,6 +33,9 @@ val APK_HTTP_CLIENT = named("apkHttpClient")
  */
 val deviceAdminModule: Module = module {
     single(APK_HTTP_CLIENT) { apkHttpClient() }
+    single<ApkChecksumSource> { HttpApkChecksumSource(get(APK_HTTP_CLIENT)) }
+    // D1: роль читается через CapabilitiesSource (commandModule); остальные D-проверки — ручные команды
+    single<List<CapabilityCheck>>(DEVICE_OWNER_CHECKS) { listOf(DeviceOwnerCheck(get(), get())) }
     single { ApkDownloader(get(APK_HTTP_CLIENT), androidContext().cacheDir) }
     single<PackageInstallerSession> { AndroidPackageInstallerSession(androidContext()) }
     single { LockTaskLauncher(androidContext(), get()) }

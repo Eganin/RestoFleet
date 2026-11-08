@@ -115,4 +115,20 @@ class LabReducerTest {
         assertThat(on.isExporting).isTrue()
         assertThat(reducer.reduce(ExportingChanged(false), on).isExporting).isFalse()
     }
+
+    @Test
+    fun commandFieldsChangeOnlyTheirOwnValue() {
+        val withPackage = reducer.reduce(LabAction.CommandPackageChanged("a.b"), LabSession())
+        val both = reducer.reduce(LabAction.CommandUrlChanged("https://h"), withPackage)
+
+        assertThat(withPackage.commandPackage).isEqualTo("a.b")
+        assertThat(withPackage.commandUrl).isEmpty()
+        assertThat(both).isEqualTo(LabSession(commandPackage = "a.b", commandUrl = "https://h"))
+    }
+
+    @Test
+    fun commandFieldsDefaultToTheDummyWaiterAndNoUrl() {
+        assertThat(LabSession().commandPackage).isEqualTo("ru.restofleet.dummy.waiter")
+        assertThat(LabSession().commandUrl).isEmpty()
+    }
 }

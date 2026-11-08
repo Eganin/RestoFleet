@@ -1,24 +1,27 @@
 package ru.restofleet.agent.presentation.lab.viewmodel
 
 import android.util.Log
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.restofleet.agent.domain.capability.CheckId
+import ru.restofleet.agent.domain.command.Command
+import ru.restofleet.agent.domain.command.Level
 import ru.restofleet.agent.domain.error.MqttNotConfigured
 import ru.restofleet.agent.domain.usecase.ExportCapabilityReport
 import ru.restofleet.agent.domain.usecase.GetDeviceInfo
 import ru.restofleet.agent.domain.usecase.PublishCheckResult
 import ru.restofleet.agent.domain.usecase.RunCapabilityChecks
+import ru.restofleet.agent.domain.usecase.RunCommandCheck
+import ru.restofleet.agent.presentation.common.guarded
 import ru.restofleet.agent.presentation.lab.viewmodel.LabIntent.User
 import ru.restofleet.agent.presentation.lab.viewmodel.mapper.LabUiStateMapper
+import ru.restofleet.agent.presentation.lab.viewmodel.model.LabCommand
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabSession
 import ru.restofleet.console.core.mvi.BaseMviViewModel
 import ru.restofleet.console.core.mvi.MviStore
@@ -34,6 +37,7 @@ class LabViewModel(
     private val exportReport: ExportCapabilityReport,
     private val publishResult: PublishCheckResult,
     private val getDeviceInfo: GetDeviceInfo,
+    private val runCommand: RunCommandCheck,
     private val io: CoroutineDispatcher,
     scope: CoroutineScope = defaultScope(),
 ) : BaseMviViewModel<LabSession, LabUiState, LabIntent, LabAction, LabEffect>(
@@ -47,26 +51,31 @@ class LabViewModel(
     override fun onIntent(intent: LabIntent) {
         when (intent) {
             User.RunAll -> runAll()
-            is User.RunOne -> runOne(intent.id)
+            is User.RunOne -> LabCommand.of(intent.id)?.let(::runCommandButton) ?: runOne(intent.id)
             is User.SelectFilter -> reduce(LabAction.FilterSelected(intent.filter))
             User.Export -> export()
             is User.SendToMqtt -> sendToMqtt(intent.id)
             is User.OpenSettings -> emitEffect(LabEffect.OpenSystemSettings(intent.target))
+            is User.EditCommandPackage -> reduce(LabAction.CommandPackageChanged(intent.text))
+            is User.EditCommandUrl -> reduce(LabAction.CommandUrlChanged(intent.text))
+            is User.RunCommand -> runCommandButton(intent.command)
         }
     }
 
     private fun runAll() {
         if (state.isRunningAll) return
-        reduce(LabAction.RunStarted(CheckId.entries.toSet(), isAll = true))
+        // Команды C1–C4 меняют состояние устройства (уведомление, звук, запуск приложения): их запускают кнопками
+        val ids = CheckId.entries.filter { LabCommand.of(it) == null }
+        reduce(LabAction.RunStarted(ids.toSet(), isAll = true))
         scope.launch {
             var firstError: Exception? = null
             try {
-                for (id in CheckId.entries) {
+                for (id in ids) {
                     val results = guarded({ firstError = firstError ?: it }) { runOnIo(id) }
                     reduce(results?.let(LabAction::ResultsArrived) ?: LabAction.RunFinished(setOf(id)))
                 }
             } finally {
-                reduce(LabAction.RunFinished(CheckId.entries.toSet()))
+                reduce(LabAction.RunFinished(ids.toSet()))
             }
             firstError?.let(::emitError)
         }
@@ -78,6 +87,23 @@ class LabViewModel(
         scope.launch {
             try {
                 guarded(::emitError) { runOnIo(id) }?.let { reduce(LabAction.ResultsArrived(it)) }
+            } finally {
+                reduce(LabAction.RunFinished(setOf(id)))
+            }
+        }
+    }
+
+    private fun runCommandButton(button: LabCommand) {
+        val id = button.checkId
+        if (state.isRunningAll || id in state.running) return
+        reduce(LabAction.RunStarted(setOf(id)))
+        scope.launch {
+            try {
+                val command = button.toCommand(state.commandPackage, state.commandUrl)
+                guarded(::emitError) {
+                    if (button == LabCommand.LAUNCH_APP_DELAYED) delay(BACKGROUND_DELAY_MS)
+                    withContext(io) { runCommand(id, command) }
+                }?.let { reduce(LabAction.ResultsArrived(listOf(it))) }
             } finally {
                 reduce(LabAction.RunFinished(setOf(id)))
             }
@@ -127,24 +153,6 @@ class LabViewModel(
         emitEffect(LabEffect.ShowMessage(LabMessage.Error(e.message ?: e::class.simpleName.orEmpty())))
     }
 
-    /**
-     * Сбой use case не должен ни зависнуть в флагах, ни уронить процесс (он общий с сервисом агента): ошибка уходит
-     * в [onError], результат — `null`. CancellationException при активном scope (чужой таймаут, отменённый future) —
-     * тоже сбой; отмена самого scope (VM уничтожена) пробрасывается. [Error] не перехватывается.
-     */
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun <T> guarded(onError: (Exception) -> Unit, block: suspend () -> T): T? =
-        try {
-            block()
-        } catch (e: CancellationException) {
-            currentCoroutineContext().ensureActive()
-            onError(e)
-            null
-        } catch (e: Exception) {
-            onError(e)
-            null
-        }
-
     private fun publishMessage(id: CheckId, outcome: Outcome<Unit, DomainError>): LabMessage = when (outcome) {
         is Outcome.Success -> LabMessage.Published(id)
         is Outcome.Failure -> when (val error = outcome.error) {
@@ -161,3 +169,15 @@ internal fun labExceptionHandler(log: (Throwable) -> Unit): CoroutineExceptionHa
 private fun defaultScope() = CoroutineScope(
     SupervisorJob() + Dispatchers.Main.immediate + labExceptionHandler { Log.e("LabViewModel", "unhandled", it) },
 )
+
+/** Пауза варианта «через 10 с»: тестировщик успевает нажать Home, чтобы запуск шёл из фона. */
+internal const val BACKGROUND_DELAY_MS = 10_000L
+
+private const val MESSAGE_TEXT = "Проверка RestoFleet"
+private const val BEEP_MS = 3_000L
+
+private fun LabCommand.toCommand(pkg: String, url: String): Command = when (this) {
+    LabCommand.SHOW_MESSAGE -> Command.ShowMessage(MESSAGE_TEXT, Level.WARNING)
+    LabCommand.LAUNCH_APP, LabCommand.LAUNCH_APP_DELAYED -> Command.LaunchApp(pkg.trim(), url.trim().ifEmpty { null })
+    LabCommand.BEEP -> Command.Beep(BEEP_MS)
+}
