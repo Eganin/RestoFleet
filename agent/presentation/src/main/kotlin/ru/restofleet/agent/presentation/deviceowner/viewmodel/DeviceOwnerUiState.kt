@@ -31,4 +31,5 @@ data class DeviceOwnerUiState(
     val targetPackage: String,
     val targetUrl: String,
     val isRunningAll: Boolean,
+    val canRunAll: Boolean,
 )

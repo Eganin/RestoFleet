@@ -18,6 +18,7 @@ import ru.restofleet.agent.domain.usecase.GetDeviceInfo
 import ru.restofleet.agent.domain.usecase.PublishCheckResult
 import ru.restofleet.agent.domain.usecase.RunCapabilityChecks
 import ru.restofleet.agent.domain.usecase.RunCommandCheck
+import ru.restofleet.agent.presentation.common.BACKGROUND_LAUNCH_DELAY_MS
 import ru.restofleet.agent.presentation.common.guarded
 import ru.restofleet.agent.presentation.lab.viewmodel.LabIntent.User
 import ru.restofleet.agent.presentation.lab.viewmodel.mapper.LabUiStateMapper
@@ -101,7 +102,7 @@ class LabViewModel(
             try {
                 val command = button.toCommand(state.commandPackage, state.commandUrl)
                 guarded(::emitError) {
-                    if (button == LabCommand.LAUNCH_APP_DELAYED) delay(BACKGROUND_DELAY_MS)
+                    if (button == LabCommand.LAUNCH_APP_DELAYED) delay(BACKGROUND_LAUNCH_DELAY_MS)
                     withContext(io) { runCommand(id, command) }
                 }?.let { reduce(LabAction.ResultsArrived(listOf(it))) }
             } finally {
@@ -169,9 +170,6 @@ internal fun labExceptionHandler(log: (Throwable) -> Unit): CoroutineExceptionHa
 private fun defaultScope() = CoroutineScope(
     SupervisorJob() + Dispatchers.Main.immediate + labExceptionHandler { Log.e("LabViewModel", "unhandled", it) },
 )
-
-/** Пауза варианта «через 10 с»: тестировщик успевает нажать Home, чтобы запуск шёл из фона. */
-internal const val BACKGROUND_DELAY_MS = 10_000L
 
 private const val MESSAGE_TEXT = "Проверка RestoFleet"
 private const val BEEP_MS = 3_000L

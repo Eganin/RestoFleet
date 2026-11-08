@@ -49,7 +49,7 @@ fun DeviceOwnerScreen(
             // Scaffold не отступает от навигационной панели для bottomBar — делаем это сами
             Button(
                 onClick = { onIntent(DeviceOwnerIntent.User.RunAll) },
-                enabled = !uiState.isRunningAll,
+                enabled = uiState.canRunAll,
                 modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp),
             ) { Text(stringResource(R.string.do_run_all)) }
         },

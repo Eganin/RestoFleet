@@ -8,13 +8,14 @@ import ru.restofleet.agent.domain.model.Reading
 import ru.restofleet.agent.domain.model.UnavailableReason
 
 /**
- * R13: серийный номер через `Build.getSerial()`. По документации (API 29+) метод доступен Device Owner полностью
- * управляемого устройства; иначе — `SecurityException`, что здесь сообщается как нехватка `READ_PHONE_STATE`
- * (разрешение объявлено и выдаётся адаптером DO самому себе). `"unknown"` и пустое значение — `Failed`.
+ * R13: серийный номер через `Build.getSerial()`. С API 29 метод доступен только Device Owner при выданном
+ * `READ_PHONE_STATE` (его выдаёт D6). `SecurityException`: не DO — `RequiresDeviceOwner`, DO без разрешения (и
+ * любая роль на API 26–28) — `PermissionMissing("READ_PHONE_STATE")`. `"unknown"` и пустое значение — `Failed`.
  * Полное значение наружу не логируется; в Lab и отчёт оно попадает только в маске (см. `CheckValues.maskSerial`).
  */
 class SerialCollector(
     private val apiLevel: ApiLevel = ApiLevel.Device,
+    private val role: DeviceOwnerRole = DeviceOwnerRole { false },
     @SuppressLint("HardwareIds", "MissingPermission") // доступ подтверждается ролью DO, а не манифестом
     private val getSerial: () -> String = { Build.getSerial() },
 ) {
@@ -23,9 +24,10 @@ class SerialCollector(
         val serial = try {
             getSerial()
         } catch (e: SecurityException) {
-            // С API 29 по javadoc Build.getSerial() доступен только Device Owner: выдача READ_PHONE_STATE не поможет
+            // С API 29 серийный номер отдаётся только Device Owner с выданным READ_PHONE_STATE (эмулятор API 36: после
+            // выдачи разрешения значение есть, до — SecurityException у уже назначенного DO). Решение 118.
             return@guarded Reading.Unavailable(
-                if (apiLevel.current() >= DEVICE_OWNER_ONLY_API) {
+                if (apiLevel.current() >= DEVICE_OWNER_ONLY_API && !role.isDeviceOwner()) {
                     UnavailableReason.RequiresDeviceOwner
                 } else {
                     UnavailableReason.PermissionMissing(PERMISSION)

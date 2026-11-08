@@ -17,12 +17,12 @@
     <string name="lab_commands_url">Адрес https (необязательно)</string>
     <string name="lab_command_show_message">C1 Сообщение</string>
     <string name="lab_command_launch_app">C2 Запуск</string>
-    <string name="lab_command_launch_app_delayed">C3 Запуск через 10 с</string>
+    <string name="lab_command_launch_app_delayed">C3 Запуск через 30 с</string>
     <string name="lab_command_beep">C4 Сигнал</string>
     <string name="do_owner">Владелец</string>
     <string name="do_serial">Серийный номер</string>
     <string name="do_run">Запустить</string>
-    <string name="do_run_delayed">Через 10 с</string>
+    <string name="do_run_delayed">Через 30 с</string>
     <string name="do_run_all">Запустить все проверки DO</string>
     <string name="do_apk_title">APK для теста установки</string>
     <string name="do_apk_url">Адрес APK (https)</string>

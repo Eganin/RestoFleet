@@ -180,6 +180,7 @@ class DeviceOwnerViewModelTest {
         val f = Fixture(this)
         f.ports.installFailure = "hash_mismatch"
         f.setUrlAndHash()
+        advanceUntilIdle()
 
         f.vm.onIntent(User.RunOne(CheckId.D3))
         advanceUntilIdle()
@@ -191,6 +192,7 @@ class DeviceOwnerViewModelTest {
     @Test
     fun d4LocksTheTargetPackageAndUrl() = runTest {
         val f = Fixture(this)
+        advanceUntilIdle()
         f.vm.onIntent(User.EditTargetPackage("com.android.chrome"))
         f.vm.onIntent(User.EditTargetUrl("https://example.com"))
 
@@ -210,25 +212,6 @@ class DeviceOwnerViewModelTest {
         advanceUntilIdle()
 
         assertThat(f.events).containsExactly("launch:ru.restofleet.dummy.waiter:null:DIRECT_DO")
-    }
-
-    @Test
-    fun d5FromBackgroundWaitsTenSeconds() = runTest {
-        val f = Fixture(this)
-        advanceUntilIdle()
-        f.events.clear()
-
-        f.vm.onIntent(User.RunLaunchFromBackground)
-        runCurrent()
-        assertThat(f.row("D5").isRunning).isTrue()
-        advanceTimeBy(9_999)
-        assertThat(f.events).isEmpty()
-
-        advanceTimeBy(1)
-        runCurrent()
-
-        assertThat(f.events).containsExactly("launch:ru.restofleet.dummy.waiter:null:DIRECT_DO")
-        assertThat(f.row("D5").isRunning).isFalse()
     }
 
     @Test
@@ -319,93 +302,6 @@ class DeviceOwnerViewModelTest {
     }
 
     @Test
-    fun runAllRunsTheStepsInOrderAndRebootsLastOnlyAfterConfirmation() = runTest {
-        val f = Fixture(this)
-        f.setUrlAndHash()
-        advanceUntilIdle()
-        f.events.clear()
-
-        f.vm.effect.test {
-            f.vm.onIntent(User.RunAll)
-            advanceUntilIdle()
-
-            assertThat(awaitItem()).isEqualTo(ConfirmReboot)
-            assertThat(f.events).containsExactly(
-                "check:D1", "grant", "check:R10", "check:R13", "install:$apk:$sha",
-                "launch:ru.restofleet.dummy.waiter:null:DIRECT_DO", "lock:ru.restofleet.dummy.waiter:null",
-            ).inOrder()
-            assertThat(f.vm.uiState.value.isRunningAll).isTrue()
-
-            f.vm.onIntent(User.ConfirmReboot(true))
-            advanceUntilIdle()
-        }
-
-        assertThat(f.events.last()).isEqualTo("reboot")
-        assertThat(f.events.count { it == "reboot" }).isEqualTo(1)
-        assertThat(f.vm.uiState.value.isRunningAll).isFalse()
-        assertThat(f.vm.uiState.value.rows.none { it.isRunning }).isTrue()
-    }
-
-    @Test
-    fun declinedRebootInRunAllLeavesD2NotRun() = runTest {
-        val f = Fixture(this)
-        f.setUrlAndHash()
-        advanceUntilIdle()
-        f.events.clear()
-
-        f.vm.onIntent(User.RunAll)
-        advanceUntilIdle()
-        f.vm.onIntent(User.ConfirmReboot(false))
-        advanceUntilIdle()
-
-        assertThat(f.events).doesNotContain("reboot")
-        assertThat(f.row("D2").summary).isEqualTo("не запускалась")
-        assertThat(f.row("D2").badge).isEqualTo(Badge.NA)
-        assertThat(f.vm.uiState.value.isRunningAll).isFalse()
-    }
-
-    @Test
-    fun rebootNeverRunsWithoutAnAnswerEvenAfterTimePasses() = runTest {
-        val f = Fixture(this)
-        f.setUrlAndHash()
-        advanceUntilIdle()
-
-        f.vm.onIntent(User.RunAll)
-        advanceTimeBy(10 * 60_000L)
-        runCurrent()
-
-        assertThat(f.events).doesNotContain("reboot")
-        assertThat(f.vm.uiState.value.isRunningAll).isTrue()
-    }
-
-    @Test
-    fun runAllSkipsD3WithoutUrlAndExplainsWhy() = runTest {
-        val f = Fixture(this)
-        f.vm.onIntent(User.EditApkUrl(""))
-        advanceUntilIdle()
-
-        f.vm.onIntent(User.RunAll)
-        advanceUntilIdle()
-
-        assertThat(f.events.none { it.startsWith("install") }).isTrue()
-        assertThat(f.row("D3").summary).isEqualTo("пропущено: нет URL")
-        assertThat(f.row("D3").isRunning).isFalse()
-    }
-
-    @Test
-    fun runAllSkipsD3WithoutHashAndExplainsWhy() = runTest {
-        val f = Fixture(this)
-        f.vm.onIntent(User.EditApkUrl(apk))
-        advanceUntilIdle()
-
-        f.vm.onIntent(User.RunAll)
-        advanceUntilIdle()
-
-        assertThat(f.events.none { it.startsWith("install") }).isTrue()
-        assertThat(f.row("D3").summary).isEqualTo("пропущено: нет хэша")
-    }
-
-    @Test
     fun runAllWithoutDeviceOwnerNeitherAsksNorReboots() = runTest {
         val f = Fixture(this, AgentMode.NORMAL)
         f.setUrlAndHash()
@@ -437,46 +333,6 @@ class DeviceOwnerViewModelTest {
         advanceUntilIdle()
 
         assertThat(f.events).isEmpty()
-    }
-
-    @Test
-    fun runAllContinuesAfterAThrowingStepAndReportsTheError() = runTest {
-        val f = Fixture(this)
-        f.setUrlAndHash()
-        advanceUntilIdle()
-        f.events.clear()
-        f.ports.failWith = IllegalStateException("boom")
-
-        f.vm.effect.test {
-            f.vm.onIntent(User.RunAll)
-            advanceUntilIdle()
-
-            assertThat(awaitItem()).isEqualTo(ShowMessage(DeviceOwnerMessage.Error("boom")))
-            assertThat(awaitItem()).isEqualTo(ConfirmReboot)
-            f.vm.onIntent(User.ConfirmReboot(false))
-            advanceUntilIdle()
-        }
-        assertThat(f.row("R10").badge).isEqualTo(Badge.OK)
-        assertThat(f.row("D6").isRunning).isFalse()
-        assertThat(f.row("D4").badge).isEqualTo(Badge.FAIL)
-    }
-
-    @Test
-    fun secondRunAllAndRowRunsAreIgnoredWhileRunningAll() = runTest {
-        val f = Fixture(this)
-        f.setUrlAndHash()
-        advanceUntilIdle()
-        f.events.clear()
-
-        f.vm.onIntent(User.RunAll)
-        advanceUntilIdle()
-        f.vm.onIntent(User.RunAll)
-        f.vm.onIntent(User.RunOne(CheckId.D6))
-        f.vm.onIntent(User.RunLaunchFromBackground)
-        advanceUntilIdle()
-
-        assertThat(f.events.count { it == "grant" }).isEqualTo(1)
-        assertThat(f.events.count { it.startsWith("launch") }).isEqualTo(1)
     }
 
     @Test
@@ -558,6 +414,233 @@ class DeviceOwnerViewModelTest {
         advanceUntilIdle()
 
         assertThat(f.journal.recorded().keys).containsExactly(CheckId.D4, CheckId.D6)
+    }
+
+    @Test
+    fun d5FromBackgroundWaitsThirtySeconds() = runTest {
+        val f = Fixture(this)
+        advanceUntilIdle()
+        f.events.clear()
+
+        f.vm.onIntent(User.RunLaunchFromBackground)
+        runCurrent()
+        assertThat(f.row("D5").isRunning).isTrue()
+        advanceTimeBy(29_999)
+        assertThat(f.events).isEmpty()
+
+        advanceTimeBy(1)
+        runCurrent()
+
+        assertThat(f.events).containsExactly("launch:ru.restofleet.dummy.waiter:null:DIRECT_DO")
+        assertThat(f.row("D5").isRunning).isFalse()
+    }
+
+    private val stepsWithoutReboot = listOf(
+        "check:D1", "grant", "check:R10", "check:R13", "install:$apk:$sha",
+        "launch:ru.restofleet.dummy.waiter:null:DIRECT_DO",
+    )
+
+    @Test
+    fun runAllAsksForRebootConfirmationFirstBeforeAnyStep() = runTest {
+        val f = Fixture(this)
+        f.setUrlAndHash()
+        advanceUntilIdle()
+        f.events.clear()
+
+        f.vm.effect.test {
+            f.vm.onIntent(User.RunAll)
+            advanceUntilIdle()
+
+            assertThat(awaitItem()).isEqualTo(ConfirmReboot)
+            assertThat(f.events).isEmpty()
+            assertThat(f.vm.uiState.value.isRunningAll).isTrue()
+
+            f.vm.onIntent(User.ConfirmReboot(false))
+            advanceUntilIdle()
+        }
+    }
+
+    @Test
+    fun confirmedRunAllRunsTheStepsInOrderAndRebootsLastWithoutLockTask() = runTest {
+        val f = Fixture(this)
+        f.setUrlAndHash()
+        advanceUntilIdle()
+        f.events.clear()
+
+        f.vm.effect.test {
+            f.vm.onIntent(User.RunAll)
+            advanceUntilIdle()
+            assertThat(awaitItem()).isEqualTo(ConfirmReboot)
+            f.vm.onIntent(User.ConfirmReboot(true))
+            advanceUntilIdle()
+        }
+
+        assertThat(f.events).containsExactlyElementsIn(stepsWithoutReboot + "reboot").inOrder()
+        assertThat(f.events.none { it.startsWith("lock") }).isTrue()
+        assertThat(f.vm.uiState.value.isRunningAll).isFalse()
+        assertThat(f.vm.uiState.value.rows.none { it.isRunning }).isTrue()
+    }
+
+    @Test
+    fun declinedRunAllRunsEverythingElseAndLeavesD2NotRun() = runTest {
+        val f = Fixture(this)
+        f.setUrlAndHash()
+        advanceUntilIdle()
+        f.events.clear()
+
+        f.vm.onIntent(User.RunAll)
+        advanceUntilIdle()
+        f.vm.onIntent(User.ConfirmReboot(false))
+        advanceUntilIdle()
+
+        assertThat(f.events).containsExactlyElementsIn(stepsWithoutReboot).inOrder()
+        assertThat(f.row("D2").summary).isEqualTo("не запускалась")
+        assertThat(f.row("D2").badge).isEqualTo(Badge.NA)
+        assertThat(f.row("D4").badge).isEqualTo(Badge.PENDING)
+        assertThat(f.vm.uiState.value.isRunningAll).isFalse()
+    }
+
+    @Test
+    fun runAllWithoutAnAnswerRunsNothingAndNeverReboots() = runTest {
+        val f = Fixture(this)
+        f.setUrlAndHash()
+        advanceUntilIdle()
+        f.events.clear()
+
+        f.vm.onIntent(User.RunAll)
+        advanceTimeBy(10 * 60_000L)
+        runCurrent()
+
+        assertThat(f.events).isEmpty()
+        assertThat(f.vm.uiState.value.isRunningAll).isTrue()
+    }
+
+    @Test
+    fun runAllSkipsD3WithoutUrlAndExplainsWhy() = runTest {
+        val f = Fixture(this)
+        f.vm.onIntent(User.EditApkUrl(""))
+        advanceUntilIdle()
+
+        f.vm.onIntent(User.RunAll)
+        advanceUntilIdle()
+        f.vm.onIntent(User.ConfirmReboot(false))
+        advanceUntilIdle()
+
+        assertThat(f.events.none { it.startsWith("install") }).isTrue()
+        assertThat(f.row("D3").summary).isEqualTo("пропущено: нет URL")
+        assertThat(f.row("D3").isRunning).isFalse()
+    }
+
+    @Test
+    fun runAllSkipsD3WithoutHashAndExplainsWhy() = runTest {
+        val f = Fixture(this)
+        f.vm.onIntent(User.EditApkUrl(apk))
+        advanceUntilIdle()
+
+        f.vm.onIntent(User.RunAll)
+        advanceUntilIdle()
+        f.vm.onIntent(User.ConfirmReboot(false))
+        advanceUntilIdle()
+
+        assertThat(f.events.none { it.startsWith("install") }).isTrue()
+        assertThat(f.row("D3").summary).isEqualTo("пропущено: нет хэша")
+    }
+
+    @Test
+    fun runAllContinuesAfterPortFailuresWhichUseCasesIsolateIntoRows() = runTest {
+        val f = Fixture(this)
+        f.setUrlAndHash()
+        advanceUntilIdle()
+        f.events.clear()
+        f.ports.failWith = IllegalStateException("boom")
+
+        f.vm.effect.test {
+            f.vm.onIntent(User.RunAll)
+            advanceUntilIdle()
+            assertThat(awaitItem()).isEqualTo(ConfirmReboot)
+            f.vm.onIntent(User.ConfirmReboot(false))
+            advanceUntilIdle()
+
+            expectNoEvents()
+        }
+        assertThat(f.row("R10").badge).isEqualTo(Badge.OK)
+        assertThat(f.row("D6").badge).isEqualTo(Badge.FAIL)
+        assertThat(f.row("D6").summary).isEqualTo("exception:IllegalStateException")
+        assertThat(f.row("D6").isRunning).isFalse()
+        assertThat(f.row("D5").badge).isEqualTo(Badge.FAIL)
+        assertThat(f.vm.uiState.value.isRunningAll).isFalse()
+    }
+
+    @Test
+    fun secondRunAllAndRowRunsAreIgnoredWhileRunningAll() = runTest {
+        val f = Fixture(this)
+        f.setUrlAndHash()
+        advanceUntilIdle()
+        f.events.clear()
+
+        f.vm.onIntent(User.RunAll)
+        advanceUntilIdle()
+        f.vm.onIntent(User.RunAll)
+        f.vm.onIntent(User.RunOne(CheckId.D6))
+        f.vm.onIntent(User.RunLaunchFromBackground)
+        f.vm.onIntent(User.ConfirmReboot(true))
+        advanceUntilIdle()
+
+        assertThat(f.events.count { it == "grant" }).isEqualTo(1)
+        assertThat(f.events.count { it.startsWith("launch") }).isEqualTo(1)
+        assertThat(f.events.count { it == "reboot" }).isEqualTo(1)
+    }
+
+    @Test
+    fun runAllIsIgnoredWhileASingleRowIsRunning() = runTest {
+        val f = Fixture(this)
+        f.setUrlAndHash()
+        advanceUntilIdle()
+        f.events.clear()
+        f.vm.onIntent(User.RunLaunchFromBackground)
+        runCurrent()
+
+        f.vm.effect.test {
+            f.vm.onIntent(User.RunAll)
+            runCurrent()
+            expectNoEvents()
+        }
+        advanceUntilIdle()
+
+        assertThat(f.events).containsExactly("launch:ru.restofleet.dummy.waiter:null:DIRECT_DO")
+        assertThat(f.vm.uiState.value.isRunningAll).isFalse()
+    }
+
+    @Test
+    fun hashOfAnOldAddressIsNotAppliedToAChangedUrl() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val f = Fixture(this, fetchGate = gate)
+
+        f.vm.effect.test {
+            f.vm.onIntent(User.FetchChecksum)
+            runCurrent()
+            f.vm.onIntent(User.EditApkUrl("https://10.0.2.2:8443/waiter-4.14.apk"))
+            gate.complete(Unit)
+            advanceUntilIdle()
+            expectNoEvents()
+        }
+
+        assertThat(f.vm.uiState.value.apkSha256).isEmpty()
+        assertThat(f.vm.uiState.value.isFetchingHash).isFalse()
+    }
+
+    @Test
+    fun hashIsAppliedWhenOnlyWhitespaceAroundTheUrlChanged() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val f = Fixture(this, fetchGate = gate)
+
+        f.vm.onIntent(User.FetchChecksum)
+        runCurrent()
+        f.vm.onIntent(User.EditApkUrl("  $apk "))
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertThat(f.vm.uiState.value.apkSha256).isEqualTo(sha)
     }
 
     @Test

@@ -194,4 +194,37 @@ class DeviceOwnerUiStateMapperTest {
         assertThat(state.targetPackage).isEqualTo("a.b")
         assertThat(state.targetUrl).isEqualTo("https://t")
     }
+
+    @Test
+    fun runAllButtonIsEnabledOnlyWhenNothingRuns() {
+        assertThat(mapper.map(session()).canRunAll).isTrue()
+        assertThat(mapper.map(session(running = setOf(CheckId.D5))).canRunAll).isFalse()
+        assertThat(mapper.map(session(isRunningAll = true)).canRunAll).isFalse()
+    }
+
+    @Test
+    fun rowsRequiringDeviceOwnerAreDisabledWhileTheModeIsUnknown() {
+        val rows = DeviceOwnerSessionRows(session(null))
+
+        listOf("D2", "D3", "D4", "D5", "D6", "R10").forEach { assertThat(rows.getValue(it).enabled).isFalse() }
+        assertThat(rows.getValue("D1").enabled).isTrue()
+        assertThat(rows.getValue("R13").enabled).isTrue()
+    }
+
+    @Test
+    fun d6NoteCodesAreShownAsRussianText() {
+        val notGranted = DeviceOwnerSessionRows(
+            session(owner, result(CheckId.D6, CheckStatus.LIMITED, note = "not_granted:A_PERM,B_PERM")),
+        )
+        val nothing = DeviceOwnerSessionRows(
+            session(owner, result(CheckId.D6, CheckStatus.LIMITED, note = "nothing_to_grant")),
+        )
+        val failed = DeviceOwnerSessionRows(
+            session(owner, result(CheckId.D6, CheckStatus.UNAVAILABLE, note = "exception:X")),
+        )
+
+        assertThat(notGranted.getValue("D6").summary).isEqualTo("не выдано: A_PERM, B_PERM")
+        assertThat(nothing.getValue("D6").summary).isEqualTo("нет разрешений для выдачи")
+        assertThat(failed.getValue("D6").summary).isEqualTo("exception:X")
+    }
 }

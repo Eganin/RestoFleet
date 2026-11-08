@@ -61,7 +61,7 @@ val checksModule: Module = module {
         DpmDeviceOwnerRole(context.getSystemService(DevicePolicyManager::class.java), context.packageName)
     }
     single { HardwarePropertiesCollector(androidContext(), role = get()) }
-    single { SerialCollector() }
+    single { SerialCollector(role = get()) }
 
     single<List<CapabilityCheck>>(READING_CHECKS) {
         CapabilityChecksFactory(

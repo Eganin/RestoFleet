@@ -41,9 +41,11 @@ class FakeDeviceAdmin : DeviceAdmin {
 
     var grantResult: Map<String, Boolean> = emptyMap()
     var grantCalls = 0
+    var grantBefore: suspend () -> Unit = {}
 
     override suspend fun grantSelfPermissions(): Map<String, Boolean> {
         grantCalls++
+        grantBefore()
         return grantResult
     }
 }

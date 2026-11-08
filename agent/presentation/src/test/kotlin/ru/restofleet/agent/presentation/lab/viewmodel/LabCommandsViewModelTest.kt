@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import ru.restofleet.agent.domain.capability.AgentMode
 import ru.restofleet.agent.domain.capability.CapabilityCheck
+import ru.restofleet.agent.domain.capability.CapabilityReport
 import ru.restofleet.agent.domain.capability.CheckId
 import ru.restofleet.agent.domain.capability.CheckResult
 import ru.restofleet.agent.domain.capability.CheckStatus
@@ -34,13 +35,17 @@ import ru.restofleet.shared.kernel.Outcome
 class LabCommandsViewModelTest {
     private val clock = Clock { 1L }
 
-    private inner class Fixture(scope: TestScope) {
+    private inner class Fixture(
+        scope: TestScope,
+        checkIds: List<CheckId> = listOf(CheckId.R1, CheckId.C1, CheckId.C4),
+    ) {
         val ports = CommandPorts()
         val journal = MemoryJournal()
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
         val checkRuns = mutableListOf<CheckId>()
+        val reports = mutableListOf<CapabilityReport>()
         private val run = RunCapabilityChecks(
-            listOf(CheckId.R1, CheckId.C1, CheckId.C4).map { id ->
+            checkIds.map { id ->
                 object : CapabilityCheck {
                     override val id = id
                     override suspend fun run(): CheckResult {
@@ -56,7 +61,10 @@ class LabCommandsViewModelTest {
             exportReport = ExportCapabilityReport(
                 run,
                 { DeviceInfo(36, "Pixel", true, AgentMode.NORMAL, "0.1") },
-                { Outcome.Success("/r.json") },
+                {
+                    reports += it
+                    Outcome.Success("/r.json")
+                },
                 clock,
                 journal,
             ),
@@ -106,13 +114,13 @@ class LabCommandsViewModelTest {
     }
 
     @Test
-    fun c3WaitsTenSecondsSoTheTesterCanPressHome() = runTest {
+    fun c3WaitsThirtySecondsSoTheLaunchIsOutsideTheGraceWindow() = runTest {
         val f = Fixture(this)
 
         f.vm.onIntent(User.RunCommand(LabCommand.LAUNCH_APP_DELAYED))
         runCurrent()
         assertThat(f.row("C3").isRunning).isTrue()
-        advanceTimeBy(9_999)
+        advanceTimeBy(29_999)
         assertThat(f.ports.calls).isEmpty()
 
         advanceTimeBy(1)
@@ -210,10 +218,16 @@ class LabCommandsViewModelTest {
 
     @Test
     fun commandResultReachesTheExportedReportThroughTheJournal() = runTest {
-        val f = Fixture(this)
+        val f = Fixture(this, listOf(CheckId.R1))
         f.vm.onIntent(User.RunCommand(LabCommand.BEEP))
         advanceUntilIdle()
 
-        assertThat(f.journal.recorded()[CheckId.C4]?.raw).containsExactly("ringerMode", "silent")
+        f.vm.onIntent(User.Export)
+        advanceUntilIdle()
+
+        val results = f.reports.single().results
+        assertThat(results.first { it.id == CheckId.C4 }.status).isEqualTo(CheckStatus.OK)
+        assertThat(results.first { it.id == CheckId.C4 }.raw).containsExactly("ringerMode", "silent")
+        assertThat(results.first { it.id == CheckId.C1 }.status).isEqualTo(CheckStatus.NOT_CHECKED)
     }
 }

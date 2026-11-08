@@ -20,9 +20,13 @@ import ru.restofleet.agent.domain.usecase.GetDeviceInfo
 import ru.restofleet.agent.domain.usecase.GrantSelfPermissions
 import ru.restofleet.agent.domain.usecase.RunCapabilityChecks
 import ru.restofleet.agent.domain.usecase.RunCommandCheck
+import ru.restofleet.agent.presentation.common.BACKGROUND_LAUNCH_DELAY_MS
 import ru.restofleet.agent.presentation.common.guarded
 import ru.restofleet.agent.presentation.deviceowner.viewmodel.DeviceOwnerIntent.User
 import ru.restofleet.agent.presentation.deviceowner.viewmodel.mapper.DeviceOwnerUiStateMapper
+import ru.restofleet.agent.presentation.deviceowner.viewmodel.model.DEVICE_OWNER_ONLY
+import ru.restofleet.agent.presentation.deviceowner.viewmodel.model.canRun
+import ru.restofleet.agent.presentation.deviceowner.viewmodel.model.canRunAll
 import ru.restofleet.agent.presentation.deviceowner.viewmodel.model.DeviceOwnerSession
 import ru.restofleet.console.core.mvi.BaseMviViewModel
 import ru.restofleet.console.core.mvi.MviStore
@@ -32,7 +36,7 @@ import ru.restofleet.shared.kernel.Outcome
 /**
  * Экран Device Owner. Состояние меняется только на главном потоке (scope — `Main.immediate`); use case идут через
  * [io]. Перезагрузка (D2) выполняется только после ответа на диалог: [rebootDecision] ждёт `User.ConfirmReboot`,
- * без ответа корутина просто стоит, `Reboot` не вызывается никогда.
+ * без ответа корутина просто стоит, `Reboot` не вызывается никогда. Правило «строку можно запустить» — `canRun`.
  */
 @Suppress("LongParameterList", "TooManyFunctions") // по одному use case на действие экрана
 class DeviceOwnerViewModel(
@@ -59,9 +63,9 @@ class DeviceOwnerViewModel(
             User.Refresh -> refresh()
             User.RunAll -> runAll()
             is User.RunOne -> runOne(intent.id)
-            User.RunLaunchFromBackground -> if (!isBlocked(CheckId.D5)) {
+            User.RunLaunchFromBackground -> if (state.canRun(CheckId.D5)) {
                 runRow(CheckId.D5) {
-                    delay(BACKGROUND_DELAY_MS)
+                    delay(BACKGROUND_LAUNCH_DELAY_MS)
                     execute(CheckId.D5)
                 }
             }
@@ -96,18 +100,11 @@ class DeviceOwnerViewModel(
         }?.mode
 
     private fun runOne(id: CheckId) {
-        if (isBlocked(id)) return
-        runRow(id) { if (id == CheckId.D2) rebootWithConfirmation() else execute(id) }
+        if (!state.canRun(id)) return
+        runRow(id) { if (id == CheckId.D2) rebootIfConfirmed(awaitRebootConfirmation()) else execute(id) }
     }
 
-    /** Строка не из экрана, DO-строка без роли или D3 без URL/хэша: кнопка недоступна, интент игнорируется. */
-    private fun isBlocked(id: CheckId): Boolean =
-        id !in DeviceOwnerUiStateMapper.ROWS ||
-            (id in DeviceOwnerUiStateMapper.DEVICE_OWNER_ONLY && state.device?.mode == AgentMode.NORMAL) ||
-            (id == CheckId.D3 && skipReasonOfInstall() != null)
-
     private fun runRow(id: CheckId, block: suspend () -> CheckResult) {
-        if (state.isRunningAll || id in state.running) return
         reduce(DeviceOwnerAction.RunStarted(setOf(id)))
         scope.launch {
             try {
@@ -119,22 +116,24 @@ class DeviceOwnerViewModel(
     }
 
     /**
-     * Порядок: D1, D6, R10, R13, D3, D5, D4, затем D2 — последней и только после подтверждения. Без роли Device Owner
-     * строки [DeviceOwnerUiStateMapper.DEVICE_OWNER_ONLY] не исполняются (NA), диалога нет.
+     * Сначала (пока агент на переднем плане) спрашивается подтверждение перезагрузки; затем D1, D6, R10, R13, D3, D5 и
+     * D2 — последней, только если подтвердили. D4 в прогон не входит: она запирает экран в lock task, выйти из
+     * которого можно лишь вне агента. Без роли Device Owner строки [DEVICE_OWNER_ONLY] не исполняются (NA),
+     * диалога нет.
      */
     private fun runAll() {
-        if (state.isRunningAll) return
-        val ids = RUN_ALL_ORDER.toSet()
+        if (!state.canRunAll) return
+        val ids = RUN_ALL_ORDER.toSet() + CheckId.D2
         reduce(DeviceOwnerAction.RunStarted(ids, isAll = true))
         scope.launch {
             try {
                 val isOwner = loadDevice() == AgentMode.DEVICE_OWNER
+                val confirmed = isOwner && awaitRebootConfirmation()
                 for (id in RUN_ALL_ORDER) {
-                    val result = guarded(::emitError) { runAllStep(id, isOwner) }
-                    reduce(
-                        result?.let { DeviceOwnerAction.ResultsArrived(listOf(it)) }
-                            ?: DeviceOwnerAction.RunFinished(setOf(id)),
-                    )
+                    finishStep(id) { runAllStep(id, isOwner) }
+                }
+                finishStep(CheckId.D2) {
+                    if (isOwner) rebootIfConfirmed(confirmed) else notApplicable(CheckId.D2)
                 }
             } finally {
                 reduce(DeviceOwnerAction.RunFinished(ids))
@@ -142,13 +141,21 @@ class DeviceOwnerViewModel(
         }
     }
 
+    private suspend fun finishStep(id: CheckId, block: suspend () -> CheckResult) {
+        val result = guarded(::emitError, block)
+        reduce(
+            result?.let { DeviceOwnerAction.ResultsArrived(listOf(it)) }
+                ?: DeviceOwnerAction.RunFinished(setOf(id)),
+        )
+    }
+
     private suspend fun runAllStep(id: CheckId, isOwner: Boolean): CheckResult = when {
-        id in DeviceOwnerUiStateMapper.DEVICE_OWNER_ONLY && !isOwner ->
-            synthetic(id, CheckStatus.NOT_APPLICABLE, REQUIRES_DEVICE_OWNER)
+        id in DEVICE_OWNER_ONLY && !isOwner -> notApplicable(id)
         id == CheckId.D3 -> skipReasonOfInstall()?.let { synthetic(id, CheckStatus.NOT_CHECKED, it) } ?: execute(id)
-        id == CheckId.D2 -> rebootWithConfirmation()
         else -> execute(id)
     }
+
+    private fun notApplicable(id: CheckId) = synthetic(id, CheckStatus.NOT_APPLICABLE, REQUIRES_DEVICE_OWNER)
 
     /** Причина, по которой D3 нельзя запустить, либо `null`. */
     private fun skipReasonOfInstall(): String? = when {
@@ -157,28 +164,31 @@ class DeviceOwnerViewModel(
         else -> null
     }
 
-    private suspend fun rebootWithConfirmation(): CheckResult {
+    /** Эффект `ConfirmReboot` и ожидание ответа; без ответа корутина стоит, перезагрузка не выполняется. */
+    private suspend fun awaitRebootConfirmation(): Boolean {
         val decision = CompletableDeferred<Boolean>()
         rebootDecision = decision
         emitEffect(DeviceOwnerEffect.ConfirmReboot)
-        val confirmed = try {
+        return try {
             decision.await()
         } finally {
             rebootDecision = null
         }
-        return if (confirmed) {
+    }
+
+    /** Единственное место, где строится `Command.Reboot`: только после подтверждения. */
+    private suspend fun rebootIfConfirmed(confirmed: Boolean): CheckResult =
+        if (confirmed) {
             withContext(io) { runCommand(CheckId.D2, Command.Reboot) }
         } else {
             synthetic(CheckId.D2, CheckStatus.NOT_CHECKED, NOT_RUN)
         }
-    }
 
     private suspend fun execute(id: CheckId): CheckResult {
         val s = state
         val target = s.targetUrl.trim().ifEmpty { null }
         return withContext(io) {
             when (id) {
-                CheckId.D2 -> runCommand(id, Command.Reboot)
                 CheckId.D3 -> runCommand(id, Command.InstallApk(s.apkUrl.trim(), s.apkSha256.trim()))
                 CheckId.D4 -> runCommand(id, Command.LockTask(s.targetPackage.trim(), target))
                 CheckId.D5 -> runCommand(id, Command.LaunchApp(s.targetPackage.trim(), target))
@@ -199,7 +209,8 @@ class DeviceOwnerViewModel(
             try {
                 guarded(::emitError) { withContext(io) { fetchChecksum(url) } }?.let { outcome ->
                     when (outcome) {
-                        is Outcome.Success -> {
+                        // Адрес мог измениться, пока шёл запрос: хэш старого адреса к новому не применяется
+                        is Outcome.Success -> if (state.apkUrl.trim() == url) {
                             reduce(DeviceOwnerAction.ApkSha256Changed(outcome.value))
                             emitEffect(DeviceOwnerEffect.ShowMessage(DeviceOwnerMessage.HashFetched))
                         }
@@ -221,10 +232,7 @@ class DeviceOwnerViewModel(
 
     private companion object {
         val REFRESH_IDS = listOf(CheckId.D1, CheckId.R10, CheckId.R13)
-        val RUN_ALL_ORDER = listOf(
-            CheckId.D1, CheckId.D6, CheckId.R10, CheckId.R13, CheckId.D3, CheckId.D5, CheckId.D4, CheckId.D2,
-        )
-        const val BACKGROUND_DELAY_MS = 10_000L
+        val RUN_ALL_ORDER = listOf(CheckId.D1, CheckId.D6, CheckId.R10, CheckId.R13, CheckId.D3, CheckId.D5)
         const val REQUIRES_DEVICE_OWNER = "requires_device_owner"
         const val SKIPPED_NO_URL = "пропущено: нет URL"
         const val SKIPPED_NO_HASH = "пропущено: нет хэша"

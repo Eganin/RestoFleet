@@ -17,41 +17,54 @@ class SerialCollectorTest {
 
     @Test
     fun serialIsReturned() {
-        assertThat(SerialCollector { "R58M123ABC" }.read()).isEqualTo(Reading.Available("R58M123ABC"))
+        assertThat(SerialCollector(getSerial = { "R58M123ABC" }).read()).isEqualTo(Reading.Available("R58M123ABC"))
     }
 
     @Test
     fun unknownIsFailed() {
-        assertThat(SerialCollector { "unknown" }.read()).isEqualTo(serialUnknown)
+        assertThat(SerialCollector(getSerial = { "unknown" }).read()).isEqualTo(serialUnknown)
     }
 
     @Test
     fun blankIsFailed() {
-        assertThat(SerialCollector { "  " }.read()).isEqualTo(serialUnknown)
+        assertThat(SerialCollector(getSerial = { "  " }).read()).isEqualTo(serialUnknown)
     }
 
-    private fun denied(api: Int) =
-        SerialCollector(ApiLevel { api }) { throw SecurityException("requires READ_PRIVILEGED_PHONE_STATE") }.read()
+    private fun denied(api: Int, deviceOwner: Boolean = false) =
+        SerialCollector(ApiLevel { api }, DeviceOwnerRole { deviceOwner }) {
+            throw SecurityException("requires READ_PRIVILEGED_PHONE_STATE")
+        }.read()
 
     @Test
-    fun securityExceptionOnApi26To28IsMissingReadPhoneState() {
+    fun securityExceptionOnApi26To28IsMissingReadPhoneStateForAnyRole() {
         for (api in 26..28) {
-            assertThat(denied(api))
+            for (owner in listOf(true, false)) {
+                assertThat(denied(api, owner))
+                    .isEqualTo(Reading.Unavailable(UnavailableReason.PermissionMissing("READ_PHONE_STATE")))
+            }
+        }
+    }
+
+    @Test
+    fun deviceOwnerWithoutReadPhoneStateOnApi29PlusNeedsThePermission() {
+        // решение 118: на API 36 владелец устройства получает серийный номер только при выданном READ_PHONE_STATE
+        for (api in listOf(29, 34, 36, 37)) {
+            assertThat(denied(api, deviceOwner = true))
                 .isEqualTo(Reading.Unavailable(UnavailableReason.PermissionMissing("READ_PHONE_STATE")))
         }
     }
 
     @Test
-    fun securityExceptionOnApi29PlusMeansNotDeviceOwner() {
-        // с API 29 разрешение READ_PHONE_STATE не помогает: серийный номер отдаётся только Device Owner
+    fun nonDeviceOwnerOnApi29PlusRequiresDeviceOwner() {
         for (api in listOf(29, 34, 37)) {
-            assertThat(denied(api)).isEqualTo(Reading.Unavailable(UnavailableReason.RequiresDeviceOwner))
+            assertThat(denied(api, deviceOwner = false))
+                .isEqualTo(Reading.Unavailable(UnavailableReason.RequiresDeviceOwner))
         }
     }
 
     @Test
     fun otherFailuresAreIsolated() {
-        val reading = SerialCollector { error("boom") }.read()
+        val reading = SerialCollector(getSerial = { error("boom") }).read()
         assertThat(reading).isEqualTo(Reading.Unavailable(UnavailableReason.Failed("boom")))
     }
 

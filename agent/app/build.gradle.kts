@@ -58,6 +58,11 @@ abstract class GenerateStandTrustTask : DefaultTask() {
         root.deleteRecursively()
         val xmlDir = root.resolve("xml").apply { mkdirs() }
         val ca = standCa.orNull?.asFile
+        ca?.readText()?.let { pem ->
+            // В APK попадает только публичный сертификат: ключ или произвольный файл по -PstandCaPath — отказ сборки
+            check("-----BEGIN CERTIFICATE-----" in pem) { "stand CA file must be a PEM certificate" }
+            check("PRIVATE KEY" !in pem) { "stand CA file must not contain a private key" }
+        }
         val overrides = if (ca != null) {
             root.resolve("raw").apply { mkdirs() }.resolve("stand_ca.pem").writeBytes(ca.readBytes())
             "<debug-overrides>\n        <trust-anchors>\n" +
@@ -113,6 +118,9 @@ androidComponents {
             mergedManifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
         }
         tasks.named("check") { dependsOn(verify) }
+        // и сама сборка release-артефакта (APK и bundle), а не только `check`
+        tasks.matching { it.name == "assembleRelease" || it.name == "bundleRelease" }
+            .configureEach { dependsOn(verify) }
     }
 }
 
