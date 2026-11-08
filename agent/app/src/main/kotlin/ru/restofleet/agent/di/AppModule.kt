@@ -30,6 +30,7 @@ import ru.restofleet.agent.data.di.checksModule
 import ru.restofleet.agent.data.di.commandModule
 import ru.restofleet.agent.data.di.deviceAdminModule
 import ru.restofleet.agent.data.di.lifecycleModule
+import ru.restofleet.agent.data.di.storageModule
 import ru.restofleet.agent.data.lifecycle.ServiceStarter
 import ru.restofleet.agent.data.lifecycle.WatchdogSchedule
 import ru.restofleet.agent.data.report.InMemoryCheckResultJournal
@@ -55,7 +56,7 @@ import ru.restofleet.shared.kernel.SystemClock
 
 /** Composition root агента: платформенные части `agent:app` + модули `agent:data`. */
 val appModule: Module = module {
-    includes(checksModule, lifecycleModule, deviceAdminModule, commandModule)
+    includes(checksModule, lifecycleModule, deviceAdminModule, commandModule, storageModule)
 
     single<Clock> { SystemClock }
     single<CoroutineDispatcher>(AGENT_DISPATCHER) { Dispatchers.IO }

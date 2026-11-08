@@ -6,8 +6,8 @@
 
 - **Этап:** MVP-A (эмуляторы) · **ветка:** `stage/0-mvp`
 - **План:** `docs/superpowers/plans/2026-11-05-mvp-a.md`
-- **Последняя завершённая задача:** 3.2 домен MQTT: порты MessagePublisher/BrokerSession/Outbox/ProcessedCommands/ShadowStore, модели, мапперы domain↔протокол по golden-фикстурам
-- **Следующая задача:** 3.3 хранилище: Room Outbox, ProcessedCommands, ShadowStore
+- **Последняя завершённая задача:** 3.3 хранилище: Room Outbox (10 000, FIFO по приоритету) и журнал ProcessedCommands (200), storageModule
+- **Следующая задача:** 3.4 исходящий поток: публикация, досылка outbox, приём команд
 - **Блокеры:** GitHub-remote не настроен (CI заработает после пуша)
 - **Как поднять стенд:** `deploy/README.md` (4 команды + `./test-stand.sh`); нужен `local.properties` с `sdk.dir` для сборки.
 - **Исполнение:** M0 — в основной сессии; M1–M4 — субагенты (исполнитель + ревьюер на задачу).
@@ -50,3 +50,4 @@
 | 2026-11-08 | 2.5 раунд 1: исправления ревью (I1, I2, m1–m10) | см. `git log` | тесты зелёные, rerun presentation/app rc=0; покрытие строк: presentation 98,3, data 97,8, domain 98,5, app 98,1, проект 97,4; I2 проверен на rf-api36 и rf-api36-do (решения 118-119) |
 | 2026-11-08 | 3.1 DynSec: роль device с %u-ACL, operator-dev, 15 dev-клиентов | см. `git log` | test-dynsec-dev.sh 16 проверок PASS (RED -> GREEN), test-stand.sh зелёный, build detekt koverVerifyCi konsist rc=0; M2 ✅; решения 120-122 |
 | 2026-11-09 | 3.2 домен MQTT: порты MessagePublisher/BrokerSession/Outbox/ProcessedCommands/ShadowStore, модели, мапперы domain↔протокол по golden-фикстурам | см. `git log` | мапперы 40 тестов (+9 domain), agent:data 518 тестов, строки: data 97,8 %, domain 98,5 %, проект 97,4 %, полная сборка rc=0; решения 123-127 |
+| 2026-11-09 | 3.3 хранилище: Room Outbox (10 000, FIFO по приоритету) и журнал ProcessedCommands (200), storageModule | см. `git log` | agent:data 538 тестов, строки проекта 98,1 %, 3 прогона --rerun rc=0, полная сборка rc=0; решения 128-130 |

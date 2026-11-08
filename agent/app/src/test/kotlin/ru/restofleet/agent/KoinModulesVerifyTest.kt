@@ -18,6 +18,7 @@ import ru.restofleet.agent.data.di.checksModule
 import ru.restofleet.agent.data.di.deviceAdminModule
 import ru.restofleet.agent.data.platform.FreeFallDetector
 import ru.restofleet.agent.data.di.lifecycleModule
+import ru.restofleet.agent.data.di.storageModule
 import ru.restofleet.agent.data.lifecycle.WatchdogSchedule
 import ru.restofleet.agent.di.appModule
 import ru.restofleet.agent.domain.usecase.RunCapabilityChecks
@@ -77,5 +78,10 @@ class KoinModulesVerifyTest {
     @Test
     fun lifecycleModuleIsCompleteGivenClockAndWatchdog() {
         lifecycleModule.verify(extraTypes = platformTypes + listOf(Clock::class, WatchdogSchedule::class))
+    }
+
+    @Test
+    fun storageModuleIsComplete() {
+        storageModule.verify(extraTypes = platformTypes)
     }
 }
