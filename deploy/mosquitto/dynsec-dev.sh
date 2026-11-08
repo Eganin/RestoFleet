@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+# Провижининг DynSec для dev-стенда: роли device и operator-dev, клиенты dev-emu-26..37, dev-do-26, dev-do-36, operator.
+# Идемпотентен: роли и ACL применяются заново, существующие клиенты пропускаются (пароль не меняется).
+# Пароли новых клиентов печатаются ОДИН раз — в deploy/out/dev-credentials.txt (600): "<username> <password>" на строку.
+# Команды уходят в контейнер через stdin, поэтому пароли не попадают в argv процессов хоста (в контейнере — на миг).
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+[ -f .env ] || fail "нет deploy/.env (см. deploy/README.md)"
+set -a; . ./.env; set +a
+: "${DYNSEC_ADMIN_PASSWORD:?DYNSEC_ADMIN_PASSWORD is not set (deploy/.env)}"
+
+creds=out/dev-credentials.txt
+clients=()
+for api in 26 27 28 29 30 31 32 33 34 35 36 37; do clients+=("dev-emu-$api"); done
+clients+=(dev-do-26 dev-do-36)
+
+# Топики, доступные устройству на публикацию / на получение (P5: всё остальное запрещено)
+publish_topics=(status telemetry probe events shadow/reported cmd/res)
+receive_topics=(shadow/desired cmd/req)
+
+# Выполняет stdin как sh-скрипт в контейнере брокера; ctrl — обёртка mosquitto_ctrl под admin
+in_broker() {
+  {
+    printf '%s\n' "ctrl() { mosquitto_ctrl -h localhost -p 8883 --cafile /mosquitto/certs/ca.crt -u admin -P '$DYNSEC_ADMIN_PASSWORD' \"\$@\"; }"
+    cat
+  } | docker compose exec -T mosquitto sh -s
+}
+
+existing="$(echo 'ctrl dynsec listClients' | in_broker)" || fail "не удалось получить список клиентов"
+grep -qx admin <<<"$existing" || fail "брокер не отвечает как admin (listClients): $(head -c 200 <<<"$existing")"
+has_client() { grep -qx -- "$1" <<<"$existing"; }
+
+umask 077
+mkdir -p out
+chmod 700 out
+touch "$creds"
+chmod 600 "$creds"
+
+# Новые клиенты: пароль генерируется на хосте и сразу записывается в файл учёток
+new_clients=()
+for name in "${clients[@]}" operator; do
+  has_client "$name" && continue
+  new_clients+=("$name")
+done
+script="$(mktemp)"
+tmp_new="$(mktemp)"
+trap 'rm -f "$script" "$tmp_new"' EXIT
+chmod 600 "$script" "$tmp_new"
+
+{
+  cat <<'SH'
+set -eu
+# mosquitto_ctrl возвращает 0 даже при ошибке команды, поэтому смотрим на текст ответа
+run() {
+  out="$(ctrl dynsec "$@" 2>&1)" || { echo "FAIL: dynsec $1 $2: $out"; exit 1; }
+  case "$out" in *rror*) echo "FAIL: dynsec $1 $2: $out"; exit 1 ;; esac
+}
+try() { ctrl dynsec "$@" >/dev/null 2>&1 || true; }
+has_role() { ctrl dynsec listRoles 2>&1 | grep -qx "$1"; }
+
+# P5: всё запрещено по умолчанию; отписка безвредна, но запрет ломает чистое отключение
+run setDefaultACLAccess publishClientSend deny
+run setDefaultACLAccess publishClientReceive deny
+run setDefaultACLAccess subscribe deny
+run setDefaultACLAccess unsubscribe allow
+
+has_role device || run createRole device
+has_role operator-dev || run createRole operator-dev
+SH
+  # ACL применяются при каждом запуске: сначала снимаем старые, потом добавляем
+  for t in "${publish_topics[@]}"; do
+    echo "try removeRoleACL device publishClientSend rf/v1/dev/%u/$t"
+    echo "run addRoleACL device publishClientSend rf/v1/dev/%u/$t allow"
+  done
+  for t in "${receive_topics[@]}"; do
+    echo "try removeRoleACL device subscribePattern rf/v1/dev/%u/$t"
+    echo "run addRoleACL device subscribePattern rf/v1/dev/%u/$t allow"
+    echo "try removeRoleACL device publishClientReceive rf/v1/dev/%u/$t"
+    echo "run addRoleACL device publishClientReceive rf/v1/dev/%u/$t allow"
+  done
+  for acl in publishClientSend publishClientReceive subscribePattern; do
+    echo "try removeRoleACL operator-dev $acl rf/v1/#"
+    echo "run addRoleACL operator-dev $acl rf/v1/# allow"
+  done
+
+  for name in "${new_clients[@]}"; do
+    pw="$(openssl rand -base64 32)"
+    printf '%s %s\n' "$name" "$pw" >>"$tmp_new"
+    if [ "$name" = operator ]; then
+      # clientId не фиксируется: одновременно нужны mosquitto_sub и mosquitto_pub
+      echo "run createClient operator -p '$pw'"
+      echo "run addClientRole operator operator-dev"
+    else
+      echo "run createClient $name -p '$pw'"
+      echo "run setClientId $name $name"
+      echo "run addClientRole $name device"
+    fi
+  done
+  # Файл учёток — источник истины: если прошлый запуск оборвался, старую строку нового клиента заменяем
+  if [ -s "$tmp_new" ]; then
+    keep="$(mktemp)"
+    chmod 600 "$keep"
+    awk 'NR==FNR { drop[$1]=1; next } !($1 in drop)' "$tmp_new" "$creds" >"$keep"
+    cat "$tmp_new" >>"$keep"
+    mv "$keep" "$creds"
+  fi
+} >"$script"
+
+in_broker <"$script" || fail "провижининг DynSec не завершился (см. вывод выше)"
+
+for name in "${clients[@]}" operator; do
+  has_client "$name" && [ -z "$(awk -v n="$name" '$1==n' "$creds")" ] \
+    && echo "WARN: клиент $name уже есть в брокере, но его пароля нет в $creds (пароль не менялся)" >&2
+done
+
+echo "DynSec: роли device, operator-dev готовы; новых клиентов: ${#new_clients[@]}; учётки: deploy/$creds ($(wc -l <"$creds" | tr -d ' ') строк)"

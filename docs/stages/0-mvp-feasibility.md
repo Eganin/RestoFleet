@@ -92,7 +92,7 @@
 | ID | Что проверяем | Итог |
 |---|---|---|
 | M1 | TLS 8883 с CA стенда: с эмулятора (`10.0.2.2`) и реального устройства (IP машины в LAN) | ⏳ |
-| M2 | DynSec: роль `device` с `%u`-ACL по направлениям; публикация в чужой/запрещённый топик отклоняется | ⏳ |
+| M2 | DynSec: роль `device` с `%u`-ACL по направлениям; публикация в чужой/запрещённый топик отклоняется | ✅ 2026-11-08 (`deploy/mosquitto/test-dynsec-dev.sh`, MQTT 5, Mosquitto 2.1.2): `dev-emu-36` → свой `telemetry` доходит до `operator`; → `dev-emu-31/telemetry` и → свой `cmd/req` отклонены (`Publish 1 failed: Not authorized` = PUBACK 0x87), `operator` ничего не получил; `-i other` → `Connection error: Not authorized`; SUBACK 0x87 на чужой `cmd/req`, на `#` и на свой `telemetry`, на свои `cmd/req` и `shadow/desired` — QoS 1; `operator` → `cmd/req` доходит до устройства; повторный запуск провижининга rc=0, учётки не изменились. Агент в чужой топик из Lab — в 3.x |
 | M3 | LWT с `connId` при выключении сети; время до `offline` ≈ keepalive × 1,5 | ⏳ |
 | M4 | Retained `desired` получен при подключении, `reported` опубликован с той же версией | ⏳ |
 | M5 | Команда с `Response Topic`, `Correlation Data`, `Message Expiry` (`mosquitto_pub -D publish …`); ответы `received` → `succeeded` | ⏳ |

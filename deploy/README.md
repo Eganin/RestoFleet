@@ -28,6 +28,9 @@ docker compose up -d --wait                               # брокер и apk-
 | `apk/` | `waiter-4.N.apk` и `waiter-4.N.apk.sha256`, собирает `tools/dev/build-dummy-apk.sh` | **нет** |
 | `mosquitto/mosquitto.conf` | конфигурация брокера | да |
 | `mosquitto/init-dynsec.sh` | однократная инициализация DynSec | да |
+| `mosquitto/dynsec-dev.sh` | роли `device`, `operator-dev` и dev-клиенты (идемпотентно) | да |
+| `mosquitto/test-dynsec-dev.sh` | проверка ACL и идемпотентности на живом стенде | да |
+| `out/dev-credentials.txt` | пароли dev-клиентов, `<username> <password>`, права 600 | **нет** |
 | `.env` | `DYNSEC_ADMIN_PASSWORD` | **нет** |
 
 SAN серверного сертификата: `localhost`, `mosquitto`, `apk-host`, `127.0.0.1`, `10.0.2.2` (хост из эмулятора), IP машины в LAN (реальные устройства, MVP-B). После смены сети машины — перезапустить `./certs/make-ca.sh <новый IP>` и `docker compose restart mosquitto`; CA при этом не меняется, агент перевыпуска не требует.
@@ -55,7 +58,30 @@ docker compose exec mosquitto mosquitto_sub -h localhost -p 8883 --cafile /mosqu
   -u admin -P "$DYNSEC_ADMIN_PASSWORD" -t '$SYS/broker/version' -C 1
 ```
 
-**`admin` после `dynsec init` имеет полный доступ**: управляет DynSec (`$CONTROL/dynamic-security/#`) и может читать все топики (`subscribePattern #`). Поэтому его пароль хранится только в `deploy/.env` и передаётся лишь одноразовому `dynsec-init` — у брокера его нет ни в окружении, ни в healthcheck (healthcheck проверяет, что анонимный клиент получает CONNACK «not authorised»). Роли `device` и `operator-dev` и учётки устройств создаёт `mosquitto/dynsec-dev.sh` (задача 3.1).
+**`admin` после `dynsec init` имеет полный доступ**: управляет DynSec (`$CONTROL/dynamic-security/#`) и может читать все топики (`subscribePattern #`). Поэтому его пароль хранится только в `deploy/.env` и передаётся лишь одноразовому `dynsec-init` — у брокера его нет ни в окружении, ни в healthcheck (healthcheck проверяет, что анонимный клиент получает CONNACK «not authorised»). Роли `device` и `operator-dev` и учётки устройств создаёт `mosquitto/dynsec-dev.sh` (см. ниже).
+
+## Учётки устройств (DynSec)
+
+```bash
+mosquitto/dynsec-dev.sh        # из deploy/, после `docker compose up -d --wait`
+mosquitto/test-dynsec-dev.sh   # проверка ACL: PASS/FAIL, код возврата != 0 при провале
+```
+
+Скрипт создаёт роль `device` (по умолчанию всё запрещено): публикация в `rf/v1/dev/%u/{status,telemetry,probe,events,shadow/reported,cmd/res}`, подписка и получение только `rf/v1/dev/%u/shadow/desired` и `rf/v1/dev/%u/cmd/req`. `%u` — имя клиента, оно же `clientId` (`setClientId`), поэтому устройство не может ни подключиться под чужим `clientId`, ни писать в чужие топики. Клиенты: `dev-emu-26` … `dev-emu-37` (эмуляторы по уровню API), `dev-do-26`, `dev-do-36` (эмуляторы с Device Owner), `operator` (роль `operator-dev`: всё на `rf/v1/#`, `clientId` не фиксирован).
+
+- **Пароли** (`openssl rand -base64 32`) выводятся один раз: в `deploy/out/dev-credentials.txt` (права 600, в git не попадает), по строке `<username> <password>`. В терминал и логи скрипт их не печатает. Агенту/эмулятору пароль берётся оттуда: `awk '$1=="dev-emu-36" {print $2}' out/dev-credentials.txt`.
+- **Повторный запуск** безопасен: ACL применяются заново, существующие клиенты пропускаются (пароль не меняется, файл не дописывается).
+- **Добавить клиента:** внести имя в массив `clients` в `mosquitto/dynsec-dev.sh` и запустить скрипт; пароль появится в файле учёток. Потерянный пароль: `mosquitto_ctrl … dynsec deleteClient <имя>`, затем скрипт.
+- **Подписка оператором на всё** (замена MQTT Explorer, без окон):
+
+```bash
+set -a; . ./.env; set +a
+PW="$(awk '$1=="operator" {print $2}' out/dev-credentials.txt)"
+docker compose exec -T mosquitto mosquitto_sub -h localhost -p 8883 --cafile /mosquitto/certs/ca.crt \
+  -V mqttv5 -u operator -P "$PW" -i op-sub -t 'rf/v1/#' -v
+```
+
+Публикация команды: тот же вызов с `mosquitto_pub -i op-pub -q 1 -t rf/v1/dev/<id>/cmd/req -m '…'`. Пароль попадает в argv процесса контейнера (dev-стенд), на хосте — только в переменную оболочки.
 
 ## Сброс стенда
 

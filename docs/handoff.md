@@ -6,8 +6,8 @@
 
 - **Этап:** MVP-A (эмуляторы) · **ветка:** `stage/0-mvp`
 - **План:** `docs/superpowers/plans/2026-11-05-mvp-a.md`
-- **Последняя завершённая задача:** 2.5 раунд 1: исправления ревью (I1, I2, m1–m10)
-- **Следующая задача:** 2.6 закрытие M2 — отчёт и handoff
+- **Последняя завершённая задача:** 3.1 DynSec: роль device с %u-ACL, operator-dev, 15 dev-клиентов
+- **Следующая задача:** 3.2 домен MQTT, outbox-порт, маппинг domain ↔ протокол
 - **Блокеры:** GitHub-remote не настроен (CI заработает после пуша)
 - **Как поднять стенд:** `deploy/README.md` (4 команды + `./test-stand.sh`); нужен `local.properties` с `sdk.dir` для сборки.
 - **Исполнение:** M0 — в основной сессии; M1–M4 — субагенты (исполнитель + ревьюер на задачу).
@@ -48,3 +48,4 @@
 | 2026-11-08 | 2.4 раунд 1: исправления ревью (I1–I3, m1–m9) | см. `git log` | тесты command 48 (+17), мутанты I2/I3 убиты; решение 114 |
 | 2026-11-08 | 2.5 экран Device Owner и команды в Lab | см. `git log` | тесты зелёные, 3 прогона presentation/app rc=0; покрытие строк: presentation 98,1, data 97,8, domain 98,5, app 98,1, проект 97,4; ручная проверка DO на rf-api36-do: D1-D3, D2 reboot, R10, R13 ок; D4-D6, C2-C4 с оговорками (решения 115-117) |
 | 2026-11-08 | 2.5 раунд 1: исправления ревью (I1, I2, m1–m10) | см. `git log` | тесты зелёные, rerun presentation/app rc=0; покрытие строк: presentation 98,3, data 97,8, domain 98,5, app 98,1, проект 97,4; I2 проверен на rf-api36 и rf-api36-do (решения 118-119) |
+| 2026-11-08 | 3.1 DynSec: роль device с %u-ACL, operator-dev, 15 dev-клиентов | см. `git log` | test-dynsec-dev.sh 16 проверок PASS (RED -> GREEN), test-stand.sh зелёный, build detekt koverVerifyCi konsist rc=0; M2 ✅; решения 120-122 |
