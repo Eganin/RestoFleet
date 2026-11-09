@@ -189,7 +189,10 @@ class DeviceOwnerViewModel(
         val target = s.targetUrl.trim().ifEmpty { null }
         return withContext(io) {
             when (id) {
-                CheckId.D3 -> runCommand(id, Command.InstallApk(s.apkUrl.trim(), s.apkSha256.trim()))
+                CheckId.D3 -> runCommand(
+                    id,
+                    Command.InstallApk(s.targetPackage.trim(), s.apkUrl.trim(), s.apkSha256.trim()),
+                )
                 CheckId.D4 -> runCommand(id, Command.LockTask(s.targetPackage.trim(), target))
                 CheckId.D5 -> runCommand(id, Command.LaunchApp(s.targetPackage.trim(), target))
                 CheckId.D6 -> grantPermissions()

@@ -32,6 +32,15 @@ class AgentTabHostTest {
     }
 
     @Test
+    fun withoutADeviceOwnerTabThereIsNoTabRowAndOnlyLabIsShown() {
+        rule.setContent { AgentTabHost(lab = { Text("lab-content") }, deviceOwner = null) }
+
+        rule.onNodeWithText("lab-content").assertExists()
+        rule.onNodeWithText("Device Owner").assertDoesNotExist()
+        rule.onNodeWithText("Lab").assertDoesNotExist()
+    }
+
+    @Test
     fun clickingTheDeviceOwnerTabSwitchesTheContentAndBack() {
         content()
 

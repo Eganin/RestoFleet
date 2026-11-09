@@ -146,8 +146,21 @@ class DeviceOwnerViewModelTest {
         f.vm.onIntent(User.RunOne(CheckId.D3))
         advanceUntilIdle()
 
-        assertThat(f.commands()).containsExactly("install:$apk:$sha")
+        assertThat(f.commands()).containsExactly("install:ru.restofleet.dummy.waiter:$apk:$sha")
         assertThat(f.row("D3").badge).isEqualTo(Badge.OK)
+    }
+
+    @Test
+    fun d3InstallsThePackageFromTheTargetField() = runTest {
+        val f = Fixture(this)
+        f.setUrlAndHash()
+        f.vm.onIntent(User.EditTargetPackage(" com.example.other "))
+        advanceUntilIdle()
+
+        f.vm.onIntent(User.RunOne(CheckId.D3))
+        advanceUntilIdle()
+
+        assertThat(f.commands()).containsExactly("install:com.example.other:$apk:$sha")
     }
 
     @Test
@@ -436,7 +449,7 @@ class DeviceOwnerViewModelTest {
     }
 
     private val stepsWithoutReboot = listOf(
-        "check:D1", "grant", "check:R10", "check:R13", "install:$apk:$sha",
+        "check:D1", "grant", "check:R10", "check:R13", "install:ru.restofleet.dummy.waiter:$apk:$sha",
         "launch:ru.restofleet.dummy.waiter:null:DIRECT_DO",
     )
 

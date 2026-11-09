@@ -23,7 +23,7 @@ import ru.restofleet.agent.presentation.common.BadgeMark
 import ru.restofleet.agent.presentation.deviceowner.viewmodel.DeviceOwnerIntent
 import ru.restofleet.agent.presentation.deviceowner.viewmodel.DeviceOwnerRowUi
 
-/** Строка проверки с кнопкой «Запустить» (у D5 ещё и «Через 10 с», чтобы успеть нажать Home). */
+/** Строка проверки с кнопкой «Запустить» (у D5 ещё и «Через 30 с», чтобы успеть нажать Home). */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun DeviceOwnerRow(

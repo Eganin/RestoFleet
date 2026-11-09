@@ -169,7 +169,8 @@ class LabUiStateMapperTest {
 
     @Test
     fun commandsSectionShowsFieldsAndFourButtonsOnTheAllTab() {
-        val commands = mapper.map(LabSession(commandPackage = "a.b", commandUrl = "https://h")).commands!!
+        val session = LabSession(commandPackage = "a.b", commandUrl = "https://h", commandsAvailable = true)
+        val commands = mapper.map(session).commands!!
 
         assertThat(commands.pkg).isEqualTo("a.b")
         assertThat(commands.url).isEqualTo("https://h")
@@ -181,7 +182,7 @@ class LabUiStateMapperTest {
 
     @Test
     fun commandsSectionDefaultsToTheDummyWaiterAndEmptyUrl() {
-        val commands = mapper.map(LabSession()).commands!!
+        val commands = mapper.map(LabSession(commandsAvailable = true)).commands!!
 
         assertThat(commands.pkg).isEqualTo("ru.restofleet.dummy.waiter")
         assertThat(commands.url).isEmpty()
@@ -189,10 +190,16 @@ class LabUiStateMapperTest {
 
     @Test
     fun runningCommandMarksOnlyItsButton() {
-        val commands = mapper.map(LabSession(running = setOf(CheckId.C3))).commands!!
+        val commands = mapper.map(LabSession(running = setOf(CheckId.C3), commandsAvailable = true)).commands!!
 
         assertThat(commands.buttons.filter { it.isRunning }.map { it.command })
             .containsExactly(LabCommand.LAUNCH_APP_DELAYED)
+    }
+
+    @Test
+    fun commandsSectionIsAbsentWhenCommandsAreNotAvailable() {
+        assertThat(mapper.map(LabSession()).commands).isNull()
+        assertThat(mapper.map(LabSession(filter = LabFilter.ALL, commandsAvailable = false)).commands).isNull()
     }
 
     @Test

@@ -18,11 +18,12 @@ import ru.restofleet.agent.domain.port.UserNotifier
 
 /**
  * Проводка Koin портов команд обычного режима C1–C4; логики здесь нет. Нужны извне: `Clock`, `AGENT_DISPATCHER`,
- * `DeviceOwnerRole` и `DevicePermissions` (из `checksModule` и `lifecycleModule`).
+ * `DeviceOwnerRole`, `DevicePermissions` и `LockTaskState` (из `checksModule`, `lifecycleModule`,
+ * `deviceAdminModule`).
  */
 val commandModule: Module = module {
     single { NotificationIds(get()) }
-    single<CapabilitiesSource> { AndroidCapabilitiesSource(get(), get()) }
+    single<CapabilitiesSource> { AndroidCapabilitiesSource(get(), get(), get()) }
     single<UserNotifier> { NotificationUserNotifier(androidContext(), get(), get(), get()) }
     single<AppLauncher> { AndroidAppLauncher(androidContext(), get(), get()) }
     // Свой scope адаптера: остановка не зависит от вызывающей корутины; подготовка звука — на AGENT_DISPATCHER

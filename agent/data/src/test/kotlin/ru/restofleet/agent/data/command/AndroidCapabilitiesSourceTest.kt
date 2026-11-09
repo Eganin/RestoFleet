@@ -17,6 +17,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.Implementation
 import org.robolectric.annotation.Implements
+import ru.restofleet.agent.data.deviceadmin.LockTaskState
 import ru.restofleet.agent.data.lifecycle.AndroidWizardPermissions
 import ru.restofleet.agent.domain.capability.AgentMode
 import ru.restofleet.agent.domain.capability.Permission
@@ -39,9 +40,16 @@ class AndroidCapabilitiesSourceTest {
     private val app = context as Application
     private var owner = false
     private var api = 34
+    private var kioskActive = false
+    private var kioskAllowed = emptySet<String>()
+    private val lockTask = object : LockTaskState {
+        override fun isActive() = kioskActive
+
+        override fun allowedPackages() = kioskAllowed
+    }
 
     private fun current() = runBlocking {
-        AndroidCapabilitiesSource({ owner }, AndroidWizardPermissions(context), { api }).current()
+        AndroidCapabilitiesSource({ owner }, AndroidWizardPermissions(context), lockTask, { api }).current()
     }
 
     private fun usageAccess(mode: Int) = shadowOf(context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager)
@@ -54,6 +62,31 @@ class AndroidCapabilitiesSourceTest {
         api = 33
         assertThat(current().mode).isEqualTo(AgentMode.DEVICE_OWNER)
         assertThat(current().apiLevel).isEqualTo(33)
+    }
+
+    @Test
+    fun noKioskByDefault() {
+        assertThat(current().kioskActive).isFalse()
+        assertThat(current().kioskPackages).isEmpty()
+    }
+
+    @Test
+    fun kioskStateAndAllowlistComeFromLockTaskState() {
+        kioskActive = true
+        kioskAllowed = setOf(context.packageName, "ru.restofleet.dummy.waiter")
+
+        val caps = current()
+
+        assertThat(caps.kioskActive).isTrue()
+        assertThat(caps.kioskPackages).containsExactly(context.packageName, "ru.restofleet.dummy.waiter")
+    }
+
+    @Test
+    fun allowlistIsNotReadWhenThereIsNoKiosk() {
+        kioskActive = false
+        kioskAllowed = setOf("a.b")
+
+        assertThat(current().kioskPackages).isEmpty()
     }
 
     @Test

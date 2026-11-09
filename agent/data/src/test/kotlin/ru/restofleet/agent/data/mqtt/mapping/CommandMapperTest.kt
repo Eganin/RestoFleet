@@ -124,11 +124,22 @@ class CommandMapperTest {
 
     @Test
     fun installUpdateValidAndInvalid() {
-        assertThat(parse("install_update", """{"url":"https://h/a.apk","sha256":"ab12"}""").command)
-            .isEqualTo(Command.InstallApk("https://h/a.apk", "ab12"))
-        assertInvalid(parse("install_update", """{"sha256":"ab12"}"""), "install_update", "url")
-        assertInvalid(parse("install_update", """{"url":"https://h/a.apk"}"""), "install_update", "sha256")
-        assertInvalid(parse("install_update", """{"url":"u","sha256":false}"""), "install_update", "sha256")
+        assertThat(parse("install_update", """{"package":"a.b","url":"https://h/a.apk","sha256":"ab12"}""").command)
+            .isEqualTo(Command.InstallApk("a.b", "https://h/a.apk", "ab12"))
+        assertInvalid(parse("install_update", """{"package":"a.b","sha256":"ab12"}"""), "install_update", "url")
+        assertInvalid(parse("install_update", """{"package":"a.b","url":"https://h/a"}"""), "install_update", "sha256")
+        assertInvalid(parse("install_update", """{"package":"a.b","url":"u","sha256":1}"""), "install_update", "sha256")
+    }
+
+    @Test
+    fun installUpdateWithoutAPackageIsAParseErrorNotAnInstallOfAnything() {
+        val withoutPackage = parse("install_update", """{"url":"https://h/a.apk","sha256":"ab12"}""")
+        assertInvalid(withoutPackage, "install_update", "package")
+        assertThat(withoutPackage.command).isNull()
+        val empty = parse("install_update", """{"package":"","url":"https://h/a","sha256":"ab"}""")
+        assertInvalid(empty, "install_update", "package")
+        val number = parse("install_update", """{"package":5,"url":"https://h/a","sha256":"ab"}""")
+        assertInvalid(number, "install_update", "package")
     }
 
     @Test

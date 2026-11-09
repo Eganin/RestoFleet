@@ -1,6 +1,7 @@
 package ru.restofleet.agent.domain.usecase
 
 import com.google.common.truth.Truth.assertThat
+import ru.restofleet.agent.domain.error.InvalidChecksumUrl
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import ru.restofleet.agent.domain.fake.TestError

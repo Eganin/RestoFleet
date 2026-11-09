@@ -62,8 +62,10 @@ class DeviceOwnerUiStateMapperTest {
     }
 
     @Test
-    fun ownerIsTheAgentPackage() {
+    fun ownerIsTheAgentPackageOnlyInDeviceOwnerMode() {
         assertThat(mapper.map(session()).owner).isEqualTo("ru.restofleet.agent")
+        assertThat(mapper.map(session(normal)).owner).isEqualTo("—")
+        assertThat(mapper.map(session(device = null)).owner).isEqualTo("—")
     }
 
     @Test

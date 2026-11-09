@@ -23,6 +23,7 @@ import ru.restofleet.agent.data.di.storageModule
 import ru.restofleet.agent.data.lifecycle.WatchdogSchedule
 import ru.restofleet.agent.di.appModule
 import ru.restofleet.agent.domain.usecase.RunCapabilityChecks
+import ru.restofleet.agent.domain.usecase.RunCommandCheck
 import kotlinx.coroutines.CoroutineDispatcher
 import ru.restofleet.shared.kernel.Clock
 import java.io.File
@@ -43,9 +44,10 @@ class KoinModulesVerifyTest {
     @Test
     fun appModuleIsComplete() {
         appModule.verify(
+            // RunCommandCheck — необязательная зависимость LabViewModel (getOrNull): в release её нет (решение 140).
             // Long — таймаут проверки со значением по умолчанию, CoroutineScope — scope ViewModel по умолчанию:
             // нужны только appModule и в общий список не входят, чтобы не ослаблять verify других модулей.
-            extraTypes = platformTypes + listOf(Long::class, CoroutineScope::class),
+            extraTypes = platformTypes + listOf(Long::class, CoroutineScope::class, RunCommandCheck::class),
             // список проверок собирается в лямбде из трёх именованных списков — по типу Koin его не найдёт
             injections = injectedParameters(
                 definition<RunCapabilityChecks>(List::class),

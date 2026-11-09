@@ -5,7 +5,7 @@ import ru.restofleet.agent.presentation.common.Badge
 
 /**
  * Строка проверки. [id] — имя `CheckId`; [enabled] — строку можно запустить; [hasDelayedVariant] — есть кнопка
- * «через 10 с» (D5).
+ * «через 30 с» (D5).
  */
 data class DeviceOwnerRowUi(
     val id: String,

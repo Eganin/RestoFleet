@@ -16,7 +16,8 @@ import ru.restofleet.shared.kernel.Outcome
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * Исполняет команду: проверка возможностей (`Unsupported` без обращения к портам), затем вызов порта.
+ * Исполняет команду: проверка возможностей (`Unsupported` без обращения к портам), отказ из-за киоска
+ * (`Failed("kiosk_active")`, решение 141), затем вызов порта.
  * Сбой порта изолируется (решение 78): `Exception` -> `Failed("exception:<Класс>")`, `Error` и настоящая отмена
  * вызывающего пробрасываются. Таймаут исполнения и срок `expiresAt` здесь не проверяются (задача 3.4, M3).
  */
@@ -33,7 +34,11 @@ class ExecuteCommand(
         try {
             val capabilities = caps.current()
             val reason = capabilities.check(command)
-            if (reason != null) CommandOutcome.Unsupported(reason) else execute(command, capabilities)
+            when {
+                reason != null -> CommandOutcome.Unsupported(reason)
+                else -> capabilities.kioskRefusal(command)?.let { CommandOutcome.Failed(it) }
+                    ?: execute(command, capabilities)
+            }
         } catch (e: CancellationException) {
             currentCoroutineContext().ensureActive()
             failed(e)
@@ -48,7 +53,7 @@ class ExecuteCommand(
             launcher.launch(command.pkg, command.url, capabilities.launchStrategy()).toOutcome()
         is Command.Beep -> beeper.beep(command.durationMs).toOutcome()
         Command.Reboot -> admin.reboot().toOutcome()
-        is Command.InstallApk -> admin.installApk(command.url, command.sha256).toOutcome()
+        is Command.InstallApk -> admin.installApk(command.pkg, command.url, command.sha256).toOutcome()
         is Command.LockTask -> admin.startLockTask(command.pkg, command.url).toOutcome()
     }
 

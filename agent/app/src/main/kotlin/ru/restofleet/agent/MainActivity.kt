@@ -37,8 +37,6 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.component.inject
 import ru.restofleet.agent.data.lifecycle.ServiceStarter
-import ru.restofleet.agent.presentation.deviceowner.DeviceOwnerContainer
-import ru.restofleet.agent.presentation.deviceowner.viewmodel.DeviceOwnerViewModel
 import ru.restofleet.agent.presentation.lab.LabContainer
 import ru.restofleet.agent.presentation.lab.viewmodel.LabViewModel
 import ru.restofleet.agent.presentation.lab.viewmodel.model.SettingsTarget
@@ -53,7 +51,7 @@ class MainActivity : ComponentActivity(), KoinComponent {
         starter.ensureRunning(REASON_ACTIVITY)
         // ViewModel живёт в InstanceKeeper (переживает поворот экрана); onDestroy вызывается при окончательном закрытии
         val lab = instanceKeeper().getOrCreate(LabViewModel::class) { get<LabViewModel>() }
-        val deviceOwner = instanceKeeper().getOrCreate(DeviceOwnerViewModel::class) { get<DeviceOwnerViewModel>() }
+        val deviceOwner = getKoin().getOrNull<DeviceOwnerTab>()?.content(instanceKeeper())
         setContent {
             MaterialTheme {
                 Surface(Modifier.fillMaxSize()) {
@@ -65,7 +63,7 @@ class MainActivity : ComponentActivity(), KoinComponent {
                         )
                         AgentTabHost(
                             lab = { LabContainer(lab, onOpenSettings = ::openSettings) },
-                            deviceOwner = { DeviceOwnerContainer(deviceOwner) },
+                            deviceOwner = deviceOwner,
                             modifier = Modifier.weight(1f),
                         )
                     }

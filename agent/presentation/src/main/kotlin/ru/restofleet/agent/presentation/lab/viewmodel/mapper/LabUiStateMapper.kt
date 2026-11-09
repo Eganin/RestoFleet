@@ -34,7 +34,7 @@ class LabUiStateMapper {
     }
 
     private fun commands(session: LabSession): CommandsUi? =
-        if (session.filter == LabFilter.ALL) {
+        if (session.commandsAvailable && session.filter == LabFilter.ALL) {
             CommandsUi(
                 pkg = session.commandPackage,
                 url = session.commandUrl,

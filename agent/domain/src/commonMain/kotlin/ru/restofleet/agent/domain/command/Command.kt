@@ -14,6 +14,6 @@ sealed interface Command {
     data class LaunchApp(val pkg: String, val url: String?) : Command
     data class Beep(val durationMs: Long) : Command
     data object Reboot : Command
-    data class InstallApk(val url: String, val sha256: String) : Command
+    data class InstallApk(val pkg: String, val url: String, val sha256: String) : Command
     data class LockTask(val pkg: String, val url: String?) : Command
 }

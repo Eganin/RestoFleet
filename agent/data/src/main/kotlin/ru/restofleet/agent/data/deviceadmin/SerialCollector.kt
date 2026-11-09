@@ -15,7 +15,7 @@ import ru.restofleet.agent.domain.model.UnavailableReason
  */
 class SerialCollector(
     private val apiLevel: ApiLevel = ApiLevel.Device,
-    private val role: DeviceOwnerRole = DeviceOwnerRole { false },
+    private val role: DeviceOwnerRole,
     @SuppressLint("HardwareIds", "MissingPermission") // доступ подтверждается ролью DO, а не манифестом
     private val getSerial: () -> String = { Build.getSerial() },
 ) {

@@ -1,4 +1,6 @@
 import com.android.build.api.artifact.SingleArtifact
+import com.android.build.api.variant.HasHostTestsBuilder
+import com.android.build.api.variant.HostTestBuilder
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 // AGP 9: Kotlin встроен — плагин org.jetbrains.kotlin.android не применяется.
@@ -88,7 +90,8 @@ abstract class GenerateStandTrustTask : DefaultTask() {
 
 /**
  * Падает, если в смёрженном release-манифесте осталась отладочная поверхность: `networkSecurityConfig` (CA стенда не
- * доверяется) или `DevConfigReceiver` и его действие `DEV_CONFIG` (приём учётки брокера по adb, только debug).
+ * доверяется), `DevConfigReceiver` и его действие `DEV_CONFIG` (приём учётки брокера по adb, только debug),
+ * `testOnly="true"` (позволил бы снять Device Owner без сброса) или `debuggable="true"`.
  */
 abstract class VerifyNoDebugSurfaceTask : DefaultTask() {
     @get:InputFile
@@ -101,6 +104,13 @@ abstract class VerifyNoDebugSurfaceTask : DefaultTask() {
         check("networkSecurityConfig" !in text) { "release manifest must not declare networkSecurityConfig" }
         check("DevConfigReceiver" !in text) { "release manifest must not declare DevConfigReceiver" }
         check("DEV_CONFIG" !in text) { "release manifest must not declare the DEV_CONFIG action" }
+        check(!TEST_ONLY.containsMatchIn(text)) { "release manifest must not be testOnly" }
+        check(!DEBUGGABLE.containsMatchIn(text)) { "release manifest must not be debuggable" }
+    }
+
+    private companion object {
+        val TEST_ONLY = Regex("""android:testOnly\s*=\s*"true"""")
+        val DEBUGGABLE = Regex("""android:debuggable\s*=\s*"true"""")
     }
 }
 
@@ -109,6 +119,11 @@ val standCaFile: Provider<RegularFile> = providers.gradleProperty("standCaPath")
     .orElse(rootProject.layout.projectDirectory.file("deploy/certs/out/ca.crt"))
 
 androidComponents {
+    // AGP отключает юнит-тесты release по умолчанию; поверхность release (нет вкладки DO и команд Lab, решение 140)
+    // проверяют только классы `*ReleaseTest` из src/testRelease — фильтр ниже, общие тесты в release не гоняются повторно.
+    beforeVariants(selector().withBuildType("release")) { builder ->
+        (builder as HasHostTestsBuilder).hostTests[HostTestBuilder.UNIT_TEST_TYPE]?.enable = true
+    }
     onVariants(selector().withBuildType("debug")) { variant ->
         val generate = tasks.register<GenerateStandTrustTask>("generate${variant.name.replaceFirstChar { it.uppercase() }}StandTrust") {
             standCaFile.get().asFile.takeIf { it.isFile }?.let { standCa.set(it) }
@@ -123,9 +138,9 @@ androidComponents {
             mergedManifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
         }
         tasks.named("check") { dependsOn(verify) }
-        // и сама сборка release-артефакта (APK и bundle), а не только `check`
-        tasks.matching { it.name == "assembleRelease" || it.name == "bundleRelease" }
-            .configureEach { dependsOn(verify) }
+        // и сама сборка release-артефакта: упаковка (APK, bundle), установка и агрегирующие задачи, а не только `check`
+        val releaseOutputs = setOf("assembleRelease", "bundleRelease", "packageRelease", "packageReleaseBundle", "installRelease")
+        tasks.matching { it.name in releaseOutputs }.configureEach { dependsOn(verify) }
     }
 }
 
@@ -174,6 +189,7 @@ dependencies {
 // Изоляция по классам делает прогон детерминированным (решение 106). Kover и `build`/`check` не затронуты.
 tasks.withType<Test>().configureEach {
     forkEvery = 1
+    if (name.endsWith("ReleaseUnitTest")) filter.includeTestsMatching("*ReleaseTest")
     // Ожидание для NetworkSecurityConfigTest: есть ли CA стенда на момент сборки
     systemProperty("standCaPresent", standCaFile.get().asFile.isFile.toString())
 }

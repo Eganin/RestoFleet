@@ -10,7 +10,7 @@ sealed interface DeviceOwnerIntent : MviIntent {
         data object RunAll : User
         data class RunOne(val id: CheckId) : User
 
-        /** D5 «через 10 с»: пауза, чтобы успеть нажать Home и запустить цель из фона. */
+        /** D5 «через 30 с»: пауза, чтобы успеть нажать Home и запустить цель из фона. */
         data object RunLaunchFromBackground : User
         data class EditApkUrl(val text: String) : User
         data class EditApkSha256(val text: String) : User

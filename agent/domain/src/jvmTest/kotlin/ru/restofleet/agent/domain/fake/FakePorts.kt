@@ -19,7 +19,7 @@ data class TestError(override val code: String) : DomainError
 class FakeDeviceAdmin : DeviceAdmin {
     val calls = mutableListOf<String>()
     var rebootResult: suspend () -> Outcome<Unit, DomainError> = { Outcome.Success(Unit) }
-    var installResult: suspend () -> Outcome<Unit, DomainError> = { Outcome.Success(Unit) }
+    var installResult: suspend () -> Outcome<Map<String, String>, DomainError> = { Outcome.Success(emptyMap()) }
     var lockResult: suspend () -> Outcome<Unit, DomainError> = { Outcome.Success(Unit) }
 
     override suspend fun isDeviceOwner(): Boolean = true
@@ -29,8 +29,12 @@ class FakeDeviceAdmin : DeviceAdmin {
         return rebootResult()
     }
 
-    override suspend fun installApk(url: String, sha256: String): Outcome<Unit, DomainError> {
-        calls += "install:$url:$sha256"
+    override suspend fun installApk(
+        pkg: String,
+        url: String,
+        sha256: String,
+    ): Outcome<Map<String, String>, DomainError> {
+        calls += "install:$pkg:$url:$sha256"
         return installResult()
     }
 

@@ -24,6 +24,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowLog
 import ru.restofleet.shared.kernel.Outcome
 import java.io.File
 import kotlin.coroutines.cancellation.CancellationException
@@ -42,6 +43,7 @@ class AndroidPackageInstallerSessionTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val installer = context.packageManager.packageInstaller
     private val action = "ru.restofleet.test.INSTALL_RESULT"
+    private val pkg = "ru.restofleet.dummy.waiter"
     private val baselineReceivers = shadowOf(context as Application).registeredReceivers.size
 
     private fun apk(): File = tmp.newFile().also { it.writeBytes(ByteArray(1024) { i -> i.toByte() }) }
@@ -64,7 +66,7 @@ class AndroidPackageInstallerSessionTest {
 
     @Test
     fun committedSessionReportingSuccessIsSuccess() = runTest {
-        val job = async { session().install(apk()) }
+        val job = async { session().install(apk(), pkg) }
         runCurrent()
         assertThat(installer.mySessions).hasSize(1)
 
@@ -75,8 +77,46 @@ class AndroidPackageInstallerSessionTest {
     }
 
     @Test
+    fun theSessionIsCreatedForTheRequestedPackage() = runTest {
+        val job = async { session().install(apk(), pkg) }
+        runCurrent()
+
+        assertThat(installer.mySessions.single().appPackageName).isEqualTo(pkg)
+
+        deliver(PackageInstaller.STATUS_SUCCESS)
+        runCurrent()
+        job.await()
+    }
+
+    @Test
+    fun failureStatusAndSystemMessageAreLogged() = runTest {
+        val job = async { session().install(apk(), pkg) }
+        runCurrent()
+
+        deliver(PackageInstaller.STATUS_FAILURE_INVALID, "INSTALL_FAILED_INVALID_APK: wrong package")
+        runCurrent()
+        job.await()
+
+        val logged = ShadowLog.getLogs().filter { it.tag == "PackageInstaller" }.joinToString { it.msg }
+        assertThat(logged).contains("status=4")
+        assertThat(logged).contains("INSTALL_FAILED_INVALID_APK: wrong package")
+    }
+
+    @Test
+    fun successIsNotLoggedAsAFailure() = runTest {
+        val job = async { session().install(apk(), pkg) }
+        runCurrent()
+
+        deliver(PackageInstaller.STATUS_SUCCESS, "ok")
+        runCurrent()
+        job.await()
+
+        assertThat(ShadowLog.getLogs().filter { it.tag == "PackageInstaller" }).isEmpty()
+    }
+
+    @Test
     fun systemFailureStatusIsMappedAndSessionIsAbandoned() = runTest {
-        val job = async { session().install(apk()) }
+        val job = async { session().install(apk(), pkg) }
         runCurrent()
 
         deliver(PackageInstaller.STATUS_FAILURE_ABORTED, "INSTALL_FAILED_ABORTED")
@@ -89,7 +129,7 @@ class AndroidPackageInstallerSessionTest {
 
     @Test
     fun pendingUserActionIsAFailureForDeviceOwner() = runTest {
-        val job = async { session().install(apk()) }
+        val job = async { session().install(apk(), pkg) }
         runCurrent()
 
         deliver(PackageInstaller.STATUS_PENDING_USER_ACTION, "confirm")
@@ -102,7 +142,7 @@ class AndroidPackageInstallerSessionTest {
 
     @Test
     fun messageWithoutStatusIsIgnoredAndTheNextRealStatusIsAccepted() = runTest {
-        val job = async { session().install(apk()) }
+        val job = async { session().install(apk(), pkg) }
         runCurrent()
 
         deliver(status = null, message = "progress")
@@ -117,7 +157,7 @@ class AndroidPackageInstallerSessionTest {
 
     @Test
     fun noAnswerForTheDefaultTimeoutIsTimeoutFailureAndSessionIsAbandoned() = runTest {
-        val job = async { session().install(apk()) }
+        val job = async { session().install(apk(), pkg) }
         runCurrent()
 
         advanceTimeBy(AndroidPackageInstallerSession.INSTALL_TIMEOUT_MS - 1)
@@ -137,7 +177,7 @@ class AndroidPackageInstallerSessionTest {
 
     @Test
     fun unreadableApkIsAnExceptionFailureAndSessionIsAbandoned() = runTest {
-        val job = async { session().install(File(tmp.root, "missing.apk")) }
+        val job = async { session().install(File(tmp.root, "missing.apk"), pkg) }
         runCurrent()
 
         assertThat(job.await()).isEqualTo(
@@ -153,7 +193,7 @@ class AndroidPackageInstallerSessionTest {
         var thrown: Throwable? = null
         val job = async {
             try {
-                returned = session().install(apk())
+                returned = session().install(apk(), pkg)
             } catch (e: Throwable) {
                 thrown = e
                 throw e
@@ -173,7 +213,7 @@ class AndroidPackageInstallerSessionTest {
 
     @Test
     fun resultIntentIsBoundToOwnPackageAndMutable() = runTest {
-        val job = async { session().install(apk()) }
+        val job = async { session().install(apk(), pkg) }
         runCurrent()
         val id = installer.mySessions.single().sessionId
         val probe = Intent(action).setPackage(context.packageName)
@@ -197,7 +237,7 @@ class AndroidPackageInstallerSessionTest {
         val actions = mutableSetOf<String>()
         repeat(2) {
             val job = async {
-                AndroidPackageInstallerSession(context, testDispatcher()).install(apk())
+                AndroidPackageInstallerSession(context, testDispatcher()).install(apk(), pkg)
             }
             runCurrent()
             shadowOf(context as Application).registeredReceivers

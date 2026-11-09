@@ -40,6 +40,7 @@ class ExecuteCommandTest {
         clock = Clock { 1_700_000_000_123L },
     )
     private val sha = "b".repeat(64)
+    private val waiter = "ru.restofleet.dummy.waiter"
 
     private fun deviceOwner() {
         caps = Capabilities(AgentMode.DEVICE_OWNER, 34, emptySet())
@@ -80,7 +81,7 @@ class ExecuteCommandTest {
         admin.lockResult = { Outcome.Failure(TestError("not_whitelisted")) }
 
         assertThat(execute(Command.Reboot)).isEqualTo(CommandOutcome.Failed("reboot_denied"))
-        assertThat(execute(Command.InstallApk("https://apk-host/a.apk", sha)))
+        assertThat(execute(Command.InstallApk(waiter, "https://apk-host/a.apk", sha)))
             .isEqualTo(CommandOutcome.Failed("hash_mismatch"))
         assertThat(execute(Command.LockTask("ru.restofleet.kiosk", null)))
             .isEqualTo(CommandOutcome.Failed("not_whitelisted"))
@@ -90,19 +91,114 @@ class ExecuteCommandTest {
     fun installAndLockTaskArePassedToAdmin() = runTest {
         deviceOwner()
 
-        assertThat(execute(Command.InstallApk("https://apk-host/a.apk", sha))).isEqualTo(CommandOutcome.Succeeded())
+        assertThat(execute(Command.InstallApk(waiter, "https://apk-host/a.apk", sha)))
+            .isEqualTo(CommandOutcome.Succeeded())
         assertThat(execute(Command.LockTask("ru.restofleet.kiosk", "https://kitchen/s")))
             .isEqualTo(CommandOutcome.Succeeded())
         assertThat(admin.calls)
-            .containsExactly("install:https://apk-host/a.apk:$sha", "lock:ru.restofleet.kiosk:https://kitchen/s")
+            .containsExactly(
+                "install:$waiter:https://apk-host/a.apk:$sha",
+                "lock:ru.restofleet.kiosk:https://kitchen/s",
+            )
             .inOrder()
+    }
+
+    @Test
+    fun installResultCarriesPackageAndVersionFromTheAdapter() = runTest {
+        deviceOwner()
+        val installed = mapOf("package" to waiter, "versionCode" to "413", "versionName" to "4.13")
+        admin.installResult = { Outcome.Success(installed) }
+
+        assertThat(execute(Command.InstallApk(waiter, "https://apk-host/a.apk", sha)))
+            .isEqualTo(CommandOutcome.Succeeded(installed))
+    }
+
+    @Test
+    fun installWithABadPackageIsUnsupportedWithoutPortCalls() = runTest {
+        deviceOwner()
+
+        assertThat(execute(Command.InstallApk("bad", "https://apk-host/a.apk", sha)))
+            .isEqualTo(CommandOutcome.Unsupported("invalid_package"))
+        assertNoPortCalls()
+    }
+
+    private fun kiosk(allowed: Set<String> = setOf("ru.restofleet.agent", waiter)) {
+        caps = Capabilities(
+            AgentMode.DEVICE_OWNER,
+            34,
+            setOf(Permission.POST_NOTIFICATIONS),
+            kioskActive = true,
+            kioskPackages = allowed,
+        )
+    }
+
+    @Test
+    fun showMessageUnderKioskFailsWithKioskActiveAndNoNotification() = runTest {
+        kiosk()
+
+        assertThat(execute(Command.ShowMessage("Перезагрузите роутер", Level.WARNING)))
+            .isEqualTo(CommandOutcome.Failed("kiosk_active"))
+        assertThat(notifier.calls).isEmpty()
+    }
+
+    @Test
+    fun launchAppOutsideTheKioskAllowlistFailsWithKioskActive() = runTest {
+        kiosk()
+
+        assertThat(execute(Command.LaunchApp("com.android.chrome", "https://kitchen/s")))
+            .isEqualTo(CommandOutcome.Failed("kiosk_active"))
+        assertThat(launcher.calls).isEmpty()
+    }
+
+    @Test
+    fun launchAppOfTheKioskTargetOrOwnPackageIsAllowedUnderKiosk() = runTest {
+        kiosk()
+
+        assertThat(execute(Command.LaunchApp(waiter, null))).isEqualTo(CommandOutcome.Succeeded())
+        assertThat(execute(Command.LaunchApp("ru.restofleet.agent", null))).isEqualTo(CommandOutcome.Succeeded())
+        assertThat(launcher.calls.map { it.pkg }).containsExactly(waiter, "ru.restofleet.agent").inOrder()
+    }
+
+    @Test
+    fun launchAppUnderKioskWithAnUnknownAllowlistIsRefused() = runTest {
+        kiosk(allowed = emptySet())
+
+        assertThat(execute(Command.LaunchApp(waiter, null))).isEqualTo(CommandOutcome.Failed("kiosk_active"))
+        assertThat(launcher.calls).isEmpty()
+    }
+
+    @Test
+    fun beepPingRebootInstallAndLockTaskAreNotAffectedByKiosk() = runTest {
+        kiosk()
+
+        assertThat(execute(Command.Beep(500))).isEqualTo(CommandOutcome.Succeeded(mapOf("ringerMode" to "normal")))
+        assertThat(execute(Command.Ping)).isInstanceOf(CommandOutcome.Succeeded::class.java)
+        assertThat(execute(Command.Reboot)).isEqualTo(CommandOutcome.Succeeded())
+        assertThat(execute(Command.InstallApk(waiter, "https://apk-host/a.apk", sha)))
+            .isEqualTo(CommandOutcome.Succeeded())
+        assertThat(execute(Command.LockTask(waiter, null))).isEqualTo(CommandOutcome.Succeeded())
+        assertThat(beeper.calls).hasSize(1)
+    }
+
+    @Test
+    fun invalidArgumentsUnderKioskStayUnsupportedAndTheKioskRuleComesAfter() = runTest {
+        kiosk()
+
+        assertThat(execute(Command.LaunchApp("bad", null))).isEqualTo(CommandOutcome.Unsupported("invalid_package"))
+        assertThat(execute(Command.ShowMessage("", Level.INFO))).isEqualTo(CommandOutcome.Unsupported("empty_text"))
+    }
+
+    @Test
+    fun withoutKioskShowMessageAndLaunchWorkAsBefore() = runTest {
+        assertThat(execute(Command.ShowMessage("x", Level.INFO))).isEqualTo(CommandOutcome.Succeeded())
+        assertThat(execute(Command.LaunchApp("com.android.chrome", null))).isEqualTo(CommandOutcome.Succeeded())
     }
 
     @Test
     fun invalidCommandIsUnsupportedWithoutPortCalls() = runTest {
         deviceOwner()
 
-        assertThat(execute(Command.InstallApk("http://x/a.apk", sha)))
+        assertThat(execute(Command.InstallApk(waiter, "http://x/a.apk", sha)))
             .isEqualTo(CommandOutcome.Unsupported("invalid_url"))
         assertThat(execute(Command.Beep(0))).isEqualTo(CommandOutcome.Unsupported("invalid_duration"))
         assertThat(execute(Command.LaunchApp("bad", null))).isEqualTo(CommandOutcome.Unsupported("invalid_package"))
@@ -132,12 +228,13 @@ class ExecuteCommandTest {
     }
 
     @Test
-    fun launchViaNotificationWithoutPermissionIsUnsupported() = runTest {
+    fun launchViaNotificationWithoutPermissionReachesTheLauncherWhichRefusesWithItsOwnCode() = runTest {
         caps = Capabilities(AgentMode.NORMAL, 34, emptySet())
+        launcher.result = { Outcome.Failure(TestError("notifications_disabled")) }
 
         assertThat(execute(Command.LaunchApp("ru.restofleet.kiosk", null)))
-            .isEqualTo(CommandOutcome.Unsupported("notifications_denied"))
-        assertNoPortCalls()
+            .isEqualTo(CommandOutcome.Failed("notifications_disabled"))
+        assertThat(launcher.calls).hasSize(1)
     }
 
     @Test

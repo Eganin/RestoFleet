@@ -51,7 +51,11 @@ class DeviceOwnerContainerTest {
             calls += "reboot"
             return Outcome.Success(Unit)
         }
-        override suspend fun installApk(url: String, sha256: String): Outcome<Unit, DomainError> = Outcome.Success(Unit)
+        override suspend fun installApk(
+            pkg: String,
+            url: String,
+            sha256: String,
+        ): Outcome<Map<String, String>, DomainError> = Outcome.Success(emptyMap())
         override suspend fun startLockTask(pkg: String, url: String?): Outcome<Unit, DomainError> =
             Outcome.Success(Unit)
         override suspend fun grantSelfPermissions(): Map<String, Boolean> = emptyMap()

@@ -64,7 +64,7 @@ internal object CommandMapper {
                 "launch_app" -> Command.LaunchApp(p.text("pkg"), p.optionalText("url"))
                 "beep" -> Command.Beep(p.positiveLong("durationMs"))
                 "reboot" -> Command.Reboot
-                "install_update" -> Command.InstallApk(p.text("url"), p.text("sha256"))
+                "install_update" -> Command.InstallApk(p.text("package"), p.text("url"), p.text("sha256"))
                 "lock_task" -> Command.LockTask(p.text("pkg"), p.optionalText("url"))
                 else -> return Parsed.UnknownType
             },

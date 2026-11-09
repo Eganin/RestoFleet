@@ -24,7 +24,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import org.junit.Before
 import org.junit.Rule
@@ -33,6 +38,8 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowLog
+import ru.restofleet.agent.domain.model.AppVersion
 import ru.restofleet.shared.kernel.Outcome
 import java.io.File
 import java.security.MessageDigest
@@ -52,12 +59,18 @@ class DpmDeviceAdminTest {
     private val downloader = mockk<ApkDownloader>()
     private val installer = mockk<PackageInstallerSession>()
     private val lockTask = mockk<LockTaskLauncher>()
+    private val waiter = "ru.restofleet.dummy.waiter"
+    private var watchedPackages = setOf(waiter, "com.android.chrome")
+    private val installedVersions = mutableMapOf<String, AppVersion>()
 
-    private fun sut(api: Int = 34) =
-        DpmDeviceAdmin(
-            context, dpm, admin, DeviceOwnerRole { dpm.isDeviceOwnerApp(self) }, downloader, installer, lockTask,
-            { api }, Dispatchers.IO,
-        )
+    private fun sut(
+        api: Int = 34,
+        rebootScope: CoroutineScope = CoroutineScope(Dispatchers.Unconfined),
+        rebootDelayMs: Long = DpmDeviceAdmin.REBOOT_DELAY_MS,
+    ) = DpmDeviceAdmin(
+        context, dpm, admin, DeviceOwnerRole { dpm.isDeviceOwnerApp(self) }, downloader, installer, lockTask,
+        { watchedPackages }, { installedVersions[it] }, { api }, Dispatchers.IO, rebootScope, rebootDelayMs,
+    )
 
     @Before
     fun allowCleanup() {
@@ -91,25 +104,72 @@ class DpmDeviceAdminTest {
     }
 
     @Test
-    fun rebootAsDeviceOwnerCallsDpm() = blocking {
+    fun rebootReturnsSuccessImmediatelyAndRebootsOnlyAfterThreeSeconds() = runTest {
         owner(true)
         every { dpm.reboot(admin) } returns Unit
-        assertThat(sut().reboot()).isEqualTo(Outcome.Success(Unit))
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
+
+        assertThat(sut(rebootScope = scope).reboot()).isEqualTo(Outcome.Success(Unit))
+        runCurrent()
+        verify(exactly = 0) { dpm.reboot(any()) }
+
+        advanceTimeBy(2_999)
+        runCurrent()
+        verify(exactly = 0) { dpm.reboot(any()) }
+
+        advanceTimeBy(1)
+        runCurrent()
         verify(exactly = 1) { dpm.reboot(admin) }
+        scope.cancel()
     }
 
     @Test
-    fun rebootDuringACallIsUnsupported() = blocking {
+    fun rebootDelayIsThreeSecondsByDefault() {
+        assertThat(DpmDeviceAdmin.REBOOT_DELAY_MS).isEqualTo(3_000L)
+    }
+
+    @Test
+    fun rebootWithoutDeviceOwnerSchedulesNothing() = runTest {
+        owner(false)
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
+
+        assertThat(sut(rebootScope = scope).reboot()).isEqualTo(Outcome.Failure(DeviceAdminError.NotDeviceOwner))
+        advanceTimeBy(10_000)
+        runCurrent()
+
+        verify(exactly = 0) { dpm.reboot(any()) }
+        scope.cancel()
+    }
+
+    @Test
+    fun rebootFailingAfterTheDelayIsLoggedNotThrown() = runTest {
         owner(true)
         every { dpm.reboot(admin) } throws IllegalStateException("ongoing call")
-        assertThat(sut().reboot()).isEqualTo(Outcome.Failure(DeviceAdminError.Unsupported("call_in_progress")))
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
+        sut(rebootScope = scope).reboot()
+
+        advanceTimeBy(3_000)
+        runCurrent()
+
+        verify(exactly = 1) { dpm.reboot(admin) }
+        assertThat(ShadowLog.getLogs().any { it.tag == "DpmDeviceAdmin" && it.msg.contains("IllegalStateException") })
+            .isTrue()
+        scope.cancel()
     }
 
     @Test
-    fun rebootAfterLosingTheRoleIsNotDeviceOwner() = blocking {
+    fun rebootAfterLosingTheRoleDuringTheDelayIsLoggedNotThrown() = runTest {
         owner(true)
         every { dpm.reboot(admin) } throws SecurityException("not owner")
-        assertThat(sut().reboot()).isEqualTo(Outcome.Failure(DeviceAdminError.NotDeviceOwner))
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
+        sut(rebootScope = scope).reboot()
+
+        advanceTimeBy(3_000)
+        runCurrent()
+
+        assertThat(ShadowLog.getLogs().any { it.tag == "DpmDeviceAdmin" && it.msg.contains("SecurityException") })
+            .isTrue()
+        scope.cancel()
     }
 
     // ---------- installApk ----------
@@ -117,16 +177,16 @@ class DpmDeviceAdminTest {
     @Test
     fun installWithoutDeviceOwnerTouchesNeitherNetworkNorInstaller() = blocking {
         owner(false)
-        assertThat(sut().installApk(url, goodHash)).isEqualTo(Outcome.Failure(DeviceAdminError.NotDeviceOwner))
+        assertThat(sut().installApk(waiter, url, goodHash)).isEqualTo(Outcome.Failure(DeviceAdminError.NotDeviceOwner))
         coVerify(exactly = 0) { downloader.download(any()) }
-        coVerify(exactly = 0) { installer.install(any()) }
+        coVerify(exactly = 0) { installer.install(any(), any()) }
     }
 
     @Test
     fun malformedHashIsRefusedBeforeDownloading() = blocking {
         owner(true)
         for (bad in listOf("", "abc", goodHash.dropLast(1), "z".repeat(64))) {
-            assertThat(sut().installApk(url, bad))
+            assertThat(sut().installApk(waiter, url, bad))
                 .isEqualTo(Outcome.Failure(DeviceAdminError.Unsupported("invalid_sha256")))
         }
         coVerify(exactly = 0) { downloader.download(any()) }
@@ -138,8 +198,8 @@ class DpmDeviceAdminTest {
         val file = apk()
         coEvery { downloader.download(url) } returns Outcome.Success(file)
         val other = "0".repeat(64)
-        assertThat(sut().installApk(url, other)).isEqualTo(Outcome.Failure(DeviceAdminError.HashMismatch))
-        coVerify(exactly = 0) { installer.install(any()) }
+        assertThat(sut().installApk(waiter, url, other)).isEqualTo(Outcome.Failure(DeviceAdminError.HashMismatch))
+        coVerify(exactly = 0) { installer.install(any(), any()) }
         assertThat(file.exists()).isFalse()
     }
 
@@ -149,13 +209,97 @@ class DpmDeviceAdminTest {
         val file = apk()
         coEvery { downloader.download(url) } returns Outcome.Success(file)
         var existedDuringInstall = false
-        coEvery { installer.install(file) } answers {
+        coEvery { installer.install(file, waiter) } answers {
             existedDuringInstall = file.exists()
             Outcome.Success(Unit)
         }
-        assertThat(sut().installApk(url, goodHash.uppercase())).isEqualTo(Outcome.Success(Unit))
+        assertThat(sut().installApk(waiter, url, goodHash.uppercase()))
+            .isEqualTo(Outcome.Success(mapOf("package" to waiter)))
         assertThat(existedDuringInstall).isTrue()
         assertThat(file.exists()).isFalse()
+    }
+
+    @Test
+    fun unwatchedPackageIsRefusedBeforeAnyDownloadOrCleanup() = blocking {
+        owner(true)
+        assertThat(sut().installApk("com.example.other", url, goodHash))
+            .isEqualTo(Outcome.Failure(DeviceAdminError.Unsupported("package_not_watched")))
+        coVerify(exactly = 0) { downloader.download(any()) }
+        coVerify(exactly = 0) { installer.install(any(), any()) }
+        verify(exactly = 0) { downloader.clearStale() }
+    }
+
+    @Test
+    fun watchedListIsReadOnEveryCall() = blocking {
+        owner(true)
+        watchedPackages = emptySet()
+        assertThat(sut().installApk(waiter, url, goodHash))
+            .isEqualTo(Outcome.Failure(DeviceAdminError.Unsupported("package_not_watched")))
+        watchedPackages = setOf(waiter)
+        val file = apk()
+        coEvery { downloader.download(url) } returns Outcome.Success(file)
+        coEvery { installer.install(file, waiter) } returns Outcome.Success(Unit)
+        assertThat(sut().installApk(waiter, url, goodHash)).isInstanceOf(Outcome.Success::class.java)
+    }
+
+    @Test
+    fun theInstallerGetsTheRequestedPackage() = blocking {
+        owner(true)
+        val file = apk()
+        coEvery { downloader.download(url) } returns Outcome.Success(file)
+        coEvery { installer.install(file, "com.android.chrome") } returns Outcome.Success(Unit)
+
+        sut().installApk("com.android.chrome", url, goodHash)
+
+        coVerify(exactly = 1) { installer.install(file, "com.android.chrome") }
+    }
+
+    @Test
+    fun installerRejectionOfAForeignApkBecomesFailed() = blocking {
+        owner(true)
+        val file = apk()
+        coEvery { downloader.download(url) } returns Outcome.Success(file)
+        val rejected = Outcome.Failure(DeviceAdminError.InstallFailed(4, "INSTALL_FAILED_INVALID_APK"))
+        coEvery { installer.install(file, waiter) } returns rejected
+
+        assertThat(sut().installApk(waiter, url, goodHash)).isEqualTo(rejected)
+        assertThat(rejected.error.code).isEqualTo("install_failed:4")
+    }
+
+    @Test
+    fun successResultCarriesPackageVersionCodeAndName() = blocking {
+        owner(true)
+        val file = apk()
+        coEvery { downloader.download(url) } returns Outcome.Success(file)
+        coEvery { installer.install(file, waiter) } returns Outcome.Success(Unit)
+        installedVersions[waiter] = AppVersion(waiter, "4.13", 413L)
+
+        assertThat(sut().installApk(waiter, url, goodHash)).isEqualTo(
+            Outcome.Success(mapOf("package" to waiter, "versionCode" to "413", "versionName" to "4.13")),
+        )
+    }
+
+    @Test
+    fun unreadableVersionAfterInstallStillReportsThePackage() = blocking {
+        owner(true)
+        val file = apk()
+        coEvery { downloader.download(url) } returns Outcome.Success(file)
+        coEvery { installer.install(file, waiter) } returns Outcome.Success(Unit)
+
+        assertThat(sut().installApk(waiter, url, goodHash))
+            .isEqualTo(Outcome.Success(mapOf("package" to waiter)))
+    }
+
+    @Test
+    fun absentVersionNameIsOmittedFromTheResult() = blocking {
+        owner(true)
+        val file = apk()
+        coEvery { downloader.download(url) } returns Outcome.Success(file)
+        coEvery { installer.install(file, waiter) } returns Outcome.Success(Unit)
+        installedVersions[waiter] = AppVersion(waiter, null, 7L)
+
+        assertThat(sut().installApk(waiter, url, goodHash))
+            .isEqualTo(Outcome.Success(mapOf("package" to waiter, "versionCode" to "7")))
     }
 
     @Test
@@ -164,8 +308,8 @@ class DpmDeviceAdminTest {
         val file = apk()
         coEvery { downloader.download(url) } returns Outcome.Success(file)
         val failure = Outcome.Failure(DeviceAdminError.InstallFailed(3, "aborted"))
-        coEvery { installer.install(file) } returns failure
-        assertThat(sut().installApk(url, goodHash)).isEqualTo(failure)
+        coEvery { installer.install(file, waiter) } returns failure
+        assertThat(sut().installApk(waiter, url, goodHash)).isEqualTo(failure)
         assertThat(file.exists()).isFalse()
     }
 
@@ -174,8 +318,8 @@ class DpmDeviceAdminTest {
         owner(true)
         val file = apk()
         coEvery { downloader.download(url) } returns Outcome.Success(file)
-        coEvery { installer.install(file) } throws IllegalStateException("boom")
-        val thrown = runCatching { runBlocking { sut().installApk(url, goodHash) } }.exceptionOrNull()
+        coEvery { installer.install(file, waiter) } throws IllegalStateException("boom")
+        val thrown = runCatching { runBlocking { sut().installApk(waiter, url, goodHash) } }.exceptionOrNull()
         assertThat(thrown).isInstanceOf(IllegalStateException::class.java)
         assertThat(file.exists()).isFalse()
     }
@@ -185,8 +329,8 @@ class DpmDeviceAdminTest {
         owner(true)
         val failure = Outcome.Failure(DeviceAdminError.DownloadFailed("http_404"))
         coEvery { downloader.download(url) } returns failure
-        assertThat(sut().installApk(url, goodHash)).isEqualTo(failure)
-        coVerify(exactly = 0) { installer.install(any()) }
+        assertThat(sut().installApk(waiter, url, goodHash)).isEqualTo(failure)
+        coVerify(exactly = 0) { installer.install(any(), any()) }
     }
 
     @Test
@@ -196,22 +340,22 @@ class DpmDeviceAdminTest {
         val entered = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
         coEvery { downloader.download(url) } answers { Outcome.Success(file) }
-        coEvery { installer.install(any()) } coAnswers {
+        coEvery { installer.install(any(), any()) } coAnswers {
             entered.complete(Unit)
             release.await()
             Outcome.Success(Unit)
         }
         val device = sut()
-        val first = async(Dispatchers.Default) { device.installApk(url, goodHash) }
+        val first = async(Dispatchers.Default) { device.installApk(waiter, url, goodHash) }
         withTimeout(5_000) { entered.await() }
 
-        assertThat(device.installApk(url, goodHash))
+        assertThat(device.installApk(waiter, url, goodHash))
             .isEqualTo(Outcome.Failure(DeviceAdminError.Unsupported("install_in_progress")))
 
         release.complete(Unit)
-        assertThat(first.await()).isEqualTo(Outcome.Success(Unit))
+        assertThat(first.await()).isEqualTo(Outcome.Success(mapOf("package" to waiter)))
         file.writeBytes(content)
-        assertThat(device.installApk(url, goodHash)).isEqualTo(Outcome.Success(Unit))
+        assertThat(device.installApk(waiter, url, goodHash)).isEqualTo(Outcome.Success(mapOf("package" to waiter)))
     }
 
     @Test
@@ -220,21 +364,23 @@ class DpmDeviceAdminTest {
         val file = apk()
         val entered = CompletableDeferred<Unit>()
         coEvery { downloader.download(url) } returns Outcome.Success(file)
-        coEvery { installer.install(any()) } coAnswers {
+        coEvery { installer.install(any(), any()) } coAnswers {
             entered.complete(Unit)
             awaitCancellation()
         }
         val device = sut()
-        val job = async(Dispatchers.Default, start = CoroutineStart.UNDISPATCHED) { device.installApk(url, goodHash) }
+        val job = async(Dispatchers.Default, start = CoroutineStart.UNDISPATCHED) {
+            device.installApk(waiter, url, goodHash)
+        }
         withTimeout(5_000) { entered.await() }
         withTimeout(5_000) { job.cancelAndJoin() }
 
         assertThat(job.isCancelled).isTrue()
         assertThat(file.exists()).isFalse()
 
-        coEvery { installer.install(any()) } returns Outcome.Success(Unit)
+        coEvery { installer.install(any(), any()) } returns Outcome.Success(Unit)
         file.writeBytes(content)
-        assertThat(device.installApk(url, goodHash)).isEqualTo(Outcome.Success(Unit))
+        assertThat(device.installApk(waiter, url, goodHash)).isEqualTo(Outcome.Success(mapOf("package" to waiter)))
     }
 
     @Test
@@ -242,12 +388,12 @@ class DpmDeviceAdminTest {
         owner(true)
         val file = apk()
         coEvery { downloader.download(url) } returns Outcome.Success(file)
-        coEvery { installer.install(file) } returns Outcome.Success(Unit)
-        sut().installApk(url, goodHash)
+        coEvery { installer.install(file, waiter) } returns Outcome.Success(Unit)
+        sut().installApk(waiter, url, goodHash)
         coVerifyOrder {
             downloader.clearStale()
             downloader.download(url)
-            installer.install(file)
+            installer.install(file, waiter)
         }
     }
 
@@ -258,19 +404,19 @@ class DpmDeviceAdminTest {
         val release = CompletableDeferred<Unit>()
         val file = apk()
         coEvery { downloader.download(url) } returns Outcome.Success(file)
-        coEvery { installer.install(any()) } coAnswers {
+        coEvery { installer.install(any(), any()) } coAnswers {
             entered.complete(Unit)
             release.await()
             Outcome.Success(Unit)
         }
         val device = sut()
-        val first = async(Dispatchers.Default) { device.installApk(url, goodHash) }
+        val first = async(Dispatchers.Default) { device.installApk(waiter, url, goodHash) }
         withTimeout(5_000) { entered.await() }
 
-        device.installApk(url, goodHash) // отказ: install_in_progress
+        device.installApk(waiter, url, goodHash) // отказ: install_in_progress
         owner(false)
-        device.installApk(url, goodHash) // отказ: не DO
-        device.installApk(url, "bad") // отказ: формат SHA-256
+        device.installApk(waiter, url, goodHash) // отказ: не DO
+        device.installApk(waiter, url, "bad") // отказ: формат SHA-256
 
         release.complete(Unit)
         first.await()
@@ -338,7 +484,8 @@ class DpmDeviceAdminTest {
         var started = 0
         val real = LockTaskLauncher(context, { _, _ -> Intent() }, { 34 }, { _, _ -> started++ })
         val device = DpmDeviceAdmin(
-            context, dpm, admin, DeviceOwnerRole { dpm.isDeviceOwnerApp(self) }, downloader, installer, real, { 34 },
+            context, dpm, admin, DeviceOwnerRole { dpm.isDeviceOwnerApp(self) }, downloader, installer, real,
+            { emptySet() }, { null }, { 34 },
         )
         for (bad in listOf("intent:#Intent;end", "file:///sdcard/x", "javascript:alert(1)", "http://x.test/")) {
             assertThat(device.startLockTask("com.android.chrome", bad))

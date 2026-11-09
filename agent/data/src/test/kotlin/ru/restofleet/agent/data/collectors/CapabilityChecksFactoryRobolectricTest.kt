@@ -40,7 +40,7 @@ class CapabilityChecksFactoryRobolectricTest {
             packageEvents = PackageEventsObserver(appContext),
             networkChanges = NetworkChangeObserver(appContext, api),
             hardware = HardwarePropertiesCollector(appContext, role = DeviceOwnerRole { false }),
-            serial = SerialCollector { "SN1234567890" },
+            serial = SerialCollector(role = DeviceOwnerRole { false }) { "SN1234567890" },
             scope = CoroutineScope(job + Dispatchers.Default),
             watched = listOf(appContext.packageName, "com.missing"),
         ).create()

@@ -32,7 +32,7 @@ class DpmDeviceAdminRobolectricTest {
 
     private fun sut() = DpmDeviceAdmin(
         context, dpm, admin, role, mockk(), mockk(), LockTaskLauncher(context, { _, _ -> error("unused") }),
-        ApiLevel { 34 },
+        { emptySet() }, { null }, ApiLevel { 34 },
     )
 
     private val role = DpmDeviceOwnerRole(dpm, context.packageName)

@@ -44,20 +44,17 @@ import ru.restofleet.agent.domain.port.DeviceInfoSource
 import ru.restofleet.agent.domain.usecase.ConfigureBrokerCredentials
 import ru.restofleet.agent.domain.usecase.ExecuteCommand
 import ru.restofleet.agent.domain.usecase.ExportCapabilityReport
-import ru.restofleet.agent.domain.usecase.FetchApkChecksum
 import ru.restofleet.agent.domain.usecase.GetDeviceInfo
-import ru.restofleet.agent.domain.usecase.GrantSelfPermissions
 import ru.restofleet.agent.domain.usecase.PublishCheckResult
 import ru.restofleet.agent.domain.usecase.RunCapabilityChecks
 import ru.restofleet.agent.domain.usecase.RunCommandCheck
-import ru.restofleet.agent.presentation.deviceowner.viewmodel.DeviceOwnerViewModel
 import ru.restofleet.agent.presentation.lab.viewmodel.LabViewModel
 import ru.restofleet.shared.kernel.Clock
 import ru.restofleet.shared.kernel.SystemClock
 
 /** Composition root агента: платформенные части `agent:app` + модули `agent:data`. */
 val appModule: Module = module {
-    includes(checksModule, lifecycleModule, deviceAdminModule, commandModule, storageModule)
+    includes(checksModule, lifecycleModule, deviceAdminModule, commandModule, storageModule, privilegedModule)
 
     single<Clock> { SystemClock }
     single<CoroutineDispatcher>(AGENT_DISPATCHER) { Dispatchers.IO }
@@ -74,7 +71,7 @@ val appModule: Module = module {
     single { LegacyLockTaskEntry { pkg, url -> LockTaskActivity.intent(androidContext(), pkg, url) } }
 
     // Capability Lab: все проверки каталога (L, R, P; остальные группы пока дают NOT_CHECKED), отчёт и публикация
-    single<DeviceInfoSource> { AndroidDeviceInfoSource(androidContext(), BuildConfig.VERSION_NAME) }
+    single<DeviceInfoSource> { AndroidDeviceInfoSource(androidContext(), BuildConfig.VERSION_NAME, get()) }
     single<CapabilityReportWriter> { JsonCapabilityReportWriter.forContext(androidContext(), get(AGENT_DISPATCHER)) }
     // R-M1: до задачи 3.6 публикация отвечает «MQTT не настроен»; привязка заменяется на MQTT-клиент
     single<CheckResultPublisher> { NotConfiguredCheckResultPublisher() }
@@ -90,13 +87,10 @@ val appModule: Module = module {
     single { ExportCapabilityReport(get(), get(), get(), get(), get()) }
     // Исполнение команд: порты из commandModule и deviceAdminModule (сеть команд — M3)
     single { ExecuteCommand(get(), get(), get(), get(), get(), get()) }
-    single { RunCommandCheck(get(), get(), get()) }
-    single { GrantSelfPermissions(get(), get(), get(), get()) }
-    single { FetchApkChecksum(get()) }
     single { GetDeviceInfo(get()) }
     single { PublishCheckResult(get()) }
     // Приём учётки брокера (debug-ресивер DevConfigReceiver; в release use case просто не вызывается)
     single { ConfigureBrokerCredentials(get()) }
-    factory { LabViewModel(get(), get(), get(), get(), get(), get(AGENT_DISPATCHER)) }
-    factory { DeviceOwnerViewModel(get(), get(), get(), get(), get(), get(), get(AGENT_DISPATCHER)) }
+    // Запуск команд C1–C4 в Lab и вкладка Device Owner есть только в debug (privilegedModule, решение 140)
+    factory { LabViewModel(get(), get(), get(), get(), getOrNull<RunCommandCheck>(), get(AGENT_DISPATCHER)) }
 }

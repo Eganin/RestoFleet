@@ -28,7 +28,7 @@
     <string name="do_apk_url">Адрес APK (https)</string>
     <string name="do_apk_sha256">SHA-256</string>
     <string name="do_fetch_hash">Подтянуть хэш</string>
-    <string name="do_target_title">Цель D4 и D5</string>
+    <string name="do_target_title">Цель D3, D4 и D5</string>
     <string name="do_target_package">Пакет</string>
     <string name="do_target_url">Адрес https (необязательно)</string>
     <string name="do_footer">Проверки Device Owner. На эмуляторе без аккаунтов после dpm set-device-owner; на реальном устройстве после сброса.</string>

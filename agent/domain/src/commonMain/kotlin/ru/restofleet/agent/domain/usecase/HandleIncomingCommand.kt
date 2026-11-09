@@ -3,12 +3,14 @@ package ru.restofleet.agent.domain.usecase
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withTimeoutOrNull
+import ru.restofleet.agent.domain.command.Command
 import ru.restofleet.agent.domain.command.CommandOutcome
 import ru.restofleet.agent.domain.command.CommandStatus
 import ru.restofleet.agent.domain.command.CommandTimeouts
 import ru.restofleet.agent.domain.model.IncomingCommand
 import ru.restofleet.agent.domain.model.MessageKind
 import ru.restofleet.agent.domain.model.OutgoingMessage
+import ru.restofleet.agent.domain.port.Outbox
 import ru.restofleet.agent.domain.port.PayloadEncoder
 import ru.restofleet.agent.domain.port.ProcessedCommands
 import ru.restofleet.shared.kernel.Clock
@@ -19,14 +21,16 @@ import kotlin.coroutines.cancellation.CancellationException
  * (P1), затем `markProcessed` и только потом исполнение (at-most-once для всех команд: после перезагрузки повтор
  * не исполнится; цена — при смерти процесса посреди исполнения итог теряется, сервер закроет команду по таймауту),
  * затем итог. Итог: `expired` при `expiresAt < now`, `invalid_params:<parseError>`, `unknown_type:<rawType>`, `timeout`
- * (потолок — [CommandTimeouts]), либо результат [ExecuteCommand]. Исключение любого порта или энкодера не роняет
- * обработчик (решение 78): `failed`/`exception:<Класс>`; настоящая отмена и `Error` пробрасываются. Команды
+ * (потолок — [CommandTimeouts]), либо результат [ExecuteCommand]. Успешный итог `reboot` кладётся в [outbox], а не
+ * публикуется напрямую (порт только планирует перезагрузку, решение 142). Исключение любого порта или энкодера не
+ * роняет обработчик (решение 78): `failed`/`exception:<Класс>`; настоящая отмена и `Error` пробрасываются. Команды
  * исполняются последовательно вызывающим.
  */
 class HandleIncomingCommand(
     private val execute: ExecuteCommand,
     private val processed: ProcessedCommands,
     private val publish: PublishOrBuffer,
+    private val outbox: Outbox,
     private val encoder: PayloadEncoder,
     private val clock: Clock,
 ) {
@@ -52,7 +56,11 @@ class HandleIncomingCommand(
             is CommandOutcome.Failed -> CommandStatus.FAILED
             is CommandOutcome.Unsupported -> CommandStatus.UNSUPPORTED
         }
-        reply(cmd, status, outcome)
+        if (cmd.command == Command.Reboot && outcome is CommandOutcome.Succeeded) {
+            persistReply(cmd, status, outcome)
+        } else {
+            reply(cmd, status, outcome)
+        }
     }
 
     private suspend fun resolve(cmd: IncomingCommand): CommandOutcome {
@@ -68,16 +76,26 @@ class HandleIncomingCommand(
     }
 
     private suspend fun reply(cmd: IncomingCommand, status: String, outcome: CommandOutcome?) {
+        publish(resultMessage(cmd, status, outcome))
+    }
+
+    /**
+     * Итог `reboot`: порт лишь запланировал перезагрузку, прямая публикация может не успеть до неё. Итог кладётся в
+     * outbox (он переживает перезагрузку) и уходит при досылке после загрузки (решение 142).
+     */
+    private suspend fun persistReply(cmd: IncomingCommand, status: String, outcome: CommandOutcome?) {
+        outbox.enqueue(resultMessage(cmd, status, outcome))
+    }
+
+    private fun resultMessage(cmd: IncomingCommand, status: String, outcome: CommandOutcome?): OutgoingMessage {
         val now = clock.nowMillis()
-        publish(
-            OutgoingMessage(
-                kind = MessageKind.COMMAND_RESULT,
-                payload = encoder.commandResult(cmd.cmdId, status, outcome, now),
-                qos = RESULT_QOS,
-                correlationData = cmd.correlationData,
-                responseTopic = cmd.responseTopic,
-                createdAt = now,
-            ),
+        return OutgoingMessage(
+            kind = MessageKind.COMMAND_RESULT,
+            payload = encoder.commandResult(cmd.cmdId, status, outcome, now),
+            qos = RESULT_QOS,
+            correlationData = cmd.correlationData,
+            responseTopic = cmd.responseTopic,
+            createdAt = now,
         )
     }
 

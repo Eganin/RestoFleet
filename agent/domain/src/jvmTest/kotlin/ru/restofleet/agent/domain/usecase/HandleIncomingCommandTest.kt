@@ -57,6 +57,7 @@ class HandleIncomingCommandTest {
         execute,
         processed,
         PublishOrBuffer(session, publisher, outbox),
+        outbox,
         encoder,
         clock,
     )
@@ -230,6 +231,91 @@ class HandleIncomingCommandTest {
     }
 
     @Test
+    fun rebootSuccessGoesToTheOutboxAndIsNotPublishedDirectly() = runTest {
+        deviceOwner()
+
+        handle(incoming(Command.Reboot, rawType = "reboot"))
+
+        assertThat(sent()).containsExactly(res("received", "null"))
+        assertThat(outbox.messages.map { String(it.payload) })
+            .containsExactly(res("succeeded", "Succeeded(result={})"))
+        assertThat(publisher.calls).isEqualTo(1)
+    }
+
+    @Test
+    fun rebootSucceededInTheOutboxKeepsReplyFieldsAndAtLeastQosOne() = runTest {
+        deviceOwner()
+
+        handle(incoming(Command.Reboot, rawType = "reboot"))
+
+        val queued = outbox.messages.single()
+        assertThat(queued.kind).isEqualTo(MessageKind.COMMAND_RESULT)
+        assertThat(queued.qos).isAtLeast(1)
+        assertThat(queued.responseTopic).isEqualTo("rf/v1/dev/d/cmd/res")
+        assertThat(String(queued.correlationData!!)).isEqualTo("c1")
+        assertThat(queued.createdAt).isEqualTo(now)
+    }
+
+    @Test
+    fun rebootOrderIsReceivedMarkExecuteThenPersistentSucceeded() = runTest {
+        deviceOwner()
+        admin.rebootResult = {
+            log += "execute"
+            Outcome.Success(Unit)
+        }
+
+        handle(incoming(Command.Reboot, rawType = "reboot"))
+
+        assertThat(log.entries).containsExactly(
+            "publish:${res("received", "null")}",
+            "mark:c1",
+            "execute",
+            "enqueue:${res("succeeded", "Succeeded(result={})")}",
+        ).inOrder()
+    }
+
+    @Test
+    fun rebootSuccessIsPersistedEvenWhenTheSessionIsDisconnected() = runTest {
+        deviceOwner()
+        session.state.value = SessionState.DISCONNECTED
+
+        handle(incoming(Command.Reboot, rawType = "reboot"))
+
+        assertThat(publisher.calls).isEqualTo(0)
+        assertThat(outbox.messages.map { String(it.payload) }.last()).contains(":succeeded:")
+    }
+
+    @Test
+    fun rebootThatCannotBeScheduledIsReportedAsFailedThroughTheNormalPath() = runTest {
+        deviceOwner()
+        admin.rebootResult = { Outcome.Failure(TestError("not_device_owner")) }
+
+        handle(incoming(Command.Reboot, rawType = "reboot"))
+
+        assertThat(sent()).containsExactly(
+            res("received", "null"),
+            res("failed", "Failed(reason=not_device_owner)"),
+        ).inOrder()
+        assertThat(outbox.messages).isEmpty()
+    }
+
+    @Test
+    fun rebootUnsupportedInNormalModeIsPublishedDirectly() = runTest {
+        handle(incoming(Command.Reboot, rawType = "reboot"))
+
+        assertThat(sent().last()).isEqualTo(res("unsupported", "Unsupported(reason=requires_device_owner)"))
+        assertThat(outbox.messages).isEmpty()
+    }
+
+    @Test
+    fun otherSuccessfulCommandsAreStillPublishedDirectly() = runTest {
+        handle(incoming(Command.Beep(500), rawType = "beep"))
+
+        assertThat(sent().last()).isEqualTo(res("succeeded", "Succeeded(result={ringerMode=normal})"))
+        assertThat(outbox.messages).isEmpty()
+    }
+
+    @Test
     fun disconnectedSessionKeepsReceivedBeforeSucceededInOutbox() = runTest {
         session.state.value = SessionState.DISCONNECTED
 
@@ -266,9 +352,10 @@ class HandleIncomingCommandTest {
         deviceOwner()
         admin.installResult = {
             delay(Long.MAX_VALUE)
-            Outcome.Success(Unit)
+            Outcome.Success(emptyMap())
         }
-        launch { handle(incoming(Command.InstallApk("https://apk-host/a.apk", sha), rawType = "install_update")) }
+        val install = Command.InstallApk("ru.restofleet.dummy.waiter", "https://apk-host/a.apk", sha)
+        launch { handle(incoming(install, rawType = "install_update")) }
 
         advanceTimeBy(599_999)
         runCurrent()
@@ -338,6 +425,7 @@ class HandleIncomingCommandTest {
             ExecuteCommand({ error("caps") }, admin, FakeUserNotifier(), FakeAppLauncher(), beeper, clock),
             processed,
             PublishOrBuffer(session, publisher, outbox),
+            outbox,
             encoder,
             clock,
         )

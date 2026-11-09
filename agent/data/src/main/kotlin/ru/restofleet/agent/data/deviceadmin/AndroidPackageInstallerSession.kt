@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageInstaller
 import android.os.Build
+import android.util.Log
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -25,7 +26,7 @@ import kotlin.coroutines.cancellation.CancellationException
  * `PendingIntent`, привязанный к пакету приложения (`setPackage`, действие уникально для каждой установки);
  * приёмник регистрируется динамически с `RECEIVER_NOT_EXPORTED` и снимается при выходе. `FLAG_MUTABLE` на API 31+
  * обязателен: установщик дописывает в intent extras. Ожидание итога ограничено [timeoutMs]; при сбое, таймауте
- * и отмене сессия `abandon`-ится.
+ * и отмене сессия `abandon`-ится. Сессия создаётся для пакета [install]`.pkg`: система отклонит APK другого пакета.
  */
 class AndroidPackageInstallerSession(
     private val context: Context,
@@ -37,7 +38,7 @@ class AndroidPackageInstallerSession(
     private class Result(val status: Int, val message: String?)
 
     @Suppress("TooGenericExceptionCaught") // любой сбой установки — результат; Error и отмена не перехватываются
-    override suspend fun install(apk: File): Outcome<Unit, DeviceAdminError> {
+    override suspend fun install(apk: File, pkg: String): Outcome<Unit, DeviceAdminError> {
         val packageInstaller = context.packageManager.packageInstaller
         val action = newAction()
         val result = CompletableDeferred<Result>()
@@ -55,7 +56,8 @@ class AndroidPackageInstallerSession(
         return try {
             withContext(ioDispatcher) {
                 sessionId = packageInstaller.createSession(
-                    PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL),
+                    PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+                        .apply { setAppPackageName(pkg) },
                 )
                 pending = resultIntent(sessionId, action)
                 packageInstaller.openSession(sessionId).use { session ->
@@ -69,7 +71,10 @@ class AndroidPackageInstallerSession(
             val outcome = withTimeoutOrNull(timeoutMs) { result.await() }
                 ?.let { InstallStatusMapper.map(it.status, it.message) }
                 ?: Outcome.Failure(DeviceAdminError.InstallFailed(InstallStatusMapper.TIMEOUT, "timeout"))
-            if (outcome is Outcome.Failure) abandon(packageInstaller, sessionId)
+            if (outcome is Outcome.Failure) {
+                logFailure(outcome.error)
+                abandon(packageInstaller, sessionId)
+            }
             outcome
         } catch (e: CancellationException) {
             abandon(packageInstaller, sessionId)
@@ -103,6 +108,13 @@ class AndroidPackageInstallerSession(
         }
     }
 
+    /** Код и сообщение системы (без URL и без путей): иначе причина отказа остаётся только числом в ответе. */
+    private fun logFailure(error: DeviceAdminError) {
+        if (error is DeviceAdminError.InstallFailed) {
+            Log.w(TAG, "install failed: status=${error.status} message=${error.message}")
+        }
+    }
+
     private fun failed(e: Exception) =
         Outcome.Failure(DeviceAdminError.InstallFailed(InstallStatusMapper.EXCEPTION, e::class.simpleName))
 
@@ -111,5 +123,6 @@ class AndroidPackageInstallerSession(
         private const val ACTION_PREFIX = "ru.restofleet.agent.INSTALL_RESULT."
         private const val APK_NAME = "base.apk"
         private const val NO_SESSION = -1
+        private const val TAG = "PackageInstaller"
     }
 }

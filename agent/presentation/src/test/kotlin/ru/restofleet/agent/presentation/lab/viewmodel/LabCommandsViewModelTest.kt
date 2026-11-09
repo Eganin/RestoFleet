@@ -38,6 +38,7 @@ class LabCommandsViewModelTest {
     private inner class Fixture(
         scope: TestScope,
         checkIds: List<CheckId> = listOf(CheckId.R1, CheckId.C1, CheckId.C4),
+        withCommands: Boolean = true,
     ) {
         val ports = CommandPorts()
         val journal = MemoryJournal()
@@ -70,12 +71,42 @@ class LabCommandsViewModelTest {
             ),
             publishResult = PublishCheckResult { Outcome.Failure(MqttNotConfigured) },
             getDeviceInfo = GetDeviceInfo { DeviceInfo(36, "Pixel", true, AgentMode.NORMAL, "0.1") },
-            runCommand = RunCommandCheck(ports.executeCommand(clock), journal, clock),
+            runCommand = RunCommandCheck(ports.executeCommand(clock), journal, clock).takeIf { withCommands },
             io = dispatcher,
             scope = CoroutineScope(SupervisorJob() + dispatcher),
         )
 
         fun row(id: String) = vm.uiState.value.rows.first { it.id == id }
+    }
+
+    @Test
+    fun withoutACommandRunnerThereIsNoCommandsSection() = runTest {
+        val f = Fixture(this, withCommands = false)
+        advanceUntilIdle()
+
+        assertThat(f.vm.uiState.value.commands).isNull()
+    }
+
+    @Test
+    fun withoutACommandRunnerNoCommandIsExecutedAndNoResultAppears() = runTest {
+        val f = Fixture(this, withCommands = false)
+
+        LabCommand.entries.forEach { f.vm.onIntent(User.RunCommand(it)) }
+        LabCommand.entries.forEach { f.vm.onIntent(User.RunOne(it.checkId)) }
+        advanceUntilIdle()
+
+        assertThat(f.ports.calls).isEmpty()
+        assertThat(f.checkRuns.filter { it == CheckId.C1 || it == CheckId.C4 }).isEmpty()
+        assertThat(f.vm.uiState.value.rows.filter { it.isRunning }).isEmpty()
+        assertThat(f.vm.uiState.value.rows.first { it.id == "C1" }.badge).isEqualTo(Badge.PENDING)
+    }
+
+    @Test
+    fun withACommandRunnerTheCommandsSectionIsShown() = runTest {
+        val f = Fixture(this)
+        advanceUntilIdle()
+
+        assertThat(f.vm.uiState.value.commands).isNotNull()
     }
 
     @Test

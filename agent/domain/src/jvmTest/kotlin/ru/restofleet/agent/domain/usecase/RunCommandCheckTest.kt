@@ -76,7 +76,7 @@ class RunCommandCheckTest {
     fun otherUnsupportedReasonsAreUnavailable() = runTest {
         caps = Capabilities(AgentMode.DEVICE_OWNER, 34, emptySet())
 
-        val result = check(CheckId.D3, Command.InstallApk("http://x/a.apk", "a".repeat(64)))
+        val result = check(CheckId.D3, Command.InstallApk("a.b", "http://x/a.apk", "a".repeat(64)))
 
         assertThat(result.status).isEqualTo(CheckStatus.UNAVAILABLE)
         assertThat(result.note).isEqualTo("invalid_url")

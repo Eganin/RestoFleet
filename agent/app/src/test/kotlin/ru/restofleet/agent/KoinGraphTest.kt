@@ -27,7 +27,10 @@ import ru.restofleet.agent.domain.port.Beeper
 import ru.restofleet.agent.domain.port.CapabilitiesSource
 import ru.restofleet.agent.domain.port.UserNotifier
 import ru.restofleet.agent.domain.usecase.ExecuteCommand
+import ru.restofleet.agent.data.deviceadmin.AndroidLockTaskState
 import ru.restofleet.agent.data.deviceadmin.DpmDeviceAdmin
+import ru.restofleet.agent.data.deviceadmin.LockTaskState
+import ru.restofleet.agent.domain.port.WatchedApps
 import ru.restofleet.agent.data.deviceadmin.LegacyLockTaskEntry
 import ru.restofleet.agent.data.di.ADMIN_COMPONENT
 import ru.restofleet.agent.data.di.APK_HTTP_CLIENT
@@ -115,6 +118,18 @@ class KoinGraphTest {
         assertThat(apk.callTimeoutMillis).isEqualTo(600_000)
         val ids = koin.get<List<CapabilityCheck>>(READING_CHECKS).map { it.id }
         assertThat(ids).containsAtLeast(CheckId.R10, CheckId.R13)
+    }
+
+    @Test
+    fun installIsLimitedToWatchedAppsAndKioskStateComesFromTheSystem() {
+        val koin = GlobalContext.get()
+
+        val watched = runBlocking { koin.get<WatchedApps>().packages() }
+        assertThat(watched).containsAtLeast("ru.restofleet.dummy.waiter", "com.android.chrome")
+        assertThat(koin.get<LockTaskState>()).isInstanceOf(AndroidLockTaskState::class.java)
+        val caps = runBlocking { koin.get<CapabilitiesSource>().current() }
+        assertThat(caps.kioskActive).isFalse()
+        assertThat(caps.kioskPackages).isEmpty()
     }
 
     @Test

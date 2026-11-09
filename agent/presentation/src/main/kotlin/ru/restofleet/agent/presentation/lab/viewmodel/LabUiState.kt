@@ -22,7 +22,7 @@ data class CheckRowUi(
     val settingsTargets: List<SettingsTarget> = emptyList(),
 )
 
-/** Кнопка секции «Команды»; [isRunning] — команда исполняется (или ждёт задержки «через 10 с»). */
+/** Кнопка секции «Команды»; [isRunning] — команда исполняется (или ждёт задержки «через 30 с»). */
 data class CommandButtonUi(val command: LabCommand, val isRunning: Boolean)
 
 /** Секция «Команды»: поля пакета и адреса и кнопки C1–C4. */

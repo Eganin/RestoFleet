@@ -13,21 +13,23 @@ import ru.restofleet.agent.domain.model.UnavailableReason
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class SerialCollectorTest {
+    private val notOwner = DeviceOwnerRole { false }
     private val serialUnknown = Reading.Unavailable(UnavailableReason.Failed("serial_unknown"))
 
     @Test
     fun serialIsReturned() {
-        assertThat(SerialCollector(getSerial = { "R58M123ABC" }).read()).isEqualTo(Reading.Available("R58M123ABC"))
+        val collector = SerialCollector(role = notOwner, getSerial = { "R58M123ABC" })
+        assertThat(collector.read()).isEqualTo(Reading.Available("R58M123ABC"))
     }
 
     @Test
     fun unknownIsFailed() {
-        assertThat(SerialCollector(getSerial = { "unknown" }).read()).isEqualTo(serialUnknown)
+        assertThat(SerialCollector(role = notOwner, getSerial = { "unknown" }).read()).isEqualTo(serialUnknown)
     }
 
     @Test
     fun blankIsFailed() {
-        assertThat(SerialCollector(getSerial = { "  " }).read()).isEqualTo(serialUnknown)
+        assertThat(SerialCollector(role = notOwner, getSerial = { "  " }).read()).isEqualTo(serialUnknown)
     }
 
     private fun denied(api: Int, deviceOwner: Boolean = false) =
@@ -64,7 +66,7 @@ class SerialCollectorTest {
 
     @Test
     fun otherFailuresAreIsolated() {
-        val reading = SerialCollector(getSerial = { error("boom") }).read()
+        val reading = SerialCollector(role = notOwner, getSerial = { error("boom") }).read()
         assertThat(reading).isEqualTo(Reading.Unavailable(UnavailableReason.Failed("boom")))
     }
 
@@ -72,6 +74,6 @@ class SerialCollectorTest {
     @Config(sdk = [29])
     fun defaultSourceReadsBuildGetSerial() {
         ShadowBuild.setSerial("SHADOW-SERIAL-1")
-        assertThat(SerialCollector().read()).isEqualTo(Reading.Available("SHADOW-SERIAL-1"))
+        assertThat(SerialCollector(role = notOwner).read()).isEqualTo(Reading.Available("SHADOW-SERIAL-1"))
     }
 }

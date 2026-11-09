@@ -28,7 +28,7 @@ class DeviceOwnerUiStateMapper {
                 null -> TITLE_UNKNOWN
             },
             isDeviceOwner = mode == AgentMode.DEVICE_OWNER,
-            owner = OWNER,
+            owner = if (mode == AgentMode.DEVICE_OWNER) OWNER else NO_VALUE,
             serial = session.results[CheckId.R13]?.raw?.get(SERIAL_KEY) ?: NO_VALUE,
             rows = DEVICE_OWNER_ROWS.map { row(it, session, mode) },
             apkUrl = session.apkUrl,

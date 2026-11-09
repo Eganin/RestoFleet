@@ -13,7 +13,31 @@ enum class Permission {
 
 enum class LaunchStrategy { DIRECT_DO, DIRECT_OVERLAY, VIA_NOTIFICATION }
 
-data class Capabilities(val mode: AgentMode, val apiLevel: Int, val granted: Set<Permission>) {
+/**
+ * Возможности агента сейчас. [kioskActive] — устройство в lock task (киоск D4 или закрепление экрана);
+ * [kioskPackages] — пакеты, которым lock task разрешает показывать окна (allowlist DPM, для Device Owner; пуст, если
+ * не известен). Под киоском системные уведомления и запуск чужих приложений недоступны (решение 141).
+ */
+data class Capabilities(
+    val mode: AgentMode,
+    val apiLevel: Int,
+    val granted: Set<Permission>,
+    val kioskActive: Boolean = false,
+    val kioskPackages: Set<String> = emptySet(),
+) {
+    /**
+     * Отказ из-за киоска: `null` — киоск не мешает. Под киоском `ShowMessage` (уведомление не видно) и `LaunchApp`
+     * для пакета вне [kioskPackages] (запуск блокирует система) честно получают `kiosk_active`, а не ложный успех.
+     * Идёт после [check]: неверные аргументы по-прежнему `Unsupported`. `Beep`, `Ping`, `Reboot`, `InstallApk`,
+     * `LockTask` киоск не затрагивает.
+     */
+    fun kioskRefusal(command: Command): String? = when {
+        !kioskActive -> null
+        command is Command.ShowMessage -> KIOSK_ACTIVE
+        command is Command.LaunchApp && command.pkg !in kioskPackages -> KIOSK_ACTIVE
+        else -> null
+    }
+
     fun launchStrategy(): LaunchStrategy = when {
         mode == AgentMode.DEVICE_OWNER -> LaunchStrategy.DIRECT_DO
         Permission.SYSTEM_ALERT_WINDOW in granted -> LaunchStrategy.DIRECT_OVERLAY
@@ -37,38 +61,31 @@ data class Capabilities(val mode: AgentMode, val apiLevel: Int, val granted: Set
     private fun requireDeviceOwner(): String? =
         if (mode == AgentMode.DEVICE_OWNER) null else "requires_device_owner"
 
-    private fun notificationsDenied(): Boolean =
-        apiLevel >= NOTIFICATION_PERMISSION_API && Permission.POST_NOTIFICATIONS !in granted
-
     private fun checkShowMessage(command: Command.ShowMessage): String? = when {
         command.text.isBlank() -> "empty_text"
         command.text.length > MAX_TEXT_LENGTH -> "text_too_long"
-        notificationsDenied() -> "notifications_denied"
         else -> null
     }
 
-    private fun checkLaunchApp(command: Command.LaunchApp): String? =
-        checkTarget(command.pkg, command.url)
-            ?: if (launchStrategy() == LaunchStrategy.VIA_NOTIFICATION && notificationsDenied()) {
-                "notifications_denied"
-            } else {
-                null
-            }
+    private fun checkLaunchApp(command: Command.LaunchApp): String? = checkTarget(command.pkg, command.url)
 
     private fun checkInstall(command: Command.InstallApk): String? = when {
+        !isValidPackage(command.pkg) -> "invalid_package"
         !isHttpsUrl(command.url) -> "invalid_url"
         !SHA256.matches(command.sha256) -> "invalid_sha256"
         else -> null
     }
 
     private fun checkTarget(pkg: String, url: String?): String? = when {
-        pkg.length > MAX_PACKAGE_LENGTH || !PACKAGE_NAME.matches(pkg) -> "invalid_package"
+        !isValidPackage(pkg) -> "invalid_package"
         url != null && !isHttpsUrl(url) -> "invalid_url"
         else -> null
     }
 
+    private fun isValidPackage(pkg: String): Boolean = pkg.length <= MAX_PACKAGE_LENGTH && PACKAGE_NAME.matches(pkg)
+
     companion object {
-        private const val NOTIFICATION_PERMISSION_API = 33
+        private const val KIOSK_ACTIVE = "kiosk_active"
         private val BEEP_RANGE_MS = 1L..30_000L
         private val PACKAGE_NAME = Regex("[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+")
         private val SHA256 = Regex("[0-9a-fA-F]{64}")

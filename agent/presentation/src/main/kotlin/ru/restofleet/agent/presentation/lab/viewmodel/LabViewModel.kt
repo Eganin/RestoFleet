@@ -31,18 +31,19 @@ import ru.restofleet.shared.kernel.Outcome
 
 /**
  * Состояние меняется только на главном потоке (scope — `Main.immediate`); тяжёлые use case идут через [io].
- * «Запустить всё» гоняет проверки по одной, чтобы строки получали статусы по мере готовности.
+ * «Запустить всё» гоняет проверки по одной, чтобы строки получали статусы по мере готовности. [runCommand] — запуск
+ * команд C1–C4; `null` в release-сборке: секции «Команды» нет, кнопки команд ничего не делают (решение 140).
  */
 class LabViewModel(
     private val runChecks: RunCapabilityChecks,
     private val exportReport: ExportCapabilityReport,
     private val publishResult: PublishCheckResult,
     private val getDeviceInfo: GetDeviceInfo,
-    private val runCommand: RunCommandCheck,
+    private val runCommand: RunCommandCheck?,
     private val io: CoroutineDispatcher,
     scope: CoroutineScope = defaultScope(),
 ) : BaseMviViewModel<LabSession, LabUiState, LabIntent, LabAction, LabEffect>(
-    store = MviStore(LabSession(), LabReducer(), LabUiStateMapper()::map),
+    store = MviStore(LabSession(commandsAvailable = runCommand != null), LabReducer(), LabUiStateMapper()::map),
     scope = scope,
 ) {
     init {
@@ -95,6 +96,7 @@ class LabViewModel(
     }
 
     private fun runCommandButton(button: LabCommand) {
+        val run = runCommand ?: return // команды подключены только в debug-сборке (решение 140)
         val id = button.checkId
         if (state.isRunningAll || id in state.running) return
         reduce(LabAction.RunStarted(setOf(id)))
@@ -103,7 +105,7 @@ class LabViewModel(
                 val command = button.toCommand(state.commandPackage, state.commandUrl)
                 guarded(::emitError) {
                     if (button == LabCommand.LAUNCH_APP_DELAYED) delay(BACKGROUND_LAUNCH_DELAY_MS)
-                    withContext(io) { runCommand(id, command) }
+                    withContext(io) { run(id, command) }
                 }?.let { reduce(LabAction.ResultsArrived(listOf(it))) }
             } finally {
                 reduce(LabAction.RunFinished(setOf(id)))
