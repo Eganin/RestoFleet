@@ -17,17 +17,20 @@ internal class SessionPrerequisites(
     private val caSource: CaSource,
     private val log: (String) -> Unit,
 ) {
-    /** `null`: учётки нет или хранилище не читается (в лог идёт только класс сбоя). */
+    /**
+     * Учётки нет — `not_configured` (ждать провижининга). Хранилище бросило (временный сбой Keystore и любой другой) —
+     * `credentials_unavailable`: запись цела, чтение повторяется по паузе (решение 174). В лог идёт только класс сбоя.
+     */
     @Suppress("TooGenericExceptionCaught", "SwallowedException") // изоляция сбоя хранилища (канон 78)
-    suspend fun settings(): BrokerSettings? =
+    suspend fun settings(): Outcome<BrokerSettings, MqttError> =
         try {
-            credentials.load()
+            credentials.load()?.let { Outcome.Success(it) } ?: Outcome.Failure(MqttError.NotConfigured)
         } catch (e: CancellationException) {
             currentCoroutineContext().ensureActive()
-            null
+            Outcome.Failure(MqttError.CredentialsUnavailable)
         } catch (e: Exception) {
             log("credentials load failed: ${e::class.java.simpleName}")
-            null
+            Outcome.Failure(MqttError.CredentialsUnavailable)
         }
 
     fun trust(): Outcome<TrustManagerFactory, MqttError> {

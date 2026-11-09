@@ -46,4 +46,14 @@ class CredentialsCheckTest {
         assertThat(r.note).contains("AEADBadTagException")
         assertThat(r.raw).containsExactly("cause", "AEADBadTagException")
     }
+
+    @Test
+    fun temporarilyUnavailableKeystoreSaysTheRecordIsKept() = runTest {
+        val r = check(StoredCredentials.Unavailable("ProviderException")).run()
+
+        assertThat(r.status).isEqualTo(CheckStatus.UNAVAILABLE)
+        assertThat(r.raw).containsExactly("cause", "ProviderException")
+        assertThat(r.note).contains("record kept")
+        assertThat(r.note).doesNotContain("erased")
+    }
 }

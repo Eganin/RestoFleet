@@ -25,6 +25,7 @@ import java.security.ProviderException
 import java.security.UnrecoverableKeyException
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import javax.crypto.AEADBadTagException
+import javax.crypto.IllegalBlockSizeException
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -115,15 +116,11 @@ class KeystoreCredentialStoreTest {
     }
 
     @Test
-    fun everyRecoverableFailureGivesNullWipesRecordAndDiscardsKey() {
+    fun permanentFailuresGiveNullWipeRecordAndDiscardKey() {
         val failures = listOf(
             AEADBadTagException("tag"),
             KeyPermanentlyInvalidatedException("invalidated"),
             UnrecoverableKeyException("unrecoverable"),
-            InvalidKeyException("key"),
-            KeyStoreException("keystore"),
-            GeneralSecurityException("generic"),
-            ProviderException("provider"),
             IllegalArgumentException("short blob"),
         )
         for (failure in failures) {
@@ -138,6 +135,45 @@ class KeystoreCredentialStoreTest {
             assertThat(prefs.getString("unreadable", null)).isEqualTo(failure::class.java.simpleName)
             assertThat(cipher.discarded).isEqualTo(1)
         }
+    }
+
+    // I4: временный сбой Keystore (keystore2 «system error», OTA, нехватка памяти) не стирает учётку и ключ
+    private val transientFailures = listOf(
+        KeyStoreException("keystore"),
+        ProviderException("Keystore operation failed"),
+        InvalidKeyException("Keystore operation failed"),
+        IllegalBlockSizeException(),
+        GeneralSecurityException("generic"),
+    )
+
+    @Test
+    fun transientKeystoreFailuresKeepRecordAndKeyAndLoadThrows() {
+        for (failure in transientFailures) {
+            prefs.edit().clear().commit()
+            runBlocking { store().save(settings) }
+            val before = prefs.getString("blob", null)
+            val cipher = ThrowingCipher(failure)
+
+            val thrown = assertThrows(CredentialsUnavailableException::class.java) {
+                runBlocking { store(cipher).load() }
+            }
+
+            assertThat(thrown.reason).isEqualTo(failure::class.java.simpleName)
+            assertThat(thrown.message).doesNotContain(settings.password)
+            assertThat(prefs.all.keys).containsExactly("blob")
+            assertThat(prefs.getString("blob", null)).isEqualTo(before)
+            assertThat(cipher.discarded).isEqualTo(0)
+        }
+    }
+
+    @Test
+    fun transientFailureIsReportedAsUnavailableAndNextReadSucceeds() = runBlocking {
+        store().save(settings)
+
+        assertThat(store(ThrowingCipher(ProviderException("Keystore operation failed"))).inspect())
+            .isEqualTo(StoredCredentials.Unavailable("ProviderException"))
+        assertThat(store().inspect()).isEqualTo(StoredCredentials.Present(settings))
+        assertThat(store().load()).isEqualTo(settings)
     }
 
     @Test

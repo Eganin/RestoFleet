@@ -2,14 +2,25 @@ package ru.restofleet.agent.data.mqtt
 
 import com.google.common.truth.Truth.assertThat
 import com.hivemq.client.mqtt.mqtt5.exceptions.Mqtt5ConnAckException
+import com.hivemq.client.mqtt.mqtt5.exceptions.Mqtt5DisconnectException
+import com.hivemq.client.mqtt.mqtt5.exceptions.Mqtt5PubAckException
+import com.hivemq.client.mqtt.mqtt5.exceptions.Mqtt5SubAckException
 import com.hivemq.client.mqtt.mqtt5.message.connect.connack.Mqtt5ConnAck
 import com.hivemq.client.mqtt.mqtt5.message.connect.connack.Mqtt5ConnAckReasonCode
+import com.hivemq.client.mqtt.mqtt5.message.disconnect.Mqtt5Disconnect
+import com.hivemq.client.mqtt.mqtt5.message.disconnect.Mqtt5DisconnectReasonCode
+import com.hivemq.client.mqtt.mqtt5.message.publish.puback.Mqtt5PubAck
+import com.hivemq.client.mqtt.mqtt5.message.publish.puback.Mqtt5PubAckReasonCode
+import com.hivemq.client.mqtt.mqtt5.message.subscribe.suback.Mqtt5SubAck
+import com.hivemq.client.mqtt.mqtt5.message.subscribe.suback.Mqtt5SubAckReasonCode
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.Test
+import ru.restofleet.agent.domain.error.MessageRejected
 import java.io.IOException
 import java.net.ConnectException
 import java.security.cert.CertificateException
+import java.util.concurrent.CompletionException
 import javax.net.ssl.SSLHandshakeException
 import javax.net.ssl.SSLPeerUnverifiedException
 
@@ -86,8 +97,117 @@ class MqttErrorMapperTest {
     }
 
     @Test
-    fun pubAckOtherErrorKeepsName() {
+    fun pubAckQuotaExceededIsFinalRejection() {
         assertThat(MqttErrorMapper.fromPublishAck("QUOTA_EXCEEDED", 0x97, isError = true))
-            .isEqualTo(MqttError.Failed("puback_quota_exceeded"))
+            .isEqualTo(MqttError.Rejected("quota_exceeded"))
+    }
+
+    // I1: HiveMQ 1.4.2 завершает future публикации исключением Mqtt5PubAckException, а не результатом с кодом
+    private fun pubAckException(code: Mqtt5PubAckReasonCode): Mqtt5PubAckException {
+        val ack = mockk<Mqtt5PubAck> { every { reasonCode } returns code }
+        return Mqtt5PubAckException(ack, "PUBACK contained an Error Code")
+    }
+
+    private fun subAckException(vararg codes: Mqtt5SubAckReasonCode): Mqtt5SubAckException {
+        val ack = mockk<Mqtt5SubAck> { every { reasonCodes } returns codes.toList() }
+        return Mqtt5SubAckException(ack, "SUBACK contains only Error Codes")
+    }
+
+    @Test
+    fun pubAckExceptionNotAuthorizedIsNotAuthorizedNotConnectFailed() {
+        val error = MqttErrorMapper.fromConnect(pubAckException(Mqtt5PubAckReasonCode.NOT_AUTHORIZED))
+
+        assertThat(error).isEqualTo(MqttError.NotAuthorized)
+        assertThat(error.code).isEqualTo("not_authorized")
+        assertThat(error).isInstanceOf(MessageRejected::class.java)
+    }
+
+    @Test
+    fun pubAckExceptionWrappedInCompletionExceptionIsFound() {
+        val wrapped = CompletionException(pubAckException(Mqtt5PubAckReasonCode.NOT_AUTHORIZED))
+
+        assertThat(MqttErrorMapper.fromConnect(wrapped)).isEqualTo(MqttError.NotAuthorized)
+    }
+
+    @Test
+    fun finalPubAckCodesAreRejectedWithTheirName() {
+        val expected = mapOf(
+            Mqtt5PubAckReasonCode.TOPIC_NAME_INVALID to "puback_topic_name_invalid",
+            Mqtt5PubAckReasonCode.QUOTA_EXCEEDED to "puback_quota_exceeded",
+            Mqtt5PubAckReasonCode.PAYLOAD_FORMAT_INVALID to "puback_payload_format_invalid",
+        )
+        for ((code, name) in expected) {
+            val error = MqttErrorMapper.fromConnect(pubAckException(code))
+
+            assertThat(error.code).isEqualTo(name)
+            assertThat(error).isInstanceOf(MessageRejected::class.java)
+        }
+    }
+
+    @Test
+    fun transientPubAckCodesStayRetryableFailures() {
+        val expected = mapOf(
+            Mqtt5PubAckReasonCode.UNSPECIFIED_ERROR to "puback_unspecified_error",
+            Mqtt5PubAckReasonCode.IMPLEMENTATION_SPECIFIC_ERROR to "puback_implementation_specific_error",
+            Mqtt5PubAckReasonCode.PACKET_IDENTIFIER_IN_USE to "puback_packet_identifier_in_use",
+        )
+        for ((code, detail) in expected) {
+            val error = MqttErrorMapper.fromConnect(pubAckException(code))
+
+            assertThat(error).isEqualTo(MqttError.Failed(detail))
+            assertThat(error).isNotInstanceOf(MessageRejected::class.java)
+        }
+    }
+
+    @Test
+    fun subAckExceptionWithNotAuthorizedAmongCodesIsNotAuthorized() {
+        val error = MqttErrorMapper.fromConnect(
+            subAckException(Mqtt5SubAckReasonCode.TOPIC_FILTER_INVALID, Mqtt5SubAckReasonCode.NOT_AUTHORIZED),
+        )
+
+        assertThat(error).isEqualTo(MqttError.NotAuthorized)
+    }
+
+    @Test
+    fun subAckExceptionWithOtherErrorsKeepsTheFirstName() {
+        val error = MqttErrorMapper.fromConnect(subAckException(Mqtt5SubAckReasonCode.TOPIC_FILTER_INVALID))
+
+        assertThat(error).isEqualTo(MqttError.Failed("suback_topic_filter_invalid"))
+    }
+
+    @Test
+    fun subAckCodesOfAPartlyRefusedSubscription() {
+        assertThat(MqttErrorMapper.fromSubAck(listOf(Mqtt5SubAckReasonCode.GRANTED_QOS_1))).isNull()
+        assertThat(
+            MqttErrorMapper.fromSubAck(
+                listOf(
+                    Mqtt5SubAckReasonCode.GRANTED_QOS_1,
+                    Mqtt5SubAckReasonCode.QUOTA_EXCEEDED,
+                    Mqtt5SubAckReasonCode.NOT_AUTHORIZED,
+                ),
+            ),
+        ).isEqualTo(MqttError.NotAuthorized)
+    }
+
+    // M17: DISCONNECT 0x8E от брокера — свой код, чтобы переподключаться с длинной паузой
+    private fun serverDisconnect(code: Mqtt5DisconnectReasonCode): Mqtt5DisconnectException {
+        val disconnect = mockk<Mqtt5Disconnect> { every { reasonCode } returns code }
+        return Mqtt5DisconnectException(disconnect, "Server sent DISCONNECT")
+    }
+
+    @Test
+    fun sessionTakenOverIsItsOwnRetryableCode() {
+        val error = MqttErrorMapper.fromConnect(serverDisconnect(Mqtt5DisconnectReasonCode.SESSION_TAKEN_OVER))
+
+        assertThat(error).isEqualTo(MqttError.SessionTakenOver)
+        assertThat(error.code).isEqualTo("session_taken_over")
+        assertThat(error.retryable).isTrue()
+    }
+
+    @Test
+    fun otherServerDisconnectKeepsOnlyTheClassName() {
+        val error = MqttErrorMapper.fromConnect(serverDisconnect(Mqtt5DisconnectReasonCode.SERVER_SHUTTING_DOWN))
+
+        assertThat(error).isEqualTo(MqttError.Failed("Mqtt5DisconnectException"))
     }
 }

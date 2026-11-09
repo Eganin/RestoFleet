@@ -7,6 +7,7 @@ import ru.restofleet.agent.domain.command.CommandOutcome
 import ru.restofleet.agent.domain.model.AgentEvent
 import ru.restofleet.agent.domain.model.DesiredShadow
 import ru.restofleet.agent.domain.model.IncomingCommand
+import ru.restofleet.agent.domain.model.MessageKind
 import ru.restofleet.agent.domain.model.OutgoingMessage
 import ru.restofleet.agent.domain.model.ProbeResult
 import ru.restofleet.agent.domain.model.TelemetrySnapshot
@@ -73,8 +74,12 @@ class FakeOutbox(private val log: CallLog = CallLog()) : Outbox {
         records[nextId++] = m
     }
 
+    /** Как `RoomOutbox`: сначала приоритет (`MessageKind.priority`, 0 — первым), внутри него порядок постановки. */
     override suspend fun peek(limit: Int): List<Pair<Long, OutgoingMessage>> =
-        records.entries.take(limit).map { it.key to it.value }
+        records.entries.sortedBy { it.value.kind.priority }.take(limit).map { it.key to it.value }
+
+    override suspend fun peek(limit: Int, kind: MessageKind): List<Pair<Long, OutgoingMessage>> =
+        records.entries.filter { it.value.kind == kind }.take(limit).map { it.key to it.value }
 
     override suspend fun remove(ids: List<Long>) {
         removeCalls += ids

@@ -16,7 +16,10 @@ data class BrokerSettings(
         "BrokerSettings(host=$host, port=$port, deviceId=${deviceId.value}, password=***)"
 }
 
-/** Защищённое хранилище учётки брокера; `load()` возвращает `null`, если записи нет или её нельзя прочитать. */
+/**
+ * Защищённое хранилище учётки брокера. `load()` возвращает `null`, если записи нет или её нельзя прочитать
+ * окончательно, и бросает, если хранилище временно недоступно: запись цела, чтение стоит повторить позже.
+ */
 interface CredentialStore {
     suspend fun save(s: BrokerSettings)
     suspend fun load(): BrokerSettings?

@@ -39,7 +39,12 @@ internal class MemoryOutbox : Outbox {
         records[next++] = m
     }
 
-    override suspend fun peek(limit: Int) = records.entries.take(limit).map { it.key to it.value }
+    /** Как `RoomOutbox`: сначала приоритет, внутри него порядок постановки. */
+    override suspend fun peek(limit: Int) =
+        records.entries.sortedBy { it.value.kind.priority }.take(limit).map { it.key to it.value }
+
+    override suspend fun peek(limit: Int, kind: MessageKind) =
+        records.entries.filter { it.value.kind == kind }.take(limit).map { it.key to it.value }
 
     override suspend fun remove(ids: List<Long>) {
         ids.forEach { records.remove(it) }
@@ -101,6 +106,8 @@ class SessionSupervisorTest {
 
     private fun msg(text: String) = OutgoingMessage(MessageKind.EVENT, text.toByteArray(), 1, createdAt = 1)
 
+    private fun result(text: String) = OutgoingMessage(MessageKind.COMMAND_RESULT, text.toByteArray(), 1, createdAt = 1)
+
     private fun TestScope.supervisor(log: MutableList<String> = mutableListOf()) = SessionSupervisor(
         scope = backgroundScope,
         session = session,
@@ -154,8 +161,8 @@ class SessionSupervisorTest {
 
     @Test
     fun rebootResultIsFlushedBeforeAck() = runTest {
-        // Как у HandleIncomingCommand для Reboot: итог succeeded кладётся только в outbox, не публикуется
-        coEvery { handle(any()) } coAnswers { outbox.enqueue(msg("reboot-succeeded")) }
+        // Как у HandleIncomingCommand для Reboot: итог succeeded (COMMAND_RESULT) кладётся только в outbox
+        coEvery { handle(any()) } coAnswers { outbox.enqueue(result("reboot-succeeded")) }
         supervisor().start()
         runCurrent()
 
@@ -164,6 +171,41 @@ class SessionSupervisorTest {
 
         assertThat(trace.filter { it.startsWith("publish") || it.startsWith("ack") })
             .containsExactly("publish:reboot-succeeded", "ack:c-reboot").inOrder()
+        assertThat(outbox.size()).isEqualTo(0)
+    }
+
+    // I3: после долгого офлайна команды не ждут конца досылки (1000 записей при 20/с — 50 с)
+    @Test
+    fun commandResultsDuringALongDrainGoOutWithinTheNextBatchAndCommandsKeepFlowing() = runTest {
+        repeat(1_000) { outbox.enqueue(OutgoingMessage(MessageKind.TELEMETRY, "t$it".toByteArray(), 1, createdAt = 1)) }
+        // Как PublishOrBuffer при непустом outbox: received и succeeded ложатся в очередь
+        coEvery { handle(any()) } coAnswers {
+            val id = firstArg<IncomingCommand>().cmdId
+            trace += "handle:$id"
+            outbox.enqueue(result("received:$id"))
+            outbox.enqueue(result("succeeded:$id"))
+        }
+        supervisor().start()
+        runCurrent()
+        epoch.value = 1
+        advanceTimeBy(1_000)
+        runCurrent()
+
+        session.commandChannel.trySend(cmd("c1"))
+        session.commandChannel.trySend(cmd("c2"))
+        // 6 с от начала досылки: срок команды (expiresAt = now + 300 с) далеко
+        advanceTimeBy(5_000)
+        runCurrent()
+
+        assertThat(trace).containsAtLeast(
+            "handle:c1", "publish:received:c1", "publish:succeeded:c1", "ack:c1",
+            "handle:c2", "publish:received:c2", "publish:succeeded:c2", "ack:c2",
+        ).inOrder()
+        assertThat(published.size).isLessThan(200)
+
+        advanceTimeBy(60_000)
+        runCurrent()
+        assertThat(published).hasSize(1_004)
         assertThat(outbox.size()).isEqualTo(0)
     }
 

@@ -135,6 +135,17 @@ class ApplyDesiredShadowTest {
         assertThat(sent().single()).contains("e[probes:empty_id, probes:empty_url:kds]")
     }
 
+    // M7: неверный интервал не применяется — остаётся прежний применённый, а не 30 с (Ruling 279)
+    @Test
+    fun invalidIntervalKeepsThePreviouslyAppliedValue() = runTest {
+        apply(shadow(1, interval = 60))
+
+        apply(shadow(2, interval = 5))
+
+        assertThat(store.saved.map { it.telemetryIntervalSec }).containsExactly(60, 60).inOrder()
+        assertThat(sent().last()).isEqualTo("reported:v2:i60:papi:e[telemetryIntervalSec:out_of_range]:at9000")
+    }
+
     @Test
     fun repeatOfSameVersionStillReportsValidationErrors() = runTest {
         store.version = 5

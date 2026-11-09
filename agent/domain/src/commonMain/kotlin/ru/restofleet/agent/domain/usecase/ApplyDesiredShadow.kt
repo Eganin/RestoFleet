@@ -11,11 +11,11 @@ import ru.restofleet.shared.kernel.Clock
 
 /**
  * Применяет `shadow/desired`: версия старее сохранённой игнорируется, новее — сохраняется, и в обоих «неигнорируемых»
- * случаях публикуется `reported` (повтор той же версии только повторяет `reported`). Невалидные поля не применяются,
- * причины идут в `errors` (коды `telemetryIntervalSec:out_of_range`, `probes:empty_id`, `probes:empty_url:<id>`,
- * `probes:duplicate_id:<id>`, `watchedApps:empty`, `watchedApps:invalid_name:<имя>`). Сохранённую тень циклы
-читают сами (интервал телеметрии, цели проб, отслеживаемые пакеты, 3.6b). Сбой хранилища
- * пробрасывается: `reported` о неприменённой версии не публикуется.
+ * случаях публикуется `reported` (повтор той же версии только повторяет `reported`). Невалидные поля не применяются:
+ * интервал вне диапазона оставляет прежний применённый (без прежней тени — 30 с), причины идут в `errors` (коды
+ * `telemetryIntervalSec:out_of_range`, `probes:empty_id`, `probes:empty_url:<id>`, `probes:duplicate_id:<id>`,
+ * `watchedApps:empty`, `watchedApps:invalid_name:<имя>`). Сохранённую тень циклы читают сами (интервал телеметрии, цели
+ * проб, отслеживаемые пакеты, 3.6b). Сбой хранилища пробрасывается: `reported` о неприменённой версии не публикуется.
  */
 class ApplyDesiredShadow(
     private val store: ShadowStore,
@@ -27,7 +27,7 @@ class ApplyDesiredShadow(
         val applied = store.appliedVersion()
         if (applied != null && d.version < applied) return
         val errors = mutableListOf<String>()
-        val valid = sanitize(d, errors)
+        val valid = sanitize(d, errors) { store.load()?.telemetryIntervalSec ?: DEFAULT_INTERVAL_SEC }
         if (applied == null || d.version > applied) store.save(valid)
         val now = clock.nowMillis()
         publish(
@@ -40,12 +40,17 @@ class ApplyDesiredShadow(
         )
     }
 
-    private fun sanitize(d: DesiredShadow, errors: MutableList<String>): DesiredShadow {
+    /** [appliedInterval] — интервал прежней тени: неверное значение поле не меняет (Ruling 279, решение 177). */
+    private suspend fun sanitize(
+        d: DesiredShadow,
+        errors: MutableList<String>,
+        appliedInterval: suspend () -> Int,
+    ): DesiredShadow {
         val interval = if (d.telemetryIntervalSec in INTERVAL_RANGE_SEC) {
             d.telemetryIntervalSec
         } else {
             errors += "telemetryIntervalSec:out_of_range"
-            DEFAULT_INTERVAL_SEC
+            appliedInterval()
         }
         return d.copy(
             telemetryIntervalSec = interval,

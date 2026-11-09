@@ -28,6 +28,9 @@ internal class RoomOutbox(
     override suspend fun peek(limit: Int): List<Pair<Long, OutgoingMessage>> =
         dao.peek(limit).map { it.id to it.toMessage() }
 
+    override suspend fun peek(limit: Int, kind: MessageKind): List<Pair<Long, OutgoingMessage>> =
+        dao.peekKind(kind.name, limit).map { it.id to it.toMessage() }
+
     override suspend fun remove(ids: List<Long>) {
         if (ids.isEmpty()) return
         // Лимит переменных SQLite — 999 на старых версиях; пачки в одной транзакции остаются атомарными

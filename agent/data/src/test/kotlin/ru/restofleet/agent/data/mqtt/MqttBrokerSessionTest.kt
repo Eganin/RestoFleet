@@ -75,6 +75,8 @@ internal class FakeLinkFactory(private val trace: MutableList<String>) : MqttLin
     }
 }
 
+private const val MINUTE = 60_000L
+
 class MqttBrokerSessionTest {
     private val ca = HeldCertificate.Builder().certificateAuthority(0).commonName("stand-ca").build()
     private val caPem = ca.certificatePem().toByteArray()
@@ -84,30 +86,40 @@ class MqttBrokerSessionTest {
     private val factory = FakeLinkFactory(trace)
 
     private class MemoryStore(var value: BrokerSettings?) : CredentialStore {
+        /** Сбои чтения по очереди: каждый вызов `load()` забирает один (как временный сбой Keystore). */
+        val failures = ArrayDeque<Exception>()
+        var loads = 0
+
         override suspend fun save(s: BrokerSettings) {
             value = s
         }
 
-        override suspend fun load(): BrokerSettings? = value
+        override suspend fun load(): BrokerSettings? {
+            loads++
+            failures.removeFirstOrNull()?.let { throw it }
+            return value
+        }
     }
 
     private val memory = MemoryStore(settings)
     private val store = NotifyingCredentialStore(memory, changes)
     private var pem: ByteArray? = caPem
+    private var pemSource: () -> ByteArray? = { pem }
 
     private fun link(connId: String) = FakeLink(connId, trace = trace).also { factory.queue += it }
 
-    private fun TestScope.session(): MqttBrokerSession {
+    private fun TestScope.session(log: MutableList<String> = mutableListOf()): MqttBrokerSession {
         var n = 0
         return MqttBrokerSession(
             credentials = store,
-            caSource = { pem },
+            caSource = { pemSource() },
             changes = changes,
             linkFactory = factory,
             ids = IdGenerator { "k-${++n}" },
             clock = Clock { 1_000 },
             statusPayloads = StatusPayloads(DeviceFacts("m", "Google", "16", 36), "0.1.0", { false }, { "boot-1" }),
             scope = backgroundScope,
+            log = { log += it },
         )
     }
 
@@ -241,7 +253,7 @@ class MqttBrokerSessionTest {
     }
 
     @Test
-    fun authFailureIsNotRetriedUntilCredentialsChange() = runTest {
+    fun authFailureReconnectsImmediatelyAfterCredentialChange() = runTest {
         val bad = link("k-1").also { it.connectResult = Outcome.Failure(MqttError.AuthFailed) }
         val s = session()
 
@@ -261,6 +273,136 @@ class MqttBrokerSessionTest {
         assertThat(factory.settingsSeen.map { it.password }).containsExactly("pw-1", "pw-2").inOrder()
         assertThat(s.state.value).isEqualTo(SessionState.CONNECTED)
         assertThat(good.published).hasSize(1)
+    }
+
+    // I5: auth_failed повторяется редко (15 мин, затем до 60), а не ждёт нового провижининга вечно
+    @Test
+    fun authFailureIsRetriedRarely() = runTest {
+        link("k-1").also { it.connectResult = Outcome.Failure(MqttError.AuthFailed) }
+        link("k-2").also { it.connectResult = Outcome.Failure(MqttError.AuthFailed) }
+        val recovered = link("k-3")
+        val s = session()
+
+        s.connect()
+        runCurrent()
+        advanceTimeBy(15 * MINUTE - 1)
+        runCurrent()
+        assertThat(factory.settingsSeen).hasSize(1)
+        assertThat(s.status.value.error).isEqualTo(MqttError.AuthFailed)
+
+        advanceTimeBy(1)
+        runCurrent()
+        assertThat(factory.settingsSeen).hasSize(2)
+        assertThat(s.status.value.error).isEqualTo(MqttError.AuthFailed)
+
+        advanceTimeBy(30 * MINUTE - 1)
+        runCurrent()
+        assertThat(factory.settingsSeen).hasSize(2)
+        advanceTimeBy(1)
+        runCurrent()
+        assertThat(factory.settingsSeen).hasSize(3)
+        assertThat(s.state.value).isEqualTo(SessionState.CONNECTED)
+        assertThat(recovered.published).hasSize(1)
+    }
+
+    @Test
+    fun authRefusalAfterAutomaticReconnectIsAlsoRetriedRarelyWithAFreshLink() = runTest {
+        val first = link("k-1")
+        val s = session()
+        s.connect()
+        runCurrent()
+        val second = link("k-2")
+
+        first.events.trySend(LinkEvent.Closed(MqttError.AuthFailed))
+        runCurrent()
+        assertThat(s.status.value.error).isEqualTo(MqttError.AuthFailed)
+        advanceTimeBy(15 * MINUTE - 1)
+        runCurrent()
+        assertThat(factory.settingsSeen).hasSize(1)
+
+        advanceTimeBy(1)
+        runCurrent()
+        assertThat(factory.settingsSeen).hasSize(2)
+        assertThat(second.published).hasSize(1)
+        assertThat(s.state.value).isEqualTo(SessionState.CONNECTED)
+    }
+
+    // I4: временный сбой хранилища учётки — не `not_configured` навсегда, а повтор по паузе без смены учётки
+    @Test
+    fun unavailableCredentialStoreIsRetriedWithBackoffWithoutCredentialChange() = runTest {
+        memory.failures += ru.restofleet.agent.data.credentials.CredentialsUnavailableException("ProviderException")
+        memory.failures += ru.restofleet.agent.data.credentials.CredentialsUnavailableException("ProviderException")
+        link("k-1")
+        val s = session()
+
+        s.connect()
+        runCurrent()
+        assertThat(s.status.value.state).isEqualTo(SessionState.DISCONNECTED)
+        assertThat(s.status.value.error).isEqualTo(MqttError.CredentialsUnavailable)
+        assertThat(s.status.value.error!!.code).isEqualTo("credentials_unavailable")
+        assertThat(factory.settingsSeen).isEmpty()
+
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertThat(memory.loads).isEqualTo(2)
+        assertThat(factory.settingsSeen).isEmpty()
+
+        advanceTimeBy(2_000)
+        runCurrent()
+        assertThat(memory.loads).isEqualTo(3)
+        assertThat(s.state.value).isEqualTo(SessionState.CONNECTED)
+    }
+
+    // M6: неожиданное исключение в цикле сессии не роняет процесс, следующая итерация — после паузы
+    @Test
+    fun unexpectedExceptionInTheLoopKeepsTheSessionAliveAndRetriesAfterAPause() = runTest {
+        var pemCalls = 0
+        pemSource = {
+            pemCalls++
+            if (pemCalls == 1) throw IllegalStateException("raw resource broken") else caPem
+        }
+        link("k-1")
+        val log = mutableListOf<String>()
+        val s = session(log)
+
+        s.connect()
+        runCurrent()
+        assertThat(s.status.value.state).isEqualTo(SessionState.DISCONNECTED)
+        assertThat(s.status.value.error).isEqualTo(MqttError.Internal("IllegalStateException"))
+        assertThat(log.joinToString()).contains("IllegalStateException")
+        assertThat(log.joinToString()).doesNotContain("raw resource broken")
+
+        advanceTimeBy(999)
+        runCurrent()
+        assertThat(factory.settingsSeen).isEmpty()
+        advanceTimeBy(1)
+        runCurrent()
+
+        assertThat(pemCalls).isEqualTo(2)
+        assertThat(s.state.value).isEqualTo(SessionState.CONNECTED)
+    }
+
+    @Test
+    fun exceptionWhileServingClosesTheLinkAndReconnectsAfterAPause() = runTest {
+        val first = link("k-1")
+        var onlines = 0
+        first.onPublish = { m ->
+            if (text(m).contains("\"state\":\"online\"") && ++onlines == 2) throw IllegalArgumentException("encoder")
+        }
+        val s = session()
+        s.connect()
+        runCurrent()
+        val second = link("k-2")
+
+        first.events.trySend(LinkEvent.Connected("k-1b"))
+        runCurrent()
+        assertThat(first.closed).isTrue()
+        assertThat(s.status.value.error).isEqualTo(MqttError.Internal("IllegalArgumentException"))
+
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertThat(second.published).hasSize(1)
+        assertThat(s.state.value).isEqualTo(SessionState.CONNECTED)
     }
 
     @Test

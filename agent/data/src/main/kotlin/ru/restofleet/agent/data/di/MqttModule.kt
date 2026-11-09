@@ -4,8 +4,6 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.Module
 import org.koin.core.qualifier.named
@@ -24,6 +22,7 @@ import ru.restofleet.agent.data.mqtt.MqttSessionCheck
 import ru.restofleet.agent.data.mqtt.SessionRuntime
 import ru.restofleet.agent.data.mqtt.SessionSupervisor
 import ru.restofleet.agent.data.mqtt.StatusPayloads
+import ru.restofleet.agent.data.mqtt.sessionScope
 import ru.restofleet.agent.data.lifecycle.TELEMETRY_INTERVAL_MS
 import ru.restofleet.agent.data.probes.ProbeLoop
 import ru.restofleet.agent.data.shadow.AppliedTelemetryInterval
@@ -44,7 +43,10 @@ import ru.restofleet.shared.kernel.IdGenerator
 import ru.restofleet.shared.kernel.UuidIdGenerator
 import java.io.File
 
-/** Qualifier процессного scope MQTT-сессии: переживает сервис, чтобы `offline` успел уйти в `onDestroy`. */
+/**
+ * Qualifier процессного scope MQTT-сессии: переживает сервис, чтобы `offline` успел уйти в `onDestroy`; неожиданное
+ * исключение в нём не роняет процесс ([sessionScope], решение 175).
+ */
 val SESSION_SCOPE = named("sessionScope")
 
 /** Qualifier проверок группы MQTT (сейчас M1). */
@@ -62,7 +64,7 @@ val mqttModule: Module = module {
     single<PayloadEncoder> { JsonPayloadEncoder() }
     single { FileShadowStore(File(androidContext().noBackupFilesDir, "shadow.json")) }
     single<ShadowStore> { get<FileShadowStore>() }
-    single(SESSION_SCOPE) { CoroutineScope(SupervisorJob() + get<CoroutineDispatcher>(AGENT_DISPATCHER)) }
+    single(SESSION_SCOPE) { sessionScope(get<CoroutineDispatcher>(AGENT_DISPATCHER)) { Log.w(TAG, it) } }
 
     single {
         val context = androidContext()
@@ -98,8 +100,8 @@ val mqttModule: Module = module {
     single<BrokerSession> { get<MqttBrokerSession>() }
     single<MessagePublisher> { get<MqttBrokerSession>() }
 
-    single { PublishOrBuffer(get(), get(), get()) }
-    single { FlushOutbox(get(), get()) }
+    single { PublishOrBuffer(get(), get(), get()) { Log.w(TAG, it) } }
+    single { FlushOutbox(get(), get(), log = { Log.w(TAG, it) }) }
     single { HandleIncomingCommand(get(), get(), get(), get(), get(), get()) }
     single { ApplyDesiredShadow(get(), get(), get(), get()) }
     single { PublishTelemetry(get(), get(), get()) }

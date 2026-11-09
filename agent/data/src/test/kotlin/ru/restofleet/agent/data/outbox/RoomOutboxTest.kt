@@ -55,6 +55,25 @@ class RoomOutboxTest {
     }
 
     @Test
+    fun `peek by kind returns only that kind in FIFO order and honours limit`() = runBlocking {
+        val outbox = outbox()
+        outbox.enqueue(msg(MessageKind.EVENT, 1))
+        outbox.enqueue(msg(MessageKind.COMMAND_RESULT, 2))
+        outbox.enqueue(msg(MessageKind.TELEMETRY, 3))
+        outbox.enqueue(msg(MessageKind.COMMAND_RESULT, 4))
+        outbox.enqueue(msg(MessageKind.COMMAND_RESULT, 5))
+
+        assertThat(outbox.peek(10, MessageKind.COMMAND_RESULT).map { it.second.createdAt })
+            .containsExactly(2L, 4L, 5L).inOrder()
+        assertThat(outbox.peek(2, MessageKind.COMMAND_RESULT).map { it.second.createdAt })
+            .containsExactly(2L, 4L).inOrder()
+        assertThat(outbox.peek(10, MessageKind.COMMAND_RESULT).first().second.kind)
+            .isEqualTo(MessageKind.COMMAND_RESULT)
+        assertThat(outbox.peek(10, MessageKind.PROBE)).isEmpty()
+        assertThat(outbox.size()).isEqualTo(5)
+    }
+
+    @Test
     fun `peek honours limit and does not remove anything`() = runBlocking {
         val outbox = outbox()
         repeat(4) { outbox.enqueue(msg(MessageKind.EVENT, it)) }

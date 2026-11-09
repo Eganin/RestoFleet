@@ -15,6 +15,9 @@ internal interface OutboxDao {
     @Query("SELECT * FROM outbox ORDER BY priority ASC, id ASC LIMIT :limit")
     suspend fun peek(limit: Int): List<OutboxEntity>
 
+    @Query("SELECT * FROM outbox WHERE kind = :kind ORDER BY id ASC LIMIT :limit")
+    suspend fun peekKind(kind: String, limit: Int): List<OutboxEntity>
+
     @Query("DELETE FROM outbox WHERE id IN (:ids)")
     suspend fun delete(ids: List<Long>)
 

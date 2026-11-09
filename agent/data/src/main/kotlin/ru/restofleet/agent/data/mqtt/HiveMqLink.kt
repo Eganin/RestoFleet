@@ -8,7 +8,6 @@ import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient
 import com.hivemq.client.mqtt.mqtt5.Mqtt5Client
 import com.hivemq.client.mqtt.mqtt5.lifecycle.Mqtt5ClientDisconnectedContext
 import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5Publish
-import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5PublishResult
 import com.hivemq.client.mqtt.mqtt5.message.subscribe.Mqtt5Subscribe
 import com.hivemq.client.mqtt.mqtt5.message.subscribe.Mqtt5Subscription
 import kotlinx.coroutines.channels.Channel
@@ -29,7 +28,8 @@ import kotlin.coroutines.cancellation.CancellationException
  *
  * - TLS: доверие только к переданному [TrustManagerFactory] (CA стенда), имя хоста проверяет [SanHostnameVerifier];
  * - `simpleAuth`: username = deviceId, пароль байтами; нигде не логируется;
- * - автопереподключение HiveMQ 1..120 с; на каждую попытку `connId` и will новые (`disconnectedListener`);
+ * - автопереподключение HiveMQ 1..120 с, после `session_taken_over` — 5..6 мин ([DisconnectPolicy]); на каждую попытку
+ *   `connId` и will новые (`disconnectedListener`);
  * - первое подключение, упавшее при `connect()`, клиент сам не повторяет: решает [MqttBrokerSession];
  * - входящие с ручным подтверждением.
  */
@@ -47,6 +47,8 @@ internal class HiveMqLink(
     @Volatile private var connectedOnce = false
 
     @Volatile private var closing = false
+
+    private val policy = DisconnectPolicy()
 
     override val events: ReceiveChannel<LinkEvent> = _events
     override val incoming: ReceiveChannel<IncomingMessage> = _incoming
@@ -106,19 +108,9 @@ internal class HiveMqLink(
             val subscriptions = topics.map { topic ->
                 Mqtt5Subscription.builder().topicFilter(topic).qos(MqttQos.AT_LEAST_ONCE).build()
             }
+            // Частичный отказ приходит кодами в SUBACK, полный — исключением Mqtt5SubAckException (ниже, в маппере)
             val ack = client.subscribe(Mqtt5Subscribe.builder().addSubscriptions(subscriptions).build()).await()
-            val failed = ack.reasonCodes.firstOrNull { it.isError }
-            if (failed == null) {
-                Outcome.Success(Unit)
-            } else {
-                Outcome.Failure(
-                    if (failed.code == NOT_AUTHORIZED_CODE) {
-                        MqttError.NotAuthorized
-                    } else {
-                        MqttError.Failed("suback_${failed.name.lowercase()}")
-                    },
-                )
-            }
+            MqttErrorMapper.fromSubAck(ack.reasonCodes)?.let { Outcome.Failure(it) } ?: Outcome.Success(Unit)
         } catch (e: CancellationException) {
             currentCoroutineContext().ensureActive()
             Outcome.Failure(MqttErrorMapper.fromConnect(e))
@@ -136,8 +128,9 @@ internal class HiveMqLink(
                 .retain(message.retain)
                 .apply { message.correlationData?.let { correlationData(it) } }
                 .build()
+            // Ошибочный PUBACK HiveMQ 1.4.2 отдаёт исключением Mqtt5PubAckException: его разбирает MqttErrorMapper
             val result = withTimeoutOrNull(PUBLISH_TIMEOUT_MS) { client.publish(publish).await() }
-            if (result == null) Outcome.Failure(MqttError.Failed("publish_timeout")) else resultOf(result)
+            if (result == null) Outcome.Failure(MqttError.Failed("publish_timeout")) else Outcome.Success(Unit)
         } catch (e: CancellationException) {
             currentCoroutineContext().ensureActive()
             Outcome.Failure(MqttErrorMapper.fromConnect(e))
@@ -158,17 +151,6 @@ internal class HiveMqLink(
         }
         _events.close()
         _incoming.close()
-    }
-
-    private fun resultOf(result: Mqtt5PublishResult): Outcome<Unit, MqttError> {
-        val ack = (result as? Mqtt5PublishResult.Mqtt5Qos1Result)?.pubAck
-        val mapped = ack?.reasonCode?.let { MqttErrorMapper.fromPublishAck(it.name, it.code, it.isError) }
-        val thrown = result.error.orElse(null)
-        return when {
-            mapped != null -> Outcome.Failure(mapped)
-            thrown != null -> Outcome.Failure(MqttErrorMapper.fromConnect(thrown))
-            else -> Outcome.Success(Unit)
-        }
     }
 
     private fun onPublish(p: Mqtt5Publish) {
@@ -195,36 +177,34 @@ internal class HiveMqLink(
         }
     }
 
-    /** Каждая попытка переподключения получает свежий `connId` и will с ним; отказ учётки её прекращает. */
+    /** Решение принимает [DisconnectPolicy]; каждая попытка переподключения получает свежий `connId` и will с ним. */
     private fun onDisconnected(context: MqttClientDisconnectedContext) {
         val reconnector = (context as Mqtt5ClientDisconnectedContext).reconnector
         val error = MqttErrorMapper.fromConnect(context.cause)
-        when {
-            closing || !connectedOnce -> reconnector.reconnect(false)
-            !error.retryable -> {
-                reconnector.reconnect(false)
-                _events.trySend(LinkEvent.Closed(error))
-            }
-            else -> {
-                if (reconnector.attempts == 0) _events.trySend(LinkEvent.Lost(error))
-                val next = configs.next().also { current = it }
-                reconnector.connectWith()
-                    .keepAlive(next.keepAliveSec)
-                    .cleanStart(next.cleanStart)
-                    .sessionExpiryInterval(next.sessionExpirySec)
-                    .simpleAuth()
-                    .username(settings.deviceId.value)
-                    .password(settings.password.toByteArray(Charsets.UTF_8))
-                    .applySimpleAuth()
-                    .willPublish()
-                    .topic(next.willTopic)
-                    .payload(next.willPayload)
-                    .qos(MqttQos.fromCode(next.willQos) ?: MqttQos.AT_LEAST_ONCE)
-                    .retain(next.willRetain)
-                    .applyWillPublish()
-                    .applyConnect()
-            }
+        val action = policy.decide(error, closing, connectedOnce, reconnector.attempts)
+        action.notify?.let { _events.trySend(it) }
+        if (action !is DisconnectPolicy.Action.Reconnect) {
+            reconnector.reconnect(false)
+            return
         }
+        // Наш слушатель идёт после автопереподключения HiveMQ: своя пауза перекрывает его паузу
+        action.delayMs?.let { reconnector.delay(it, TimeUnit.MILLISECONDS) }
+        val next = configs.next().also { current = it }
+        reconnector.connectWith()
+            .keepAlive(next.keepAliveSec)
+            .cleanStart(next.cleanStart)
+            .sessionExpiryInterval(next.sessionExpirySec)
+            .simpleAuth()
+            .username(settings.deviceId.value)
+            .password(settings.password.toByteArray(Charsets.UTF_8))
+            .applySimpleAuth()
+            .willPublish()
+            .topic(next.willTopic)
+            .payload(next.willPayload)
+            .qos(MqttQos.fromCode(next.willQos) ?: MqttQos.AT_LEAST_ONCE)
+            .retain(next.willRetain)
+            .applyWillPublish()
+            .applyConnect()
     }
 
     private companion object {
@@ -232,6 +212,5 @@ internal class HiveMqLink(
         const val RECONNECT_MAX_S = 120L
         const val PUBLISH_TIMEOUT_MS = 10_000L
         const val CLOSE_TIMEOUT_MS = 3_000L
-        const val NOT_AUTHORIZED_CODE = 0x87
     }
 }

@@ -13,6 +13,7 @@ import ru.restofleet.agent.domain.fake.FakeBrokerSession
 import ru.restofleet.agent.domain.fake.FakeMessagePublisher
 import ru.restofleet.agent.domain.fake.FakeOutbox
 import ru.restofleet.agent.domain.fake.TestError
+import ru.restofleet.agent.domain.fake.TestRejection
 import ru.restofleet.agent.domain.model.MessageKind
 import ru.restofleet.agent.domain.model.OutgoingMessage
 import ru.restofleet.agent.domain.port.SessionState
@@ -170,6 +171,25 @@ class PublishOrBufferTest {
         // Без сериализации b ушёл бы напрямую, пока a ещё публиковался, а потом a встал бы в очередь: порядок нарушен.
         assertThat(publisher.published.map { String(it.payload) }).isEmpty()
         assertThat(outbox.messages.map { String(it.payload) }).containsExactly("a", "b").inOrder()
+    }
+
+    // I2: окончательный отказ брокера прямой публикации не буферизуется, иначе outbox встал бы до следующей досылки
+    @Test
+    fun brokerRejectionIsDroppedNotBufferedAndTheNextMessageGoesDirectly() = runTest {
+        val log = mutableListOf<String>()
+        val publish = PublishOrBuffer(session, publisher, outbox) { log += it }
+        publisher.result = { m ->
+            if (String(m.payload) == "a") Outcome.Failure(TestRejection()) else Outcome.Success(Unit)
+        }
+
+        publish(message("a"))
+        publish(message("b"))
+
+        assertThat(outbox.messages).isEmpty()
+        assertThat(publisher.published.map { String(it.payload) }).containsExactly("b")
+        assertThat(log).hasSize(1)
+        assertThat(log.single()).contains("not_authorized")
+        assertThat(log.single()).doesNotContain("\"a\"")
     }
 
     @Test

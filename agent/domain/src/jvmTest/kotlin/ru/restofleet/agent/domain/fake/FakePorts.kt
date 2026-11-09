@@ -4,6 +4,7 @@ import ru.restofleet.agent.domain.capability.CheckId
 import ru.restofleet.agent.domain.capability.CheckResult
 import ru.restofleet.agent.domain.capability.LaunchStrategy
 import ru.restofleet.agent.domain.command.Level
+import ru.restofleet.agent.domain.error.MessageRejected
 import ru.restofleet.agent.domain.port.AppLauncher
 import ru.restofleet.agent.domain.port.Beeper
 import ru.restofleet.agent.domain.port.CheckResultJournal
@@ -15,6 +16,9 @@ import ru.restofleet.shared.kernel.Outcome
 typealias MapResult = Outcome<Map<String, String>, DomainError>
 
 data class TestError(override val code: String) : DomainError
+
+/** Окончательный отказ брокера в публикации (как PUBACK `0x87`): повтор не поможет. */
+data class TestRejection(override val code: String = "not_authorized") : MessageRejected
 
 class FakeDeviceAdmin : DeviceAdmin {
     val calls = mutableListOf<String>()

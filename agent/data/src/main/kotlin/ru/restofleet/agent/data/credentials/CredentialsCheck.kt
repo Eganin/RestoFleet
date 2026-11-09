@@ -9,7 +9,8 @@ import ru.restofleet.shared.kernel.Clock
 /**
  * L5: учётка брокера читается из хранилища на Android Keystore. В `raw` — только `deviceId` и `host:port`, пароль
  * не попадает ни в `raw`, ни в `note`. Запись есть, но не расшифровалась (ключ потерян или запись повреждена) —
- * UNAVAILABLE с классом причины; записи нет — NOT_CHECKED.
+ * UNAVAILABLE с классом причины; Keystore временно недоступен — тоже UNAVAILABLE, но запись сохранена (решение 174);
+ * записи нет — NOT_CHECKED.
  */
 class CredentialsCheck(
     private val clock: Clock,
@@ -35,6 +36,13 @@ class CredentialsCheck(
                 CheckStatus.NOT_CHECKED,
                 emptyMap(),
                 "no credentials saved: provision the device first (debug: DEV_CONFIG broadcast)",
+                now,
+            )
+            is StoredCredentials.Unavailable -> CheckResult(
+                id,
+                CheckStatus.UNAVAILABLE,
+                mapOf("cause" to state.reason),
+                "keystore is temporarily unavailable (${state.reason}); record kept, the session retries",
                 now,
             )
             is StoredCredentials.Unreadable -> CheckResult(

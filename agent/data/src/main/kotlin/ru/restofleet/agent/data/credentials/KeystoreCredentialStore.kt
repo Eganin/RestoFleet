@@ -1,6 +1,7 @@
 package ru.restofleet.agent.data.credentials
 
 import android.content.SharedPreferences
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.util.Base64
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
@@ -9,6 +10,8 @@ import ru.restofleet.agent.domain.port.CredentialStore
 import java.io.IOException
 import java.security.GeneralSecurityException
 import java.security.ProviderException
+import java.security.UnrecoverableKeyException
+import javax.crypto.AEADBadTagException
 
 /** Состояние записи учётки для Lab (L5); `load()` разницы между «нет» и «не расшифровалась» не показывает. */
 sealed interface StoredCredentials {
@@ -16,9 +19,15 @@ sealed interface StoredCredentials {
 
     data class Present(val settings: BrokerSettings) : StoredCredentials
 
-    /** Запись была, но не расшифровалась; она стёрта, [reason] — класс сбоя (не секрет). */
+    /** Запись была, но не расшифровалась окончательно; она стёрта, [reason] — класс сбоя (не секрет). */
     data class Unreadable(val reason: String) : StoredCredentials
+
+    /** Хранилище ключей временно не читается; запись и ключ на месте, следующее чтение повторит попытку. */
+    data class Unavailable(val reason: String) : StoredCredentials
 }
+
+/** `load()` при временном сбое хранилища ключей: запись цела, повторить позже. [reason] — класс сбоя (не секрет). */
+class CredentialsUnavailableException(val reason: String) : IOException("credential store unavailable: $reason")
 
 /** Внутреннее API data-слоя для Lab: порт [CredentialStore] не расширяется (решение 138). */
 fun interface CredentialInspector {
@@ -27,9 +36,17 @@ fun interface CredentialInspector {
 
 /**
  * Учётка брокера в `SharedPreferences` (`MODE_PRIVATE`): шифруется вся запись, в prefs лежит Base64(IV || шифротекст).
- * Любой сбой чтения (плохой тег, потерянный или инвалидированный ключ, битый Base64 или формат) — запись стирается,
- * ключ сбрасывается, `load()` возвращает `null`; факт сбоя остаётся маркером `unreadable` (класс исключения) до
- * следующего `save()`. `Error` не перехватывается. Запись — `commit()`: она должна быть на диске до перезапуска.
+ *
+ * Сбои чтения делятся на два вида (решение 174):
+ * - окончательные — подменённый тег (`AEADBadTagException`; так же проявляется и потерянный ключ: вместо него создаётся
+ *   новый), инвалидированный ключ (`KeyPermanentlyInvalidatedException`, `UnrecoverableKeyException`), битый Base64
+ *   или формат: запись стирается, ключ сбрасывается, `load()` возвращает `null`, маркер `unreadable` (класс
+ *   исключения) остаётся до следующего `save()`;
+ * - временные — любой другой `GeneralSecurityException` или `ProviderException` (keystore2 «system error» после OTA,
+ *   нехватка памяти): запись и ключ не трогаются, `inspect()` даёт `Unavailable`, `load()` бросает
+ *   [CredentialsUnavailableException], сессия повторяет чтение по паузе.
+ *
+ * `Error` не перехватывается. Запись — `commit()`: она должна быть на диске до перезапуска.
  */
 class KeystoreCredentialStore(
     private val prefs: SharedPreferences,
@@ -42,7 +59,11 @@ class KeystoreCredentialStore(
         if (!committed) throw IOException("credentials were not committed to disk")
     }
 
-    override suspend fun load(): BrokerSettings? = (inspect() as? StoredCredentials.Present)?.settings
+    override suspend fun load(): BrokerSettings? = when (val state = inspect()) {
+        is StoredCredentials.Present -> state.settings
+        is StoredCredentials.Unavailable -> throw CredentialsUnavailableException(state.reason)
+        StoredCredentials.Missing, is StoredCredentials.Unreadable -> null
+    }
 
     override suspend fun inspect(): StoredCredentials = withContext(dispatcher) {
         val encoded = prefs.getString(KEY_BLOB, null)
@@ -58,12 +79,15 @@ class KeystoreCredentialStore(
             val plain = cipher.decrypt(Base64.decode(encoded, Base64.NO_WRAP))
             CredentialCodec.decode(plain)?.let { StoredCredentials.Present(it) } ?: erase(MALFORMED)
         } catch (e: GeneralSecurityException) {
-            erase(reasonOf(e))
+            if (e.isPermanent()) erase(reasonOf(e)) else StoredCredentials.Unavailable(reasonOf(e))
         } catch (e: IllegalArgumentException) {
             erase(reasonOf(e))
         } catch (e: ProviderException) {
-            erase(reasonOf(e))
+            StoredCredentials.Unavailable(reasonOf(e))
         }
+
+    private fun GeneralSecurityException.isPermanent(): Boolean =
+        this is AEADBadTagException || this is KeyPermanentlyInvalidatedException || this is UnrecoverableKeyException
 
     private fun erase(reason: String): StoredCredentials {
         cipher.discardKey()

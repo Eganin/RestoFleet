@@ -9,6 +9,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import ru.restofleet.agent.domain.model.FlushScope
 import ru.restofleet.agent.domain.port.BrokerSession
 import ru.restofleet.agent.domain.port.Outbox
 import ru.restofleet.agent.domain.port.SessionState
@@ -21,8 +22,10 @@ import kotlin.coroutines.cancellation.CancellationException
  * Циклы вокруг сессии, каждый изолирован (канон 78: сбой одного не роняет остальные и саму сессию, `Error` не
  * ловится):
  * - сессия ([BrokerSession.connect]);
- * - команды: `HandleIncomingCommand`, затем досылка outbox, если он не пуст и связь есть (итог `reboot` лежит только
- *   в outbox, решение 142), и лишь после этого поток подтверждает сообщение брокеру;
+ * - команды: `HandleIncomingCommand`, затем досылка итогов команд из outbox, если он не пуст и связь есть (итог
+ *   `reboot` лежит только в outbox, решение 142), и лишь после этого поток подтверждает сообщение брокеру. Телеметрию
+ *   и события коллектор не ждёт: досылка отпускает замок между пачками, итог уходит сразу или после текущей пачки
+ *   (решение 172);
  * - `desired`: `ApplyDesiredShadow`, ack после возврата;
  * - досылка при каждом новом подключении ([connectedEpoch], уже после `online` и подписок) и раз в
  *   [flushIntervalMs], пока есть связь и outbox не пуст.
@@ -65,7 +68,8 @@ class SessionSupervisor internal constructor(
         session.commands.collectResilient("commands") { cmd ->
             isolated("command") {
                 handleCommand(cmd)
-                flushIfPending()
+                // Только итоги команд: не ждать досылки телеметрии после долгого офлайна (решение 172)
+                if (connectedWithPending()) flush(FlushScope.COMMAND_RESULTS)
             }
         }
     }
@@ -83,13 +87,11 @@ class SessionSupervisor internal constructor(
     private suspend fun flushPeriodically() {
         while (currentCoroutineContext().isActive) {
             delay(flushIntervalMs)
-            isolated("periodic-flush") { flushIfPending() }
+            isolated("periodic-flush") { if (connectedWithPending()) flush() }
         }
     }
 
-    private suspend fun flushIfPending() {
-        if (session.state.value == SessionState.CONNECTED && outbox.size() > 0) flush()
-    }
+    private suspend fun connectedWithPending() = session.state.value == SessionState.CONNECTED && outbox.size() > 0
 
     /** Сбой самого потока (не обработчика) не должен гасить цикл навсегда: повтор через секунду. */
     private suspend fun <T> kotlinx.coroutines.flow.Flow<T>.collectResilient(name: String, block: suspend (T) -> Unit) {
