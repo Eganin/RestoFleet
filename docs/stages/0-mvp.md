@@ -72,8 +72,8 @@ restofleet/
 - [x] `agent:presentation`: Capability Lab (MVI, тесты Reducer/Mapper/ViewModel).
 
 ### M2. Device Owner и команды (1–2 дня)
-- [ ] `AdminReceiver`, `deviceadmin/`: D1–D6; команды C1–C4.
-- [ ] Экран Device Owner в Capability Lab.
+- [x] `AdminReceiver`, `deviceadmin/`: D1–D6; команды C1–C4.
+- [x] Экран Device Owner в Capability Lab (только debug-сборка, решение 140).
 
 ### M3. MQTT и серверные спайки (1–2 дня)
 - [ ] Агент ↔ Mosquitto: M1–M7 (команды через `mosquitto_pub -D publish response-topic … -D publish correlation-data … -D publish message-expiry-interval 300`, просмотр — MQTT Explorer).
