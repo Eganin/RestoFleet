@@ -6,8 +6,8 @@
 
 - **Этап:** MVP-A (эмуляторы) · **ветка:** `stage/0-mvp`
 - **План:** `docs/superpowers/plans/2026-11-05-mvp-a.md`
-- **Последняя завершённая задача:** 2.6 закрытие M2: отчёт M2.md, метрики, handoff; исправления по ревью вехи (C1, I1–I3, m1–m9, решения 140–147)
-- **Следующая задача:** 3.6 MQTT-сессия (BrokerSession); перед ней — FlushOutbox после enqueue итога reboot и WatchedApps из shadow.watchedApps
+- **Последняя завершённая задача:** 3.6a MQTT-сессия агента (HiveMQ, TLS-пиннинг CA стенда, LWT с `connId`, автопереподключение, команды/тень с ack после обработки, досылка outbox, телеметрия и события в MQTT); решения 148–157
+- **Следующая задача:** 3.6b — `PublishCheckResult` (Lab -> `capability_check`), debug-кнопки M2/M7, применение `desired` к циклам (интервал телеметрии, цели проб, `watchedApps`; `FileShadowStore.load()` уже есть)
 - **Блокеры:** GitHub-remote не настроен (CI заработает после пуша)
 - **Как поднять стенд:** `deploy/README.md` (4 команды + `./test-stand.sh`); нужен `local.properties` с `sdk.dir` для сборки.
 - **Исполнение:** M0 — в основной сессии; M1–M4 — субагенты (исполнитель + ревьюер на задачу).
@@ -54,3 +54,4 @@
 | 2026-11-09 | 3.4 домен сессии: PublishOrBuffer, FlushOutbox, HandleIncomingCommand (at-most-once, таймауты), ApplyDesiredShadow, порт PayloadEncoder | см. `git log` | agent:domain 158 тестов (54 новых), строки domain 95,5 %, проект 96,3 %, полная сборка rc=0; мутанты: mark после execute, удаление пачкой, без Mutex убиты; решения 131-135 |
 | 2026-11-09 | 3.5 учётка устройства: Keystore (L5), CredentialStore, debug-ресивер DevConfigReceiver (DUMP) | см. `git log` | agent:domain +ConfigureBrokerCredentials, 3 прогона --rerun app/data rc=0, полная сборка rc=0; строки проекта 96,1 %; L5 на rf-api36 ok до и после reboot; решения 136-139 |
 | 2026-11-09 | 2.6 закрытие M2: отчёт M2.md, метрики, handoff; исправления по ревью вехи (C1, I1–I3, m1–m9, решения 140–147) | см. `git log` | 1070 тестов, строки проекта 96,2 %; rerun app/data rc=0, полная сборка rc=0; D3/киоск/reboot проверены на rf-api36-do |
+| 2026-11-09 | 3.6a MQTT-сессия: `MqttBrokerSession` над `HiveMqLink`, TLS-пиннинг CA стенда (debug), LWT с `connId`, автопереподключение 1–120 с, команды/`desired` с ack после обработки, досылка outbox, телеметрия и события в MQTT, `FileShadowStore`, M1 в Lab | см. `git log` | agent:data 704 теста, всего ~1195; строки проекта 93,3 %, data 90,9 % (HiveMqLink без тестов), domain 96,1 %; полная сборка rc=0; M1 на `rf-api36`: `online`, телеметрия 30 с, LWT с тем же `connId`; решения 148–157 |

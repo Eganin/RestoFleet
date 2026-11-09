@@ -72,16 +72,19 @@ mosquitto/test-dynsec-dev.sh   # проверка ACL: PASS/FAIL, код воз�
 - **Пароли** (`openssl rand -base64 32`) выводятся один раз: в `deploy/out/dev-credentials.txt` (права 600, в git не попадает), по строке `<username> <password>`. В терминал и логи скрипт их не печатает. Агенту/эмулятору пароль берётся оттуда: `awk '$1=="dev-emu-36" {print $2}' out/dev-credentials.txt`.
 - **Повторный запуск** безопасен: ACL применяются заново, существующие клиенты пропускаются (пароль не меняется, файл не дописывается).
 - **Добавить клиента:** внести имя в массив `clients` в `mosquitto/dynsec-dev.sh` и запустить скрипт; пароль появится в файле учёток. Потерянный пароль: `mosquitto_ctrl … dynsec deleteClient <имя>`, затем скрипт.
-- **Подписка оператором на всё** (замена MQTT Explorer, без окон):
+- **Подписка оператором на всё** (замена MQTT Explorer, без окон). Пароль не должен попадать в argv процессов, поэтому опции с ним записываются в файл внутри контейнера через stdin (`mosquitto_sub`/`mosquitto_pub` читают `$XDG_CONFIG_HOME/<имя утилиты>`):
 
 ```bash
-set -a; . ./.env; set +a
 PW="$(awk '$1=="operator" {print $2}' out/dev-credentials.txt)"
-docker compose exec -T mosquitto mosquitto_sub -h localhost -p 8883 --cafile /mosquitto/certs/ca.crt \
-  -V mqttv5 -u operator -P "$PW" -i op-sub -t 'rf/v1/#' -v
+printf '%s\n' '-u operator' "-P $PW" '--cafile /mosquitto/certs/ca.crt' \
+  | docker compose exec -T mosquitto sh -c 'umask 077; mkdir -p /tmp/rfopt; cat > /tmp/rfopt/mosquitto_sub'
+unset PW
+docker compose exec -T -e XDG_CONFIG_HOME=/tmp/rfopt mosquitto \
+  mosquitto_sub -h localhost -p 8883 -V mqttv5 -i op-sub -t 'rf/v1/#' -v -F '%I %t %p'
+docker compose exec -T mosquitto rm -rf /tmp/rfopt          # опции удаляются после проверки
 ```
 
-Публикация команды: тот же вызов с `mosquitto_pub -i op-pub -q 1 -t rf/v1/dev/<id>/cmd/req -m '…'`. Пароль попадает в argv процесса контейнера (dev-стенд), на хосте — только в переменную оболочки.
+Публикация команды: тот же приём с файлом `/tmp/rfopt/mosquitto_pub` и вызовом `mosquitto_pub -i op-pub -q 1 -t rf/v1/dev/<id>/cmd/req -m '…'`. На хосте пароль живёт только в переменной оболочки (`printf` встроен в оболочку и в argv не попадает), в контейнере — в файле с правами 600 на время проверки.
 
 ## Сброс стенда
 
