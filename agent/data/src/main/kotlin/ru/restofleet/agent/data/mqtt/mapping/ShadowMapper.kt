@@ -3,6 +3,7 @@ package ru.restofleet.agent.data.mqtt.mapping
 import kotlinx.serialization.SerializationException
 import ru.restofleet.agent.domain.model.DesiredShadow
 import ru.restofleet.agent.domain.model.ProbeTarget
+import ru.restofleet.agent.domain.model.Thresholds
 import ru.restofleet.shared.kernel.Outcome
 import ru.restofleet.shared.protocol.RfJson
 import ru.restofleet.shared.protocol.dto.ProbeTargetDto
@@ -17,6 +18,7 @@ internal object ShadowMapper {
         telemetryIntervalSec = dto.telemetry.intervalSec,
         watchedApps = dto.watchedApps,
         probes = dto.probes.filter { it.type == HTTP }.map { it.toDomain() },
+        thresholds = Thresholds(dto.thresholds.batteryLowPct, dto.thresholds.tempHighC, dto.thresholds.fgAbsentMin),
     )
 
     /** Битый JSON и отсутствие обязательных полей — [InvalidPayload], исключение наружу не выходит. */
@@ -26,5 +28,12 @@ internal object ShadowMapper {
         Outcome.Failure(InvalidPayload("shadow/desired: ${e.message}"))
     }
 
-    private fun ProbeTargetDto.toDomain() = ProbeTarget(id = id, url = url, timeoutMs = timeoutMs)
+    private fun ProbeTargetDto.toDomain() = ProbeTarget(
+        id = id,
+        url = url,
+        timeoutMs = timeoutMs,
+        intervalSec = intervalSec,
+        failThreshold = failThreshold,
+        reference = reference,
+    )
 }

@@ -1,7 +1,17 @@
 package ru.restofleet.agent.domain.model
 
-/** Цель HTTPS-пробы: [id] попадает в результат, [timeoutMs] — потолок всей пробы. */
-data class ProbeTarget(val id: String, val url: String, val timeoutMs: Long)
+/**
+ * Цель HTTPS-пробы: [id] попадает в результат, [timeoutMs] — потолок всей пробы. [intervalSec], [failThreshold] и
+ * [reference] агент пока не использует (цикла проб нет), они хранятся для эхо в `shadow/reported`.
+ */
+data class ProbeTarget(
+    val id: String,
+    val url: String,
+    val timeoutMs: Long,
+    val intervalSec: Int = 30,
+    val failThreshold: Int = 3,
+    val reference: Boolean = false,
+)
 
 /** Класс ошибки пробы; соответствует `ProbeResultDto.error` протокола (на проводе — lowercase). */
 enum class ProbeError {

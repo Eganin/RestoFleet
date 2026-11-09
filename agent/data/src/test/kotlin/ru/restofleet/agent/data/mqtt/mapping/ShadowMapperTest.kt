@@ -3,6 +3,7 @@ package ru.restofleet.agent.data.mqtt.mapping
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import ru.restofleet.agent.domain.model.ProbeTarget
+import ru.restofleet.agent.domain.model.Thresholds
 import ru.restofleet.shared.kernel.Outcome
 import ru.restofleet.shared.kernel.errorOrNull
 import ru.restofleet.shared.kernel.getOrNull
@@ -10,9 +11,9 @@ import ru.restofleet.shared.protocol.dto.ShadowDesiredDto
 
 class ShadowMapperTest {
     private val expectedProbes = listOf(
-        ProbeTarget("api", "https://api.company.example/health", 5000),
-        ProbeTarget("kds", "https://kitchen.company.example/", 5000),
-        ProbeTarget("ref", "https://reference.example/", 5000),
+        ProbeTarget("api", "https://api.company.example/health", 5000, intervalSec = 30, failThreshold = 3),
+        ProbeTarget("kds", "https://kitchen.company.example/", 5000, intervalSec = 60, failThreshold = 3),
+        ProbeTarget("ref", "https://reference.example/", 5000, intervalSec = 60, failThreshold = 3, reference = true),
     )
 
     @Test
@@ -23,6 +24,13 @@ class ShadowMapperTest {
         assertThat(shadow.telemetryIntervalSec).isEqualTo(30)
         assertThat(shadow.watchedApps).containsExactly("com.android.chrome")
         assertThat(shadow.probes).containsExactlyElementsIn(expectedProbes).inOrder()
+    }
+
+    @Test
+    fun thresholdsAreKeptForTheReportedEcho() {
+        val shadow = ShadowMapper.fromDto(Fixtures.decode("shadow-desired", ShadowDesiredDto.serializer()))
+
+        assertThat(shadow.thresholds).isEqualTo(Thresholds(batteryLowPct = 20, tempHighC = 45.0, fgAbsentMin = 10))
     }
 
     @Test

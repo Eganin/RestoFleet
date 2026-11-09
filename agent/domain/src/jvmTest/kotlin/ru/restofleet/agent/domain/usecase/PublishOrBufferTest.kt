@@ -150,4 +150,36 @@ class PublishOrBufferTest {
 
         assertFailsWith<AssertionError> { publish(message("a")) }
     }
+
+    @Test
+    fun parallelCallsKeepOrderWhenFirstPublishFailsLate() = runTest {
+        publisher.result = { m ->
+            if (String(m.payload) == "a") {
+                delay(100)
+                Outcome.Failure(TestError("late_failure"))
+            } else {
+                Outcome.Success(Unit)
+            }
+        }
+
+        val first = launch { publish(message("a")) }
+        val second = launch { publish(message("b")) }
+        first.join()
+        second.join()
+
+        // Без сериализации b ушёл бы напрямую, пока a ещё публиковался, а потом a встал бы в очередь: порядок нарушен.
+        assertThat(publisher.published.map { String(it.payload) }).isEmpty()
+        assertThat(outbox.messages.map { String(it.payload) }).containsExactly("a", "b").inOrder()
+    }
+
+    @Test
+    fun parallelCallsWithNonEmptyOutboxBothBufferedInOrder() = runTest {
+        outbox.enqueue(message("old"))
+
+        val jobs = listOf("a", "b", "c").map { text -> launch { publish(message(text)) } }
+        jobs.forEach { it.join() }
+
+        assertThat(outbox.messages.map { String(it.payload) }).containsExactly("old", "a", "b", "c").inOrder()
+        assertThat(publisher.calls).isEqualTo(0)
+    }
 }
