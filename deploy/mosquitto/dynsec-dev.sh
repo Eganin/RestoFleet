@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Провижининг DynSec для dev-стенда: роли device и operator-dev, клиенты dev-emu-26..37, dev-do-26, dev-do-36, operator.
+# Провижининг DynSec для dev-стенда: роли device и operator-dev, клиенты dev-emu-26..37, dev-do-26, dev-do-36,
+# dev-acl-test (только для test-dynsec-dev.sh, агентам не выдаётся), operator.
 # Идемпотентен: роли и ACL применяются заново, существующие клиенты пропускаются (пароль не меняется).
 # Пароли новых клиентов печатаются ОДИН раз — в deploy/out/dev-credentials.txt (600): "<username> <password>" на строку.
 # Команды уходят в контейнер через stdin, поэтому пароли не попадают в argv процессов хоста (в контейнере — на миг).
@@ -15,7 +16,8 @@ set -a; . ./.env; set +a
 creds=out/dev-credentials.txt
 clients=()
 for api in 26 27 28 29 30 31 32 33 34 35 36 37; do clients+=("dev-emu-$api"); done
-clients+=(dev-do-26 dev-do-36)
+# dev-acl-test — субъект test-dynsec-dev.sh: проверка не вытесняет работающих агентов (решение 178)
+clients+=(dev-do-26 dev-do-36 dev-acl-test)
 
 # Топики, доступные устройству на публикацию / на получение (P5: всё остальное запрещено)
 publish_topics=(status telemetry probe events shadow/reported cmd/res)
