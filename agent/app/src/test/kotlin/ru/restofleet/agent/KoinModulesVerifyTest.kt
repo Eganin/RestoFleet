@@ -12,6 +12,8 @@ import org.koin.test.verify.definition
 import org.koin.test.verify.injectedParameters
 import org.koin.test.verify.verify
 import ru.restofleet.agent.data.deviceadmin.DeviceOwnerRole
+import ru.restofleet.agent.data.mqtt.BootIdSource
+import ru.restofleet.agent.data.mqtt.DeviceFacts
 import ru.restofleet.agent.data.di.commandModule
 import ru.restofleet.agent.data.lifecycle.DevicePermissions
 import ru.restofleet.agent.data.deviceadmin.LegacyLockTaskEntry
@@ -26,6 +28,7 @@ import ru.restofleet.agent.domain.usecase.RunCapabilityChecks
 import ru.restofleet.agent.domain.usecase.RunCommandCheck
 import kotlinx.coroutines.CoroutineDispatcher
 import ru.restofleet.shared.kernel.Clock
+import ru.restofleet.shared.kernel.IdGenerator
 import java.io.File
 
 class KoinModulesVerifyTest {
@@ -39,6 +42,11 @@ class KoinModulesVerifyTest {
         FreeFallDetector::class,
         Function1::class, // лямбды tick/onError/log с значениями по умолчанию
         Function0::class, // isDeviceOwner коллектора R10 передаётся лямбдой из composition root
+        IdGenerator::class, // connId (`k-<uuid>`) создаётся лямбдой в mqttModule
+        DeviceFacts::class, // сведения об устройстве для status online собираются из Build в лямбде mqttModule
+        BootIdSource::class, // и источник bootId тоже
+        // фабрика ссылок HiveMQ создаётся лямбдой внутри mqttModule; тип internal в data, поэтому по имени
+        Class.forName("ru.restofleet.agent.data.mqtt.MqttLinkFactory").kotlin,
     )
 
     @Test

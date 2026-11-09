@@ -6,6 +6,8 @@ import android.util.Log
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import ru.restofleet.agent.data.lifecycle.AgentCycle
@@ -13,10 +15,14 @@ import ru.restofleet.agent.data.lifecycle.CpuWakeLock
 import ru.restofleet.agent.data.lifecycle.LifecycleJournal
 import ru.restofleet.agent.data.lifecycle.TelemetryLoop
 import ru.restofleet.agent.data.di.AGENT_DISPATCHER
+import ru.restofleet.agent.data.di.SESSION_SCOPE
+import ru.restofleet.agent.data.mqtt.SessionRuntime
 
 /**
- * Foreground-сервис (specialUse): держит цикл телеметрии. Тонкий: вся логика в `AgentCycle`/`TelemetryLoop`.
- * Koin-инъекция допустима: сервис создаёт система.
+ * Foreground-сервис (specialUse): держит цикл телеметрии и MQTT-сессию. Тонкий: вся логика в
+ * `AgentCycle`/`TelemetryLoop` и `SessionRuntime`. Сессия живёт в процессном scope (`SESSION_SCOPE`), а не в
+ * `lifecycleScope`: к `onDestroy` последний уже отменён, а `offline` нужно успеть отправить. Koin-инъекция
+ * допустима: сервис создаёт система.
  */
 class AgentService : LifecycleService(), KoinComponent {
     private val notifications: AgentNotifications by inject()
@@ -25,6 +31,8 @@ class AgentService : LifecycleService(), KoinComponent {
     private val starter: ForegroundStarter by inject()
     private val wakeLock: CpuWakeLock by inject()
     private val dispatcher: CoroutineDispatcher by inject(AGENT_DISPATCHER)
+    private val runtime: SessionRuntime by inject()
+    private val sessionScope: CoroutineScope by inject(SESSION_SCOPE)
     private val cycle by lazy { AgentCycle(lifecycleScope, loop, journal, dispatcher, wakeLock) }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -36,7 +44,9 @@ class AgentService : LifecycleService(), KoinComponent {
             return START_NOT_STICKY
         }
         // Только запускает корутину на IO и возвращается: ни I/O журнала, ни тик не выполняются на главном потоке.
-        cycle.start(intent?.getStringExtra(EXTRA_REASON) ?: REASON_SYSTEM_RESTART)
+        val reason = intent?.getStringExtra(EXTRA_REASON) ?: REASON_SYSTEM_RESTART
+        cycle.start(reason)
+        sessionScope.launch { runtime.start(reason) }
         return START_STICKY
     }
 
@@ -70,6 +80,7 @@ class AgentService : LifecycleService(), KoinComponent {
 
     override fun onDestroy() {
         cycle.stop()
+        sessionScope.launch { runtime.stop() }
         super.onDestroy()
     }
 

@@ -37,13 +37,22 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
     }
+    // Требование HiveMQ MQTT Client на Android: иначе сборка APK падает на дублях ресурсов Netty
+    packaging {
+        resources {
+            excludes += listOf("META-INF/INDEX.LIST", "META-INF/io.netty.versions.properties")
+        }
+    }
 }
 
 /**
- * Доверие к CA стенда (`deploy/certs/out/ca.crt`) только в debug: ресурсы `xml/network_security_config` и
- * `raw/stand_ca` генерируются в `build/generated/` и подключаются лишь к debug-варианту; `android:networkSecurityConfig`
- * объявлен только в `src/debug/AndroidManifest.xml`. Сертификат в git не попадает. Нет файла — `<debug-overrides/>`
- * пустой, сборка и CI проходят. Путь можно подменить свойством `-PstandCaPath=` (так проверяется ветка «нет файла»).
+ * Доверие к CA стенда (`deploy/certs/out/public/ca.crt`, единственный файл CA для клиентов по `deploy/README.md`)
+ * только в debug: ресурсы `xml/network_security_config` и `raw/stand_ca` генерируются в `build/generated/` и
+ * подключаются лишь к debug-варианту; `android:networkSecurityConfig` объявлен только в `src/debug/AndroidManifest.xml`.
+ * Сертификат в git не попадает. `raw/stand_ca` создаётся всегда (debug-код MQTT-сессии на него ссылается): без файла
+ * CA ресурс пустой, `<debug-overrides/>` пустой, сборка и CI проходят, а сессия не стартует (`ca_missing`). Путь можно
+ * подменить свойством `-PstandCaPath=` (так проверяется ветка «нет файла»). В release CA не доставляется вовсе
+ * (QR-провижининг, MVP-B).
  */
 abstract class GenerateStandTrustTask : DefaultTask() {
     @get:InputFile
@@ -65,8 +74,8 @@ abstract class GenerateStandTrustTask : DefaultTask() {
             check("-----BEGIN CERTIFICATE-----" in pem) { "stand CA file must be a PEM certificate" }
             check("PRIVATE KEY" !in pem) { "stand CA file must not contain a private key" }
         }
+        root.resolve("raw").apply { mkdirs() }.resolve("stand_ca.pem").writeBytes(ca?.readBytes() ?: ByteArray(0))
         val overrides = if (ca != null) {
-            root.resolve("raw").apply { mkdirs() }.resolve("stand_ca.pem").writeBytes(ca.readBytes())
             "<debug-overrides>\n        <trust-anchors>\n" +
                 "            <certificates src=\"@raw/stand_ca\" />\n" +
                 "        </trust-anchors>\n    </debug-overrides>"
@@ -116,7 +125,7 @@ abstract class VerifyNoDebugSurfaceTask : DefaultTask() {
 
 val standCaFile: Provider<RegularFile> = providers.gradleProperty("standCaPath")
     .map { layout.projectDirectory.file(it) }
-    .orElse(rootProject.layout.projectDirectory.file("deploy/certs/out/ca.crt"))
+    .orElse(rootProject.layout.projectDirectory.file("deploy/certs/out/public/ca.crt"))
 
 androidComponents {
     // AGP отключает юнит-тесты release по умолчанию; поверхность release (нет вкладки DO и команд Lab, решение 140)

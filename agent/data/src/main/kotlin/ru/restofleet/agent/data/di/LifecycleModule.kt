@@ -22,6 +22,7 @@ import ru.restofleet.agent.domain.capability.CapabilityCheck
 import ru.restofleet.agent.domain.port.SequenceSource
 import ru.restofleet.agent.domain.port.TelemetrySource
 import ru.restofleet.agent.domain.usecase.CollectTelemetry
+import ru.restofleet.agent.domain.usecase.PublishTelemetry
 
 /** Qualifier списка проверок жизненного цикла L1–L5. */
 val LIFECYCLE_CHECKS = named("lifecycleChecks")
@@ -40,7 +41,10 @@ val lifecycleModule: Module = module {
     single<SequenceSource> { InMemorySequenceSource() }
     single<TelemetrySource> { AndroidTelemetrySource(get(), get(), get(), get(), get(), get()) }
     single { CollectTelemetry(get(), get(), get()) }
-    single { TelemetryTick(get(), get(), CapabilityChecksFactory.DEFAULT_WATCHED) }
+    // Публикация телеметрии (MQTT) подключена лениво: use case берётся из mqttModule на каждом тике
+    single {
+        TelemetryTick(get(), get(), CapabilityChecksFactory.DEFAULT_WATCHED, publish = { get<PublishTelemetry>()(it) })
+    }
     single { TelemetryLoop(TELEMETRY_INTERVAL_MS, tick = { get<TelemetryTick>().invoke() }) }
     single<List<CapabilityCheck>>(LIFECYCLE_CHECKS) {
         LifecycleChecks(get(), get(), get(), get(), get(), get()).create() + CredentialsCheck(get(), get())

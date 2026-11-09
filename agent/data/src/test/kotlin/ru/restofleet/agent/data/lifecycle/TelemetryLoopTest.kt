@@ -174,6 +174,47 @@ class TelemetryLoopTest {
     }
 
     @Test
+    fun tickPublishesTheCollectedSnapshot() = runTest {
+        val heartbeat = HeartbeatLog(File(tmp.root, "hb"), clock)
+        val published = mutableListOf<Long>()
+        val tick = TelemetryTick(collect, heartbeat, emptyList(), {}, publish = { published += it.seq })
+
+        tick()
+
+        assertThat(published).containsExactly(7L)
+    }
+
+    @Test
+    fun publishFailureDoesNotFailTheTickOrSkipTheHeartbeat() = runTest {
+        val heartbeat = HeartbeatLog(File(tmp.root, "hb"), clock)
+        val logged = mutableListOf<String>()
+        val tick = TelemetryTick(
+            collect, heartbeat, emptyList(), logged::add,
+            publish = { throw IllegalStateException("outbox: secret detail") },
+        )
+        now = 9_000
+
+        tick()
+
+        assertThat(heartbeat.timestamps()).containsExactly(9_000L)
+        assertThat(logged.joinToString()).contains("IllegalStateException")
+        assertThat(logged.joinToString()).doesNotContain("secret detail")
+    }
+
+    @Test
+    fun genuineCancellationDuringPublishPropagates() = runTest {
+        val heartbeat = HeartbeatLog(File(tmp.root, "hb"), clock)
+        val tick = TelemetryTick(collect, heartbeat, emptyList(), {}, publish = { awaitCancellation() })
+        val job = launch { tick() }
+        runCurrent()
+
+        job.cancel()
+        job.join()
+
+        assertThat(job.isCancelled).isTrue()
+    }
+
+    @Test
     fun tickDoesNotAppendHeartbeatWhenCollectFails() = runTest {
         val heartbeat = HeartbeatLog(File(tmp.root, "hb"), clock)
         val failing = CollectTelemetry(
@@ -184,7 +225,7 @@ class TelemetryLoopTest {
             clock,
             SequenceSource { 1L },
         )
-        val tick = TelemetryTick(failing, heartbeat, emptyList()) {}
+        val tick = TelemetryTick(failing, heartbeat, emptyList(), log = {})
 
         runCatching { tick() }
 

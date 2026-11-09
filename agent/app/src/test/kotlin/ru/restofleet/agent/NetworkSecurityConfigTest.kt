@@ -12,7 +12,8 @@ import org.xmlpull.v1.XmlPullParser
 
 /**
  * Доверие к CA стенда только в debug. Сгенерированный `xml/network_security_config` разбирается как есть; ожидание
- * «CA есть» приходит из сборки (`standCaPresent`: есть ли `deploy/certs/out/ca.crt`, либо путь из `-PstandCaPath`).
+ * «CA есть» приходит из сборки (`standCaPresent`: есть ли `deploy/certs/out/public/ca.crt`, либо путь из
+ * `-PstandCaPath`).
  * Release-часть (нет атрибута и ресурсов) проверяют `verifyReleaseNoDebugSurface` и `aapt2 dump` APK.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -77,15 +78,16 @@ class NetworkSecurityConfigTest {
         val rawId = context.resources.getIdentifier("stand_ca", "raw", context.packageName)
 
         assertThat(config.overrideAnchors).isNotNull()
+        // Ресурс есть всегда (debug-код сессии на него ссылается); без CA он пустой, и доверия в конфиге нет
+        assertThat(rawId).isNotEqualTo(0)
+        val pem = context.resources.openRawResource(rawId).bufferedReader().readText()
         if (caExpected) {
             assertThat(config.overrideAnchors!!.single()).startsWith("@")
-            assertThat(rawId).isNotEqualTo(0)
-            val pem = context.resources.openRawResource(rawId).bufferedReader().readText()
             assertThat(pem).startsWith("-----BEGIN CERTIFICATE-----")
             assertThat(pem).doesNotContain("PRIVATE KEY")
         } else {
             assertThat(config.overrideAnchors).isEmpty()
-            assertThat(rawId).isEqualTo(0)
+            assertThat(pem).isEmpty()
         }
     }
 }

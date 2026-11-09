@@ -6,7 +6,11 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import io.mockk.coVerify
+import io.mockk.coVerifyOrder
+import io.mockk.mockk
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.After
@@ -29,6 +33,8 @@ import ru.restofleet.agent.data.lifecycle.LifecycleEntry
 import ru.restofleet.agent.data.lifecycle.LifecycleJournal
 import ru.restofleet.agent.data.lifecycle.TelemetryLoop
 import ru.restofleet.agent.data.di.AGENT_DISPATCHER
+import ru.restofleet.agent.data.di.SESSION_SCOPE
+import ru.restofleet.agent.data.mqtt.SessionRuntime
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -42,6 +48,7 @@ class AgentServiceTest {
 
     private val ticks = AtomicInteger()
     private lateinit var journal: LifecycleJournal
+    private val runtime = mockk<SessionRuntime>(relaxed = true)
 
     @Before
     fun setUp() {
@@ -52,6 +59,8 @@ class AgentServiceTest {
                 single { journal }
                 single { TelemetryLoop(30_000, { ticks.incrementAndGet() }) }
                 single<CoroutineDispatcher>(AGENT_DISPATCHER) { UnconfinedTestDispatcher() }
+                single { runtime }
+                single(SESSION_SCOPE) { CoroutineScope(UnconfinedTestDispatcher()) }
             },
         )
     }
@@ -106,6 +115,37 @@ class AgentServiceTest {
         c.destroy()
 
         assertThat(journal.entries().last().kind).isEqualTo(LifecycleEntry.Kind.STOP)
+    }
+
+    @Test
+    fun startCommandStartsTheMqttSessionWithTheReason() {
+        val c = controller().create()
+
+        c.get().onStartCommand(Intent().putExtra(AgentService.EXTRA_REASON, "boot"), 0, 1)
+
+        coVerify(exactly = 1) { runtime.start("boot") }
+    }
+
+    @Test
+    fun stickyRestartStartsTheMqttSessionWithSystemRestartReason() {
+        val c = controller().create()
+
+        c.get().onStartCommand(null, 0, 1)
+
+        coVerify { runtime.start(AgentService.REASON_SYSTEM_RESTART) }
+    }
+
+    @Test
+    fun destroyStopsTheMqttSessionOutsideTheServiceScope() {
+        val c = controller().create()
+        c.get().onStartCommand(Intent().putExtra(AgentService.EXTRA_REASON, "manual"), 0, 1)
+
+        c.destroy()
+
+        coVerifyOrder {
+            runtime.start("manual")
+            runtime.stop()
+        }
     }
 
     @Test
@@ -171,6 +211,18 @@ class AgentServiceTest {
         assertThat(shadowOf(c.get()).isStoppedBySelf).isTrue()
         assertThat(ticks.get()).isEqualTo(0)
         assertThat(GlobalContext.get().get<CpuWakeLock>().isHeld).isFalse()
+    }
+
+    @Test
+    fun refusedForegroundDoesNotStartTheMqttSession() {
+        refuseForeground { SecurityException("denied") }
+        val c = controller().create()
+        c.get().onStartCommand(Intent(), 0, 1)
+
+        c.destroy()
+
+        // stop() при этом безвреден: SessionRuntime без старта его игнорирует (SessionRuntimeTest)
+        coVerify(exactly = 0) { runtime.start(any()) }
     }
 
     @Test

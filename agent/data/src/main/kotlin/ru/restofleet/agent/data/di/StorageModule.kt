@@ -9,6 +9,8 @@ import ru.restofleet.agent.data.credentials.AndroidKeystoreKeySource
 import ru.restofleet.agent.data.credentials.BlobCipher
 import ru.restofleet.agent.data.credentials.CredentialInspector
 import ru.restofleet.agent.data.credentials.KeystoreCredentialStore
+import ru.restofleet.agent.data.mqtt.CredentialChanges
+import ru.restofleet.agent.data.mqtt.NotifyingCredentialStore
 import ru.restofleet.agent.data.outbox.AgentDatabase
 import ru.restofleet.agent.data.outbox.RoomOutbox
 import ru.restofleet.agent.data.outbox.RoomProcessedCommands
@@ -30,6 +32,8 @@ val storageModule: Module = module {
         val prefs = androidContext().getSharedPreferences(KeystoreCredentialStore.PREFS_NAME, Context.MODE_PRIVATE)
         KeystoreCredentialStore(prefs, get(), get(AGENT_DISPATCHER))
     }
-    single<CredentialStore> { get<KeystoreCredentialStore>() }
+    // Смена учётки сообщается работающей MQTT-сессии (решение 23): запись идёт через декоратор
+    single { CredentialChanges() }
+    single<CredentialStore> { NotifyingCredentialStore(get<KeystoreCredentialStore>(), get()) }
     single<CredentialInspector> { get<KeystoreCredentialStore>() }
 }

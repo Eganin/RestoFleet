@@ -42,6 +42,33 @@ class CommandMapperTest {
     }
 
     @Test
+    fun installUpdateFixtureFixesTheWireContractWithPackage() {
+        val dto = Fixtures.decode("cmd-req-install-update", CommandRequestDto.serializer())
+
+        val c = CommandMapper.fromDto(dto)
+
+        assertThat(dto.type).isEqualTo("install_update")
+        assertThat(dto.params.keys).containsExactly("package", "url", "sha256")
+        assertThat(c.command).isEqualTo(
+            Command.InstallApk(
+                "ru.restofleet.dummy.waiter",
+                "https://10.0.2.2:8443/waiter-4.14.apk",
+                "3f2b6c1a9d8e7f60a1b2c3d4e5f60718293a4b5c6d7e8f9012a3b4c5d6e7f809",
+            ),
+        )
+    }
+
+    @Test
+    fun installUpdateFixtureWithoutPackageIsAParseError() {
+        val text = Fixtures.text("cmd-req-install-update").replace(Regex(""""package"\s*:\s*"[^"]*",?"""), "")
+
+        val c = CommandMapper.parse(text.toByteArray()).getOrNull()!!
+
+        assertInvalid(c, "install_update", "package")
+        assertThat(c.command).isNull()
+    }
+
+    @Test
     fun unknownTypeKeepsRawTypeWithoutCommandAndWithoutParseError() {
         val c = parse("self_destruct", """{"x": 1}""")
 

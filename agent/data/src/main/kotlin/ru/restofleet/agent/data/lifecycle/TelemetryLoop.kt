@@ -8,15 +8,21 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import ru.restofleet.agent.domain.model.TelemetrySnapshot
 import ru.restofleet.agent.domain.usecase.CollectTelemetry
 import kotlin.coroutines.cancellation.CancellationException
 
-/** Один тик: снимок телеметрии → лог → метка heartbeat (L1). Метка ставится, только если сбор вернул снимок. */
+/**
+ * Один тик: снимок телеметрии → лог → метка heartbeat (L1) → публикация [publish] (MQTT, `PublishTelemetry`). Метка
+ * ставится, только если сбор вернул снимок. Сбой публикации (Exception) изолирован: тик не падает, heartbeat уже
+ * поставлен, в лог идёт только класс исключения; настоящая отмена пробрасывается.
+ */
 class TelemetryTick(
     private val collect: CollectTelemetry,
     private val heartbeat: HeartbeatLog,
     private val watched: List<String>,
     private val log: (String) -> Unit = { Log.i(TAG, it) },
+    private val publish: suspend (TelemetrySnapshot) -> Unit = {},
 ) {
     suspend operator fun invoke() {
         val snapshot = collect(watched)
@@ -25,6 +31,19 @@ class TelemetryTick(
                 "unavailable=${snapshot.unavailable.keys.sorted()}",
         )
         heartbeat.append()
+        publishIsolated(snapshot)
+    }
+
+    @Suppress("TooGenericExceptionCaught", "SwallowedException") // изоляция публикации (канон 78); Error не ловится
+    private suspend fun publishIsolated(snapshot: TelemetrySnapshot) {
+        try {
+            publish(snapshot)
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            log("publish failed: stray cancellation")
+        } catch (e: Exception) {
+            log("publish failed: ${e::class.java.simpleName}")
+        }
     }
 
     private companion object {

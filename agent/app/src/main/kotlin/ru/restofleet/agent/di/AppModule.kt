@@ -14,6 +14,7 @@ import ru.restofleet.agent.AndroidServiceStarter
 import ru.restofleet.agent.ForegroundStarter
 import ru.restofleet.agent.LockTaskActivity
 import ru.restofleet.agent.ServiceCompatForegroundStarter
+import ru.restofleet.agent.StandCaSource
 import ru.restofleet.agent.SettingsIntents
 import ru.restofleet.agent.WatchdogWorker
 import ru.restofleet.agent.BuildConfig
@@ -30,9 +31,12 @@ import ru.restofleet.agent.data.di.checksModule
 import ru.restofleet.agent.data.di.commandModule
 import ru.restofleet.agent.data.di.deviceAdminModule
 import ru.restofleet.agent.data.di.lifecycleModule
+import ru.restofleet.agent.data.di.mqttModule
+import ru.restofleet.agent.data.di.MQTT_CHECKS
 import ru.restofleet.agent.data.di.storageModule
 import ru.restofleet.agent.data.lifecycle.ServiceStarter
 import ru.restofleet.agent.data.lifecycle.WatchdogSchedule
+import ru.restofleet.agent.data.mqtt.CaSource
 import ru.restofleet.agent.data.report.InMemoryCheckResultJournal
 import ru.restofleet.agent.data.report.JsonCapabilityReportWriter
 import ru.restofleet.agent.data.report.NotConfiguredCheckResultPublisher
@@ -54,9 +58,13 @@ import ru.restofleet.shared.kernel.SystemClock
 
 /** Composition root агента: платформенные части `agent:app` + модули `agent:data`. */
 val appModule: Module = module {
-    includes(checksModule, lifecycleModule, deviceAdminModule, commandModule, storageModule, privilegedModule)
+    includes(
+        checksModule, lifecycleModule, deviceAdminModule, commandModule, storageModule, mqttModule, privilegedModule,
+    )
 
     single<Clock> { SystemClock }
+    // CA стенда для MQTT: debug читает R.raw.stand_ca, release возвращает null (fail closed, решение 3.6a)
+    single<CaSource> { StandCaSource(androidContext()) }
     single<CoroutineDispatcher>(AGENT_DISPATCHER) { Dispatchers.IO }
     single { WorkManager.getInstance(androidContext()) }
     single<WatchdogSchedule> { WorkManagerWatchdogSchedule(get()) }
@@ -79,7 +87,8 @@ val appModule: Module = module {
         val checks = get<List<CapabilityCheck>>(LIFECYCLE_CHECKS) +
             get<List<CapabilityCheck>>(READING_CHECKS) +
             get<List<CapabilityCheck>>(PROBE_CHECKS) +
-            get<List<CapabilityCheck>>(DEVICE_OWNER_CHECKS)
+            get<List<CapabilityCheck>>(DEVICE_OWNER_CHECKS) +
+            get<List<CapabilityCheck>>(MQTT_CHECKS)
         RunCapabilityChecks(checks, get())
     }
     // Журнал ручных проверок (C1–C4, D2–D6): отчёт Lab берёт из него то, что RunCapabilityChecks не исполняет сам

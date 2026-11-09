@@ -1,0 +1,10 @@
+{
+  "cmdId": "c-01J9Z4",
+  "type": "install_update",
+  "params": {
+    "package": "ru.restofleet.dummy.waiter",
+    "url": "https://10.0.2.2:8443/waiter-4.14.apk",
+    "sha256": "3f2b6c1a9d8e7f60a1b2c3d4e5f60718293a4b5c6d7e8f9012a3b4c5d6e7f809"
+  },
+  "expiresAt": 1793866400000
+}

@@ -39,7 +39,20 @@ import ru.restofleet.agent.data.di.PROBE_HTTP_CLIENT
 import ru.restofleet.agent.data.di.PROBE_CHECKS
 import ru.restofleet.agent.data.di.READING_CHECKS
 import ru.restofleet.agent.data.credentials.CredentialInspector
+import ru.restofleet.agent.data.di.MQTT_CHECKS
+import ru.restofleet.agent.data.mqtt.CaSource
+import ru.restofleet.agent.data.mqtt.JsonPayloadEncoder
+import ru.restofleet.agent.data.mqtt.SessionRuntime
+import ru.restofleet.agent.data.shadow.FileShadowStore
+import ru.restofleet.agent.domain.port.BrokerSession
+import ru.restofleet.agent.domain.port.MessagePublisher
+import ru.restofleet.agent.domain.port.PayloadEncoder
+import ru.restofleet.agent.domain.port.ShadowStore
+import ru.restofleet.agent.domain.usecase.ApplyDesiredShadow
+import ru.restofleet.agent.domain.usecase.HandleIncomingCommand
+import ru.restofleet.agent.domain.usecase.PublishTelemetry
 import ru.restofleet.agent.data.credentials.KeystoreCredentialStore
+import ru.restofleet.agent.data.mqtt.NotifyingCredentialStore
 import ru.restofleet.agent.domain.port.CredentialStore
 import ru.restofleet.agent.domain.usecase.ConfigureBrokerCredentials
 import ru.restofleet.agent.data.lifecycle.AndroidCpuWakeLock
@@ -94,11 +107,41 @@ class KoinGraphTest {
         assertThat(koin.get<CpuWakeLock>()).isInstanceOf(AndroidCpuWakeLock::class.java)
         val lifecycle = koin.get<List<CapabilityCheck>>(LIFECYCLE_CHECKS)
         assertThat(lifecycle.map { it.id.name }).containsExactly("L1", "L2", "L3", "L4", "L5").inOrder()
-        assertThat(koin.get<CredentialStore>()).isInstanceOf(KeystoreCredentialStore::class.java)
-        assertThat(koin.get<CredentialInspector>()).isSameInstanceAs(koin.get<CredentialStore>())
+        // запись учётки идёт через декоратор, который будит MQTT-сессию; инспектор Lab читает само хранилище
+        assertThat(koin.get<CredentialStore>()).isInstanceOf(NotifyingCredentialStore::class.java)
+        assertThat(koin.get<CredentialInspector>()).isInstanceOf(KeystoreCredentialStore::class.java)
         assertThat(koin.get<ConfigureBrokerCredentials>()).isNotNull()
         assertThat(koin.get<List<CapabilityCheck>>(READING_CHECKS)).isNotEmpty()
         assertThat(koin.get<List<CapabilityCheck>>(PROBE_CHECKS)).isNotEmpty()
+    }
+
+    @Test
+    fun mqttGraphResolvesOneSessionBehindBothPorts() {
+        val koin = GlobalContext.get()
+
+        val session = koin.get<BrokerSession>()
+        // MqttBrokerSession internal в data: проверяем по имени класса
+        assertThat(session::class.java.simpleName).isEqualTo("MqttBrokerSession")
+        assertThat(koin.get<MessagePublisher>()).isSameInstanceAs(session)
+        assertThat(koin.get<PayloadEncoder>()).isInstanceOf(JsonPayloadEncoder::class.java)
+        assertThat(koin.get<ShadowStore>()).isInstanceOf(FileShadowStore::class.java)
+        assertThat(koin.get<SessionRuntime>()).isNotNull()
+        assertThat(koin.get<HandleIncomingCommand>()).isNotNull()
+        assertThat(koin.get<ApplyDesiredShadow>()).isNotNull()
+        assertThat(koin.get<PublishTelemetry>()).isNotNull()
+        assertThat(koin.get<List<CapabilityCheck>>(MQTT_CHECKS).map { it.id }).containsExactly(CheckId.M1)
+    }
+
+    @Test
+    fun caSourceIsFailClosedInReleaseAndReadsTheStandCaInDebug() {
+        val pem = GlobalContext.get().get<CaSource>().pem()
+
+        if (BuildConfig.DEBUG) {
+            // в debug-варианте PEM есть, только если при сборке был deploy/certs/out/public/ca.crt
+            assertThat(pem == null).isEqualTo(!System.getProperty("standCaPresent").toBoolean())
+        } else {
+            assertThat(pem).isNull()
+        }
     }
 
     @Test
