@@ -4,6 +4,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import ru.restofleet.agent.data.probes.ProbeLoop
 import ru.restofleet.agent.domain.model.AgentEvent
 import ru.restofleet.agent.domain.usecase.PublishEvent
 import ru.restofleet.shared.kernel.Clock
@@ -11,13 +12,15 @@ import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Всё, что агент делает с брокером, под одним стартом и одной остановкой для сервиса: события жизненного цикла
- * (`boot` при запуске после перезагрузки, иначе `start`; `stop` до отключения), источники событий, циклы вокруг
+ * (`boot` при запуске после перезагрузки, иначе `start`; `stop` до отключения), источники событий, цикл проб,
+ * циклы вокруг
  * сессии. Сама телеметрия публикуется тиком цикла M1. Остановка идёт в процессном scope: к `onDestroy` сервиса
  * `lifecycleScope` уже отменён, а `offline` нужно успеть отправить.
  */
 class SessionRuntime(
     private val supervisor: SessionSupervisor,
     private val pump: EventPump,
+    private val probes: ProbeLoop,
     private val publishEvent: PublishEvent,
     private val clock: Clock,
     private val log: (String) -> Unit = {},
@@ -31,6 +34,7 @@ class SessionRuntime(
         val phase = if (reason == BOOT_REASON) AgentEvent.Lifecycle.Phase.BOOT else AgentEvent.Lifecycle.Phase.START
         supervisor.start()
         pump.start()
+        probes.start()
         lifecycle(phase)
     }
 
@@ -38,6 +42,7 @@ class SessionRuntime(
         if (!started) return@withLock
         started = false
         lifecycle(AgentEvent.Lifecycle.Phase.STOP)
+        probes.stop()
         pump.stop()
         supervisor.stop()
     }

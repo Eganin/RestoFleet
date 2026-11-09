@@ -56,3 +56,15 @@ data class CapabilityCheckEventDto(
     val raw: Map<String, String> = emptyMap(),
     val note: String? = null,
 ) : EventDto
+
+/**
+ * Только debug (проверка M7: порядок и полнота досылки outbox): [seq] 1..N в пачке [batchId]. Агент в release такие
+ * события не создаёт, сервер их игнорирует.
+ */
+@Serializable
+@SerialName("debug_seq")
+data class DebugSeqEventDto(
+    override val ts: Long,
+    val seq: Int,
+    val batchId: String,
+) : EventDto

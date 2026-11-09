@@ -30,6 +30,7 @@ class LabUiStateMapper {
             isRunningAll = session.isRunningAll,
             isExporting = session.isExporting,
             commands = commands(session),
+            debugTools = session.debugAvailable && session.filter == LabFilter.ALL,
         )
     }
 

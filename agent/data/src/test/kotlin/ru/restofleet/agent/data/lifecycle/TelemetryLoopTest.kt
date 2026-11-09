@@ -47,6 +47,24 @@ class TelemetryLoopTest {
     }
 
     @Test
+    fun intervalIsReadOnEveryTick() = runTest {
+        var ticks = 0
+        val intervals = ArrayDeque(listOf(30_000L, 10_000L))
+        val loop = TelemetryLoop(interval = { intervals.removeFirstOrNull() ?: 10_000L }, tick = { ticks++ })
+        val job = launch { loop.run() }
+
+        runCurrent()
+        assertThat(ticks).isEqualTo(1)
+        advanceTimeBy(30_000)
+        runCurrent()
+        assertThat(ticks).isEqualTo(2)
+        advanceTimeBy(10_000)
+        runCurrent()
+        assertThat(ticks).isEqualTo(3)
+        job.cancel()
+    }
+
+    @Test
     fun failingTickDoesNotStopTheLoop() = runTest {
         var ticks = 0
         val errors = mutableListOf<String>()

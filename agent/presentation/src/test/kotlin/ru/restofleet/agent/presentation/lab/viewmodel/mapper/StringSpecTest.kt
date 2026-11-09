@@ -50,4 +50,12 @@ class StringSpecTest {
         assertThat(LabCommand.LAUNCH_APP_DELAYED.labelRes()).isEqualTo(R.string.lab_command_launch_app_delayed)
         assertThat(LabCommand.BEEP.labelRes()).isEqualTo(R.string.lab_command_beep)
     }
+
+    @Test
+    fun foreignTopicAndDebugEventsMessages() {
+        assertThat(LabMessage.ForeignTopic(false, "0x87 not_authorized").toStringSpec())
+            .isEqualTo(StringSpec(R.string.lab_message_foreign_topic, listOf("0x87 not_authorized")))
+        assertThat(LabMessage.DebugEventsSent(500, "b-1").toStringSpec())
+            .isEqualTo(StringSpec(R.string.lab_message_debug_events, listOf("500", "b-1")))
+    }
 }

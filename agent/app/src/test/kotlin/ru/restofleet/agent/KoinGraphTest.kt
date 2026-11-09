@@ -65,7 +65,6 @@ import ru.restofleet.agent.domain.capability.CapabilityCheck
 import ru.restofleet.agent.domain.capability.CheckId
 import ru.restofleet.agent.domain.capability.CheckResult
 import ru.restofleet.agent.domain.capability.CheckStatus
-import ru.restofleet.agent.domain.error.MqttNotConfigured
 import ru.restofleet.agent.domain.port.DeviceAdmin
 import ru.restofleet.agent.domain.port.CapabilityReportWriter
 import ru.restofleet.agent.domain.usecase.CollectTelemetry
@@ -202,7 +201,7 @@ class KoinGraphTest {
     }
 
     @Test
-    fun labGraphResolvesAndPublicationIsStubbedUntilMqtt() {
+    fun labGraphResolvesAndPublicationGoesThroughPublishOrBuffer() {
         val koin = GlobalContext.get()
 
         assertThat(koin.get<LabViewModel>()).isNotNull()
@@ -210,7 +209,8 @@ class KoinGraphTest {
         assertThat(koin.get<CapabilityReportWriter>()).isInstanceOf(JsonCapabilityReportWriter::class.java)
         val result = CheckResult(CheckId.R1, CheckStatus.OK, emptyMap(), null, 1L)
         val outcome = runBlocking { koin.get<PublishCheckResult>()(result) }
-        assertThat(outcome).isEqualTo(Outcome.Failure(MqttNotConfigured))
+        // сессия не подключена: событие capability_check ложится в outbox, а не теряется
+        assertThat(outcome).isEqualTo(Outcome.Success(Unit))
     }
 
     @Test

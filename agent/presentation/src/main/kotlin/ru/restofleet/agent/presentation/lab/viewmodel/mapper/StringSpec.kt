@@ -14,6 +14,9 @@ fun LabMessage.toStringSpec(): StringSpec = when (this) {
     is LabMessage.Error -> StringSpec(R.string.lab_message_error, listOf(details))
     LabMessage.MqttNotConfigured -> StringSpec(R.string.lab_message_mqtt_not_configured)
     LabMessage.NoResult -> StringSpec(R.string.lab_message_no_result)
+    is LabMessage.ForeignTopic -> StringSpec(R.string.lab_message_foreign_topic, listOf(reason))
+    is LabMessage.DebugEventsSent ->
+        StringSpec(R.string.lab_message_debug_events, listOf(count.toString(), batchId))
 }
 
 @StringRes

@@ -12,6 +12,11 @@
     <string name="lab_message_error">Ошибка: %1$s</string>
     <string name="lab_message_mqtt_not_configured">MQTT не настроен</string>
     <string name="lab_message_no_result">Результата нет: сначала запустите проверку</string>
+    <string name="lab_message_foreign_topic">Чужой топик: %1$s</string>
+    <string name="lab_message_debug_events">Отправлено событий: %1$s (пачка %2$s)</string>
+    <string name="lab_debug_title">Отладка (только debug)</string>
+    <string name="lab_debug_foreign_topic">Публикация в чужой топик</string>
+    <string name="lab_debug_generate_events">Сгенерировать N событий</string>
     <string name="lab_commands_title">Команды</string>
     <string name="lab_commands_package">Пакет цели (C2, C3)</string>
     <string name="lab_commands_url">Адрес https (необязательно)</string>

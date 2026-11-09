@@ -17,5 +17,11 @@ sealed interface LabIntent : MviIntent {
         data class EditCommandPackage(val text: String) : User
         data class EditCommandUrl(val text: String) : User
         data class RunCommand(val command: LabCommand) : User
+
+        /** Только debug (M2): публикация QoS 1 в топик чужого устройства. */
+        data object PublishForeignTopic : User
+
+        /** Только debug (M7): серия событий `debug_seq`. */
+        data object GenerateDebugEvents : User
     }
 }

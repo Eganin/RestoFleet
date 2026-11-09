@@ -105,6 +105,10 @@ class FakeShadowStore : ShadowStore {
         saved += shadow
         version = shadow.version
     }
+
+    override suspend fun load(): DesiredShadow? = saved.lastOrNull()
+
+    override fun observe(): kotlinx.coroutines.flow.Flow<DesiredShadow?> = kotlinx.coroutines.flow.emptyFlow()
 }
 
 /** Пишет читаемые маркеры вместо JSON: тесты 3.4 проверяют поведение use case, а не байты. */

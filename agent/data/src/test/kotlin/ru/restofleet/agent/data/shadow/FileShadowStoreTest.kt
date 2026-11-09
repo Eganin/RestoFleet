@@ -1,6 +1,10 @@
 package ru.restofleet.agent.data.shadow
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -66,5 +70,25 @@ class FileShadowStoreTest {
         FileShadowStore(file()).save(shadow)
 
         assertThat(tmp.root.list()!!.toList()).containsExactly("shadow.json")
+    }
+
+    @Test
+    fun observeEmitsTheStoredShadowFirstAndEverySaveAfterIt() = runTest {
+        val store = FileShadowStore(file())
+        store.save(shadow)
+        val seen = mutableListOf<DesiredShadow?>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) { store.observe().toList(seen) }
+
+        store.save(shadow.copy(version = 13))
+
+        assertThat(seen.map { it?.version }).containsExactly(12L, 13L).inOrder()
+        job.cancel()
+    }
+
+    @Test
+    fun observeOfAnEmptyStoreEmitsNull() = runTest {
+        val first = FileShadowStore(file()).observe().first()
+
+        assertThat(first).isNull()
     }
 }

@@ -17,6 +17,8 @@ import org.robolectric.annotation.Config
 import ru.restofleet.agent.data.lifecycle.ServiceStarter
 import ru.restofleet.agent.domain.usecase.ExecuteCommand
 import ru.restofleet.agent.domain.usecase.FetchApkChecksum
+import ru.restofleet.agent.domain.port.ForeignTopicPublisher
+import ru.restofleet.agent.domain.usecase.GenerateDebugEvents
 import ru.restofleet.agent.domain.usecase.GrantSelfPermissions
 import ru.restofleet.agent.domain.usecase.RunCommandCheck
 import ru.restofleet.agent.presentation.deviceowner.viewmodel.DeviceOwnerViewModel
@@ -57,5 +59,16 @@ class PrivilegedSurfaceDebugTest {
     fun labCommandsSectionIsOnTheScreen() {
         compose.onNodeWithText("Команды").assertExists()
         assertThat(GlobalContext.get().get<LabViewModel>().uiState.value.commands).isNotNull()
+    }
+
+    @Test
+    fun debugToolsM2AndM7AreInTheGraphAndOnTheScreen() {
+        val koin = GlobalContext.get()
+
+        assertThat(koin.getOrNull<ForeignTopicPublisher>()).isNotNull()
+        assertThat(koin.getOrNull<GenerateDebugEvents>()).isNotNull()
+        compose.onNodeWithText("Публикация в чужой топик").assertExists()
+        compose.onNodeWithText("Сгенерировать N событий").assertExists()
+        assertThat(koin.get<LabViewModel>().uiState.value.debugTools).isTrue()
     }
 }

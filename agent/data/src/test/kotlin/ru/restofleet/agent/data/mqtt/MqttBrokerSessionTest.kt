@@ -526,4 +526,43 @@ class MqttBrokerSessionTest {
         assertThat(factory.settingsSeen).hasSize(1)
         assertThat(s.state.first()).isEqualTo(SessionState.CONNECTED)
     }
+
+    @Test
+    fun publishToSendsToTheExplicitTopicWithTheGivenQos() = runTest {
+        val l = link("k-1")
+        val s = session()
+        s.connect()
+        runCurrent()
+
+        val outcome = s.publishTo("rf/v1/dev/dev-emu-31/telemetry", "x".toByteArray(), 1)
+
+        assertThat(outcome).isEqualTo(Outcome.Success(Unit))
+        val sent = l.published.last()
+        assertThat(sent.topic).isEqualTo("rf/v1/dev/dev-emu-31/telemetry")
+        assertThat(sent.qos).isEqualTo(1)
+        assertThat(sent.retain).isFalse()
+        assertThat(text(sent)).isEqualTo("x")
+    }
+
+    @Test
+    fun publishToPropagatesTheBrokerRefusal() = runTest {
+        val l = link("k-1")
+        val s = session()
+        s.connect()
+        runCurrent()
+        l.publishResult = { Outcome.Failure(MqttError.NotAuthorized) }
+
+        val outcome = s.publishTo("rf/v1/dev/dev-emu-31/telemetry", ByteArray(0), 1)
+
+        assertThat(outcome).isEqualTo(Outcome.Failure(MqttError.NotAuthorized))
+    }
+
+    @Test
+    fun publishToWithoutConnectionFailsWithNotConnected() = runTest {
+        val s = session()
+
+        val outcome = s.publishTo("rf/v1/dev/dev-emu-31/telemetry", ByteArray(0), 1)
+
+        assertThat(outcome).isEqualTo(Outcome.Failure(MqttError.NotConnected))
+    }
 }

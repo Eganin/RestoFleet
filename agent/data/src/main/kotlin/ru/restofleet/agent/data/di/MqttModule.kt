@@ -24,6 +24,9 @@ import ru.restofleet.agent.data.mqtt.MqttSessionCheck
 import ru.restofleet.agent.data.mqtt.SessionRuntime
 import ru.restofleet.agent.data.mqtt.SessionSupervisor
 import ru.restofleet.agent.data.mqtt.StatusPayloads
+import ru.restofleet.agent.data.lifecycle.TELEMETRY_INTERVAL_MS
+import ru.restofleet.agent.data.probes.ProbeLoop
+import ru.restofleet.agent.data.shadow.AppliedTelemetryInterval
 import ru.restofleet.agent.data.shadow.FileShadowStore
 import ru.restofleet.agent.domain.capability.CapabilityCheck
 import ru.restofleet.agent.domain.port.BrokerSession
@@ -35,6 +38,7 @@ import ru.restofleet.agent.domain.usecase.FlushOutbox
 import ru.restofleet.agent.domain.usecase.HandleIncomingCommand
 import ru.restofleet.agent.domain.usecase.PublishEvent
 import ru.restofleet.agent.domain.usecase.PublishOrBuffer
+import ru.restofleet.agent.domain.usecase.PublishProbeResult
 import ru.restofleet.agent.domain.usecase.PublishTelemetry
 import ru.restofleet.shared.kernel.IdGenerator
 import ru.restofleet.shared.kernel.UuidIdGenerator
@@ -124,7 +128,18 @@ val mqttModule: Module = module {
             log = { Log.i(TAG, it) },
         )
     }
-    single { SessionRuntime(get(), get(), get(), get()) { Log.i(TAG, it) } }
+    single { PublishProbeResult(get(), get(), get()) }
+    single {
+        ProbeLoop(
+            scope = get(SESSION_SCOPE),
+            shadow = get(),
+            executor = get(),
+            publish = { results -> get<PublishProbeResult>()(results) },
+            log = { Log.i(TAG, it) },
+        )
+    }
+    single { AppliedTelemetryInterval(get(), TELEMETRY_INTERVAL_MS) }
+    single { SessionRuntime(get(), get(), get(), get(), get()) { Log.i(TAG, it) } }
 
     single<List<CapabilityCheck>>(MQTT_CHECKS) { listOf(MqttSessionCheck(get<MqttBrokerSession>().status, get())) }
 }

@@ -3,6 +3,7 @@ package ru.restofleet.agent.data.mqtt.mapping
 import ru.restofleet.agent.domain.model.AgentEvent
 import ru.restofleet.shared.protocol.dto.AgentLifecycleEventDto
 import ru.restofleet.shared.protocol.dto.CapabilityCheckEventDto
+import ru.restofleet.shared.protocol.dto.DebugSeqEventDto
 import ru.restofleet.shared.protocol.dto.EventDto
 import ru.restofleet.shared.protocol.dto.NetChangedEventDto
 import ru.restofleet.shared.protocol.dto.PackageChangedEventDto
@@ -33,5 +34,6 @@ internal object EventMapper {
             raw = event.result.raw,
             note = event.result.note,
         )
+        is AgentEvent.DebugSeq -> DebugSeqEventDto(event.ts, event.seq, event.batchId)
     }
 }

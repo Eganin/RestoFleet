@@ -14,10 +14,10 @@ import ru.restofleet.agent.data.lifecycle.DevicePermissions
 import ru.restofleet.agent.data.lifecycle.InMemorySequenceSource
 import ru.restofleet.agent.data.lifecycle.LifecycleChecks
 import ru.restofleet.agent.data.lifecycle.LifecycleStorage
-import ru.restofleet.agent.data.lifecycle.TELEMETRY_INTERVAL_MS
 import ru.restofleet.agent.data.lifecycle.TelemetryLoop
 import ru.restofleet.agent.data.lifecycle.TelemetryTick
 import ru.restofleet.agent.data.lifecycle.WizardPermissions
+import ru.restofleet.agent.data.shadow.AppliedTelemetryInterval
 import ru.restofleet.agent.domain.capability.CapabilityCheck
 import ru.restofleet.agent.domain.port.SequenceSource
 import ru.restofleet.agent.domain.port.TelemetrySource
@@ -45,7 +45,10 @@ val lifecycleModule: Module = module {
     single {
         TelemetryTick(get(), get(), CapabilityChecksFactory.DEFAULT_WATCHED, publish = { get<PublishTelemetry>()(it) })
     }
-    single { TelemetryLoop(TELEMETRY_INTERVAL_MS, tick = { get<TelemetryTick>().invoke() }) }
+    // Интервал берётся из сохранённой тени на каждом тике, пока тени нет — TELEMETRY_INTERVAL_MS
+    single {
+        TelemetryLoop(interval = { get<AppliedTelemetryInterval>().millis() }, tick = { get<TelemetryTick>().invoke() })
+    }
     single<List<CapabilityCheck>>(LIFECYCLE_CHECKS) {
         LifecycleChecks(get(), get(), get(), get(), get(), get()).create() + CredentialsCheck(get(), get())
     }

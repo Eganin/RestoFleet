@@ -37,4 +37,6 @@ data class LabUiState(
     val isExporting: Boolean,
     /** `null` — секция скрыта (она показывается на вкладке «Все»). */
     val commands: CommandsUi?,
+    /** Кнопки отладки M2/M7 (только debug, вкладка «Все»). */
+    val debugTools: Boolean = false,
 )

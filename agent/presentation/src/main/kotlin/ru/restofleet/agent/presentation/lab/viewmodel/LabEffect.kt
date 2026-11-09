@@ -11,6 +11,12 @@ sealed interface LabMessage {
     data class Error(val details: String) : LabMessage
     data object MqttNotConfigured : LabMessage
     data object NoResult : LabMessage
+
+    /** Итог проверки ACL (M2): [reason] — код PUBACK (`0x87 not_authorized` ожидается). */
+    data class ForeignTopic(val accepted: Boolean, val reason: String) : LabMessage
+
+    /** Серия `debug_seq` отправлена (M7). */
+    data class DebugEventsSent(val count: Int, val batchId: String) : LabMessage
 }
 
 sealed interface LabEffect : MviEffect {

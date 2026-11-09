@@ -31,4 +31,10 @@ sealed interface AgentEvent {
 
     /** Серийный номер и прочее приходят в [result] уже маскированными у источника (R13), здесь не дополняются. */
     data class CapabilityChecked(override val ts: Long, val result: CheckResult) : AgentEvent
+
+    /**
+     * Только debug (проверка M7): последовательность из [seq] 1..N в пачке [batchId]. Сервер такие события
+     * игнорирует; в release они не создаются.
+     */
+    data class DebugSeq(override val ts: Long, val seq: Int, val batchId: String) : AgentEvent
 }

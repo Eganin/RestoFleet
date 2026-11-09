@@ -5,9 +5,12 @@ import org.koin.dsl.module
 import ru.restofleet.agent.DebugDeviceOwnerTab
 import ru.restofleet.agent.DeviceOwnerTab
 import ru.restofleet.agent.data.di.AGENT_DISPATCHER
+import ru.restofleet.agent.data.di.debugToolsModule
 import ru.restofleet.agent.domain.usecase.FetchApkChecksum
+import ru.restofleet.agent.domain.usecase.GenerateDebugEvents
 import ru.restofleet.agent.domain.usecase.GrantSelfPermissions
 import ru.restofleet.agent.domain.usecase.RunCommandCheck
+import ru.restofleet.shared.kernel.UuidIdGenerator
 import ru.restofleet.agent.presentation.deviceowner.viewmodel.DeviceOwnerViewModel
 
 /**
@@ -17,6 +20,8 @@ import ru.restofleet.agent.presentation.deviceowner.viewmodel.DeviceOwnerViewMod
  * пользуется приём команд по MQTT.
  */
 val privilegedModule: Module = module {
+    includes(debugToolsModule)
+    single { GenerateDebugEvents(get(), get(), UuidIdGenerator()) }
     single { RunCommandCheck(get(), get(), get()) }
     single { GrantSelfPermissions(get(), get(), get(), get()) }
     single { FetchApkChecksum(get()) }

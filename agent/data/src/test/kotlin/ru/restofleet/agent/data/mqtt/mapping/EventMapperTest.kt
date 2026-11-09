@@ -113,4 +113,9 @@ class EventMapperTest {
         assertThat(json).contains("****4F2A")
         assertThat(json).doesNotContain("RF8N")
     }
+
+    @Test
+    fun debugSeqMatchesFixture() {
+        check("event-debug-seq", AgentEvent.DebugSeq(1793865740000, 17, "b-3f9a1c"))
+    }
 }

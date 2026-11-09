@@ -13,7 +13,9 @@ import ru.restofleet.agent.domain.capability.CheckId
 import ru.restofleet.agent.domain.command.Command
 import ru.restofleet.agent.domain.command.Level
 import ru.restofleet.agent.domain.error.MqttNotConfigured
+import ru.restofleet.agent.domain.port.ForeignTopicPublisher
 import ru.restofleet.agent.domain.usecase.ExportCapabilityReport
+import ru.restofleet.agent.domain.usecase.GenerateDebugEvents
 import ru.restofleet.agent.domain.usecase.GetDeviceInfo
 import ru.restofleet.agent.domain.usecase.PublishCheckResult
 import ru.restofleet.agent.domain.usecase.RunCapabilityChecks
@@ -40,10 +42,19 @@ class LabViewModel(
     private val publishResult: PublishCheckResult,
     private val getDeviceInfo: GetDeviceInfo,
     private val runCommand: RunCommandCheck?,
+    private val debugEvents: GenerateDebugEvents? = null,
+    private val foreignTopic: ForeignTopicPublisher? = null,
     private val io: CoroutineDispatcher,
     scope: CoroutineScope = defaultScope(),
 ) : BaseMviViewModel<LabSession, LabUiState, LabIntent, LabAction, LabEffect>(
-    store = MviStore(LabSession(commandsAvailable = runCommand != null), LabReducer(), LabUiStateMapper()::map),
+    store = MviStore(
+        LabSession(
+            commandsAvailable = runCommand != null,
+            debugAvailable = debugEvents != null || foreignTopic != null,
+        ),
+        LabReducer(),
+        LabUiStateMapper()::map,
+    ),
     scope = scope,
 ) {
     init {
@@ -61,6 +72,8 @@ class LabViewModel(
             is User.EditCommandPackage -> reduce(LabAction.CommandPackageChanged(intent.text))
             is User.EditCommandUrl -> reduce(LabAction.CommandUrlChanged(intent.text))
             is User.RunCommand -> runCommandButton(intent.command)
+            User.PublishForeignTopic -> publishForeignTopic()
+            User.GenerateDebugEvents -> generateDebugEvents()
         }
     }
 
@@ -149,6 +162,27 @@ class LabViewModel(
         scope.launch {
             guarded(::emitError) { withContext(io) { publishResult(result) } }
                 ?.let { emitEffect(LabEffect.ShowMessage(publishMessage(id, it))) }
+        }
+    }
+
+    // Только debug (M2): без реализации (release) кнопки нет, интент ничего не делает.
+    private fun publishForeignTopic() {
+        val publisher = foreignTopic ?: return
+        scope.launch {
+            guarded(::emitError) { withContext(io) { publisher.publish() } }
+                ?.let { emitEffect(LabEffect.ShowMessage(LabMessage.ForeignTopic(it.accepted, it.reason))) }
+        }
+    }
+
+    // Только debug (M7): серия `debug_seq` через PublishOrBuffer; офлайн копится в outbox.
+    private fun generateDebugEvents() {
+        val generate = debugEvents ?: return
+        scope.launch {
+            guarded(::emitError) { withContext(io) { generate(GenerateDebugEvents.DEFAULT_COUNT) } }
+                ?.let { batchId ->
+                    val sent = LabMessage.DebugEventsSent(GenerateDebugEvents.DEFAULT_COUNT, batchId)
+                    emitEffect(LabEffect.ShowMessage(sent))
+                }
         }
     }
 

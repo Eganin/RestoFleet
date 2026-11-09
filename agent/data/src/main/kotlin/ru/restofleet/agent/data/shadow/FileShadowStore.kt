@@ -1,5 +1,9 @@
 package ru.restofleet.agent.data.shadow
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerializationException
@@ -30,11 +34,16 @@ class FileShadowStore(private val file: File) : ShadowStore {
             temp.delete()
             throw IOException("shadow was not persisted")
         }
+        saves.update { it + 1 }
     }
+
+    private val saves = MutableStateFlow(0)
+
+    override fun observe(): Flow<DesiredShadow?> = saves.map { load() }
 
     /** Сохранённая тень или `null`; нужна циклам, чтобы применить конфигурацию при старте (3.6b). */
     @Suppress("SwallowedException") // нечитаемый файл равен отсутствующему
-    suspend fun load(): DesiredShadow? = mutex.withLock {
+    override suspend fun load(): DesiredShadow? = mutex.withLock {
         try {
             file.takeIf { it.isFile }
                 ?.let { RfJson.decodeFromString(StoredShadow.serializer(), it.readText()).toDomain() }

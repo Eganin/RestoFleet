@@ -103,6 +103,16 @@ internal class MqttBrokerSession(
         return current.link.publish(current.router.outbound(message))
     }
 
+    /**
+     * Публикация в произвольный топик, минуя [TopicRouter]. Нужна только debug-адаптеру проверки ACL (M2); в
+     * release адаптера нет, вызвать метод больше некому.
+     */
+    internal suspend fun publishTo(topic: String, payload: ByteArray, qos: Int): Outcome<Unit, MqttError> {
+        val current = active
+        if (current == null || _state.value != SessionState.CONNECTED) return Outcome.Failure(MqttError.NotConnected)
+        return current.link.publish(OutboundMessage(topic, payload, qos, retain = false, correlationData = null))
+    }
+
     private suspend fun runLoop() {
         val backoff = ReconnectBackoff()
         while (currentCoroutineContext().isActive) {

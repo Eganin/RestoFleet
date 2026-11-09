@@ -39,15 +39,17 @@ import ru.restofleet.agent.data.lifecycle.WatchdogSchedule
 import ru.restofleet.agent.data.mqtt.CaSource
 import ru.restofleet.agent.data.report.InMemoryCheckResultJournal
 import ru.restofleet.agent.data.report.JsonCapabilityReportWriter
-import ru.restofleet.agent.data.report.NotConfiguredCheckResultPublisher
 import ru.restofleet.agent.domain.capability.CapabilityCheck
+import ru.restofleet.agent.domain.report.EventCheckResultPublisher
 import ru.restofleet.agent.domain.port.CapabilityReportWriter
 import ru.restofleet.agent.domain.port.CheckResultJournal
 import ru.restofleet.agent.domain.port.CheckResultPublisher
 import ru.restofleet.agent.domain.port.DeviceInfoSource
+import ru.restofleet.agent.domain.port.ForeignTopicPublisher
 import ru.restofleet.agent.domain.usecase.ConfigureBrokerCredentials
 import ru.restofleet.agent.domain.usecase.ExecuteCommand
 import ru.restofleet.agent.domain.usecase.ExportCapabilityReport
+import ru.restofleet.agent.domain.usecase.GenerateDebugEvents
 import ru.restofleet.agent.domain.usecase.GetDeviceInfo
 import ru.restofleet.agent.domain.usecase.PublishCheckResult
 import ru.restofleet.agent.domain.usecase.RunCapabilityChecks
@@ -81,8 +83,8 @@ val appModule: Module = module {
     // Capability Lab: все проверки каталога (L, R, P; остальные группы пока дают NOT_CHECKED), отчёт и публикация
     single<DeviceInfoSource> { AndroidDeviceInfoSource(androidContext(), BuildConfig.VERSION_NAME, get()) }
     single<CapabilityReportWriter> { JsonCapabilityReportWriter.forContext(androidContext(), get(AGENT_DISPATCHER)) }
-    // R-M1: до задачи 3.6 публикация отвечает «MQTT не настроен»; привязка заменяется на MQTT-клиент
-    single<CheckResultPublisher> { NotConfiguredCheckResultPublisher() }
+    // Lab -> событие capability_check через PublishOrBuffer (без связи ждёт в outbox)
+    single<CheckResultPublisher> { EventCheckResultPublisher(get(), get()) }
     single {
         val checks = get<List<CapabilityCheck>>(LIFECYCLE_CHECKS) +
             get<List<CapabilityCheck>>(READING_CHECKS) +
@@ -101,5 +103,16 @@ val appModule: Module = module {
     // Приём учётки брокера (debug-ресивер DevConfigReceiver; в release use case просто не вызывается)
     single { ConfigureBrokerCredentials(get()) }
     // Запуск команд C1–C4 в Lab и вкладка Device Owner есть только в debug (privilegedModule, решение 140)
-    factory { LabViewModel(get(), get(), get(), get(), getOrNull<RunCommandCheck>(), get(AGENT_DISPATCHER)) }
+    factory {
+        LabViewModel(
+            runChecks = get(),
+            exportReport = get(),
+            publishResult = get(),
+            getDeviceInfo = get(),
+            runCommand = getOrNull<RunCommandCheck>(),
+            debugEvents = getOrNull<GenerateDebugEvents>(),
+            foreignTopic = getOrNull<ForeignTopicPublisher>(),
+            io = get(AGENT_DISPATCHER),
+        )
+    }
 }

@@ -17,7 +17,7 @@ import ru.restofleet.agent.data.deviceadmin.AndroidLockTaskState
 import ru.restofleet.agent.data.deviceadmin.HttpApkChecksumSource
 import ru.restofleet.agent.data.deviceadmin.LockTaskState
 import ru.restofleet.agent.data.deviceadmin.InstalledVersions
-import ru.restofleet.agent.data.deviceadmin.StaticWatchedApps
+import ru.restofleet.agent.data.shadow.ShadowWatchedApps
 import ru.restofleet.agent.data.deviceadmin.LockTaskLauncher
 import ru.restofleet.agent.data.deviceadmin.PackageInstallerSession
 import ru.restofleet.agent.data.deviceadmin.apkHttpClient
@@ -58,7 +58,7 @@ val deviceAdminModule: Module = module {
     single<PackageInstallerSession> { AndroidPackageInstallerSession(androidContext()) }
     single { LockTaskLauncher(androidContext(), get()) }
     // Отслеживаемые приложения: пока статический список M1; 3.6 заменит источником shadow.watchedApps
-    single<WatchedApps> { StaticWatchedApps(CapabilityChecksFactory.DEFAULT_WATCHED) }
+    single<WatchedApps> { ShadowWatchedApps(CapabilityChecksFactory.DEFAULT_WATCHED.toSet(), get()) }
     single<DeviceAdmin> {
         val context = androidContext()
         DpmDeviceAdmin(

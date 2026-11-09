@@ -57,16 +57,35 @@ class TelemetryTick(
  * замок — дело владельца цикла ([AgentCycle]).
  */
 class TelemetryLoop(
-    private val intervalMs: Long,
+    private val interval: suspend () -> Long,
     private val tick: suspend () -> Unit,
     private val onError: (Exception) -> Unit = { Log.w(TAG, "tick failed", it) },
 ) {
+    constructor(
+        intervalMs: Long,
+        tick: suspend () -> Unit,
+        onError: (Exception) -> Unit = { Log.w(TAG, "tick failed", it) },
+    ) : this({ intervalMs }, tick, onError)
+
     suspend fun run(lease: CpuWakeLock.Lease? = null) {
         while (true) {
             lease?.renew(WAKE_LOCK_TIMEOUT_MS)
             runTick()
-            delay(intervalMs)
+            delay(nextDelay())
         }
+    }
+
+    /** Интервал читается на каждом тике (применённая тень); сбой чтения не останавливает цикл. */
+    // Изоляция чтения интервала; отмена цикла и Error пробрасываются
+    @Suppress("TooGenericExceptionCaught", "SwallowedException")
+    private suspend fun nextDelay(): Long = try {
+        interval()
+    } catch (e: CancellationException) {
+        currentCoroutineContext().ensureActive()
+        FALLBACK_INTERVAL_MS
+    } catch (e: Exception) {
+        onError(e)
+        FALLBACK_INTERVAL_MS
     }
 
     @Suppress("TooGenericExceptionCaught") // изоляция тика; отмена цикла и Error пробрасываются
@@ -84,6 +103,7 @@ class TelemetryLoop(
     companion object {
         /** Таймаут удержания CPU: 10 мин, около 20 интервалов; зависший цикл не держит CPU дольше. */
         const val WAKE_LOCK_TIMEOUT_MS = 600_000L
+        private const val FALLBACK_INTERVAL_MS = 30_000L
         private const val TAG = "AgentLoop"
     }
 }

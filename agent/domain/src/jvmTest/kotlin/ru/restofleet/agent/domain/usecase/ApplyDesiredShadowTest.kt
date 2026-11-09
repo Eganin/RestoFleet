@@ -145,3 +145,33 @@ class ApplyDesiredShadowTest {
         assertThat(sent().single()).contains("telemetryIntervalSec:out_of_range")
     }
 }
+
+class ApplyDesiredShadowWatchedAppsTest {
+    private val store = FakeShadowStore()
+    private val publisher = FakeMessagePublisher()
+    private val apply = ApplyDesiredShadow(
+        store,
+        PublishOrBuffer(FakeBrokerSession(), publisher, FakeOutbox()),
+        FakePayloadEncoder(),
+        Clock { 9_000L },
+    )
+
+    @Test
+    fun invalidAndBlankPackageNamesAreDroppedAndReported() = runTest {
+        apply(DesiredShadow(1, 30, listOf("com.android.chrome", "", "bad name", "x"), emptyList()))
+
+        assertThat(store.saved.single().watchedApps).containsExactly("com.android.chrome")
+        val report = String(publisher.published.single().payload)
+        assertThat(report).contains("watchedApps:empty")
+        assertThat(report).contains("watchedApps:invalid_name:bad name")
+        assertThat(report).contains("watchedApps:invalid_name:x")
+    }
+
+    @Test
+    fun duplicatePackageNamesAreCollapsedSilently() = runTest {
+        apply(DesiredShadow(1, 30, listOf("a.b", "a.b"), emptyList()))
+
+        assertThat(store.saved.single().watchedApps).containsExactly("a.b")
+        assertThat(String(publisher.published.single().payload)).contains("e[]")
+    }
+}

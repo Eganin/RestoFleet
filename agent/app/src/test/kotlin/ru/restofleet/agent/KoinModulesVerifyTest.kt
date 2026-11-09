@@ -24,6 +24,8 @@ import ru.restofleet.agent.data.di.lifecycleModule
 import ru.restofleet.agent.data.di.storageModule
 import ru.restofleet.agent.data.lifecycle.WatchdogSchedule
 import ru.restofleet.agent.di.appModule
+import ru.restofleet.agent.domain.port.ForeignTopicPublisher
+import ru.restofleet.agent.domain.usecase.GenerateDebugEvents
 import ru.restofleet.agent.domain.usecase.RunCapabilityChecks
 import ru.restofleet.agent.domain.usecase.RunCommandCheck
 import kotlinx.coroutines.CoroutineDispatcher
@@ -41,6 +43,7 @@ class KoinModulesVerifyTest {
         SharedPreferences::class, // prefs учётки брокера берутся у контекста в лямбде
         FreeFallDetector::class,
         Function1::class, // лямбды tick/onError/log с значениями по умолчанию
+        Function2::class, // suspend-лямбда публикации проб (ProbeLoop) передаётся из mqttModule
         Function0::class, // isDeviceOwner коллектора R10 передаётся лямбдой из composition root
         IdGenerator::class, // connId (`k-<uuid>`) создаётся лямбдой в mqttModule
         DeviceFacts::class, // сведения об устройстве для status online собираются из Build в лямбде mqttModule
@@ -55,7 +58,10 @@ class KoinModulesVerifyTest {
             // RunCommandCheck — необязательная зависимость LabViewModel (getOrNull): в release её нет (решение 140).
             // Long — таймаут проверки со значением по умолчанию, CoroutineScope — scope ViewModel по умолчанию:
             // нужны только appModule и в общий список не входят, чтобы не ослаблять verify других модулей.
-            extraTypes = platformTypes + listOf(Long::class, CoroutineScope::class, RunCommandCheck::class),
+            extraTypes = platformTypes + listOf(Long::class, CoroutineScope::class, RunCommandCheck::class,
+                // кнопки отладки M2/M7 — необязательные зависимости LabViewModel (getOrNull): в release их нет
+                GenerateDebugEvents::class, ForeignTopicPublisher::class,
+            ),
             // список проверок собирается в лямбде из трёх именованных списков — по типу Koin его не найдёт
             injections = injectedParameters(
                 definition<RunCapabilityChecks>(List::class),

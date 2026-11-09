@@ -1,8 +1,9 @@
 package ru.restofleet.agent.domain.model
 
 /**
- * Цель HTTPS-пробы: [id] попадает в результат, [timeoutMs] — потолок всей пробы. [intervalSec], [failThreshold] и
- * [reference] агент пока не использует (цикла проб нет), они хранятся для эхо в `shadow/reported`.
+ * Цель HTTPS-пробы: [id] попадает в результат, [timeoutMs] — потолок всей пробы. [intervalSec] задаёт период цикла
+ * проб, а [failThreshold] и [reference] агент пока не использует (`probe_state` отложен), они хранятся для эхо в
+ * `shadow/reported`.
  */
 data class ProbeTarget(
     val id: String,

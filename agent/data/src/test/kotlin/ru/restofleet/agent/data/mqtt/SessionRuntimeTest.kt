@@ -7,8 +7,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.flow
+import ru.restofleet.agent.data.probes.ProbeLoop
 import ru.restofleet.agent.domain.model.AgentEvent
 import ru.restofleet.agent.domain.model.AgentEvent.Lifecycle.Phase
+import ru.restofleet.agent.domain.model.DesiredShadow
+import ru.restofleet.agent.domain.port.ShadowStore
 import ru.restofleet.agent.domain.usecase.ApplyDesiredShadow
 import ru.restofleet.agent.domain.usecase.FlushOutbox
 import ru.restofleet.agent.domain.usecase.HandleIncomingCommand
@@ -22,6 +27,27 @@ class SessionRuntimeTest {
         coEvery { pe(any()) } coAnswers { trace += "event:${(firstArg<AgentEvent>() as AgentEvent.Lifecycle).phase}" }
     }
 
+    private val probeTrace = mutableListOf<String>()
+
+    private fun probeLoop(scope: kotlinx.coroutines.CoroutineScope) = ProbeLoop(
+        scope,
+        object : ShadowStore {
+            override suspend fun appliedVersion(): Long? = null
+            override suspend fun save(shadow: DesiredShadow) = Unit
+            override suspend fun load(): DesiredShadow? = null
+            override fun observe() = flow<DesiredShadow?> {
+                probeTrace += "observe"
+                try {
+                    awaitCancellation()
+                } finally {
+                    probeTrace += "cancelled"
+                }
+            }
+        },
+        { error("no probes expected") },
+        {},
+    )
+
     private fun TestScopeRuntime(scope: kotlinx.coroutines.CoroutineScope): SessionRuntime {
         val supervisor = SessionSupervisor(
             scope, session, MutableStateFlow(0), mockk<HandleIncomingCommand>(), mockk<ApplyDesiredShadow>(),
@@ -29,7 +55,7 @@ class SessionRuntimeTest {
         )
         val pump = EventPump(scope, { kotlinx.coroutines.flow.emptyFlow() }, { kotlinx.coroutines.flow.emptyFlow() },
             { emptySet() }, publishEvent, Clock { 1 })
-        return SessionRuntime(supervisor, pump, publishEvent, Clock { 42 })
+        return SessionRuntime(supervisor, pump, probeLoop(scope), publishEvent, Clock { 42 })
     }
 
     @Test
@@ -85,5 +111,18 @@ class SessionRuntimeTest {
 
         assertThat(session.connects).isEqualTo(1)
         assertThat(session.disconnects).isEqualTo(1)
+    }
+
+    @Test
+    fun startLaunchesTheProbeLoopAndStopCancelsIt() = runTest {
+        val runtime = TestScopeRuntime(backgroundScope)
+
+        runtime.start("boot")
+        runCurrent()
+        assertThat(probeTrace).containsExactly("observe")
+
+        runtime.stop()
+        runCurrent()
+        assertThat(probeTrace).containsExactly("observe", "cancelled").inOrder()
     }
 }

@@ -44,6 +44,7 @@ dependencies {
     testImplementation(libs.truth)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
+    testImplementation(libs.mockk)
 }
 
 kover {
