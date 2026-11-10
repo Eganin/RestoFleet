@@ -1,0 +1,375 @@
+{
+    "deviceInfo": {
+        "apiLevel": 36,
+        "model": "Android SDK built for arm64",
+        "isEmulator": true,
+        "mode": "normal",
+        "agentVersion": "0.1.0-mvp"
+    },
+    "ts": 1794303664422,
+    "results": [
+        {
+            "id": "L1",
+            "status": "limited",
+            "raw": {
+                "samples": "711",
+                "coverageMs": "127824337",
+                "gaps": "17",
+                "maxGapMs": "36164485",
+                "wakeLock": "held"
+            },
+            "note": "heartbeat gaps over 120 s: 17",
+            "ts": 1794303644352
+        },
+        {
+            "id": "L2",
+            "status": "ok",
+            "raw": {
+                "bootAt": "1794280247581",
+                "firstHeartbeatAt": "1794280293575",
+                "delayMs": "45994"
+            },
+            "note": null,
+            "ts": 1794303644359
+        },
+        {
+            "id": "L3",
+            "status": "not_checked",
+            "raw": {
+                "scheduled": "true",
+                "lastWatchdogStartAt": "none",
+                "lastWatchdogDeniedAt": "1794280247622",
+                "lastStartFailureAt": "1794280247622"
+            },
+            "note": "watchdog has not restarted the agent yet",
+            "ts": 1794303644365
+        },
+        {
+            "id": "L4",
+            "status": "limited",
+            "raw": {
+                "notifications": "true",
+                "usageAccess": "false",
+                "ignoreBatteryOptimizations": "false"
+            },
+            "note": "missing: usageAccess, ignoreBatteryOptimizations",
+            "ts": 1794303644366
+        },
+        {
+            "id": "L5",
+            "status": "ok",
+            "raw": {
+                "deviceId": "dev-emu-36",
+                "endpoint": "10.0.2.2:8883"
+            },
+            "note": null,
+            "ts": 1794303644366
+        },
+        {
+            "id": "R1",
+            "status": "ok",
+            "raw": {
+                "level": "100",
+                "charging": "true",
+                "source": "AC"
+            },
+            "note": null,
+            "ts": 1794303644372
+        },
+        {
+            "id": "R2",
+            "status": "ok",
+            "raw": {
+                "tempC": "25.0"
+            },
+            "note": null,
+            "ts": 1794303644372
+        },
+        {
+            "id": "R3",
+            "status": "ok",
+            "raw": {
+                "status": "NONE",
+                "headroom": "0.9033333659172058"
+            },
+            "note": null,
+            "ts": 1794303644373
+        },
+        {
+            "id": "R4",
+            "status": "ok",
+            "raw": {
+                "type": "WIFI",
+                "rssiDbm": "-50",
+                "validated": "true"
+            },
+            "note": null,
+            "ts": 1794303644374
+        },
+        {
+            "id": "R5",
+            "status": "unavailable",
+            "raw": {},
+            "note": "PermissionMissing: ACCESS_FINE_LOCATION",
+            "ts": 1794303644377
+        },
+        {
+            "id": "R6",
+            "status": "ok",
+            "raw": {
+                "freeStorageMb": "5452",
+                "availMemoryMb": "1285",
+                "uptimeSec": "3354",
+                "os": "16",
+                "api": "36",
+                "model": "Android SDK built for arm64",
+                "manufacturer": "unknown"
+            },
+            "note": null,
+            "ts": 1794303644378
+        },
+        {
+            "id": "R7",
+            "status": "ok",
+            "raw": {
+                "com.android.chrome": "not installed",
+                "ru.restofleet.dummy.waiter": "4.13 (13)"
+            },
+            "note": null,
+            "ts": 1794303644378
+        },
+        {
+            "id": "R8",
+            "status": "unavailable",
+            "raw": {},
+            "note": "PermissionMissing: PACKAGE_USAGE_STATS",
+            "ts": 1794303644378
+        },
+        {
+            "id": "R9",
+            "status": "ok",
+            "raw": {
+                "lux": "0.0"
+            },
+            "note": null,
+            "ts": 1794303644397
+        },
+        {
+            "id": "R10",
+            "status": "not_applicable",
+            "raw": {},
+            "note": "RequiresDeviceOwner",
+            "ts": 1794303644397
+        },
+        {
+            "id": "R11",
+            "status": "unavailable",
+            "raw": {},
+            "note": "Failed: missing sensor: significant_motion",
+            "ts": 1794303644400
+        },
+        {
+            "id": "R12",
+            "status": "ok",
+            "raw": {
+                "events": "0"
+            },
+            "note": "subscription registered, no events yet",
+            "ts": 1794303644401
+        },
+        {
+            "id": "R13",
+            "status": "not_applicable",
+            "raw": {},
+            "note": "RequiresDeviceOwner",
+            "ts": 1794303644404
+        },
+        {
+            "id": "R14",
+            "status": "ok",
+            "raw": {
+                "events": "1",
+                "last_event": "WIFI validated=true",
+                "last_at": "1794280293429"
+            },
+            "note": null,
+            "ts": 1794303644404
+        },
+        {
+            "id": "P1",
+            "status": "unavailable",
+            "raw": {},
+            "note": "timeout 10000 ms",
+            "ts": 1794303654414
+        },
+        {
+            "id": "P2",
+            "status": "unavailable",
+            "raw": {},
+            "note": "timeout 10000 ms",
+            "ts": 1794303664415
+        },
+        {
+            "id": "P3",
+            "status": "ok",
+            "raw": {
+                "result": "conn_refused",
+                "totalMs": "4"
+            },
+            "note": null,
+            "ts": 1794303664419
+        },
+        {
+            "id": "P4",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794303664420
+        },
+        {
+            "id": "C1",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794303664420
+        },
+        {
+            "id": "C2",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794303664420
+        },
+        {
+            "id": "C3",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794303664420
+        },
+        {
+            "id": "C4",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794303664420
+        },
+        {
+            "id": "D1",
+            "status": "unavailable",
+            "raw": {
+                "mode": "NORMAL"
+            },
+            "note": "not_device_owner",
+            "ts": 1794303664422
+        },
+        {
+            "id": "D2",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794303664422
+        },
+        {
+            "id": "D3",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794303664422
+        },
+        {
+            "id": "D4",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794303664422
+        },
+        {
+            "id": "D5",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794303664422
+        },
+        {
+            "id": "D6",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794303664422
+        },
+        {
+            "id": "D7",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794303664422
+        },
+        {
+            "id": "M1",
+            "status": "ok",
+            "raw": {
+                "endpoint": "10.0.2.2:8883",
+                "connId": "k-1aafe3c3-ac8"
+            },
+            "note": null,
+            "ts": 1794303664422
+        },
+        {
+            "id": "M2",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794303664422
+        },
+        {
+            "id": "M3",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794303664422
+        },
+        {
+            "id": "M4",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794303664422
+        },
+        {
+            "id": "M5",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794303664422
+        },
+        {
+            "id": "M6",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794303664422
+        },
+        {
+            "id": "M7",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794303664422
+        },
+        {
+            "id": "RS1",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794303664422
+        },
+        {
+            "id": "RS2",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794303664422
+        }
+    ]
+}

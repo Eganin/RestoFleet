@@ -1,0 +1,8 @@
+avd=rf-api26 api=26 sdk=26 boot_s=5
+install=ok
+devconfig: result=-1 data="ok" 
+mqtt_online=ok connId=k-9e879a44-1f5 after_s=1 mode=normal
+mqtt_telemetry=ok seq=2 ts=1794304023252
+L2_reboot=ok boot_s=15 online_after_boot_s=1 connId=k-0399999f-33d
+export_tap=ok
+export_pull=ok file=docs/mvp-results/api26-normal.json

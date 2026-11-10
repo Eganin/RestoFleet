@@ -1,0 +1,3 @@
+avd=rf-api37 (system-images;android-37.0;google_apis;arm64-v8a, pixel_6, 4 ГБ RAM; emulator 37.2.13.0, macOS arm64, -no-window -no-audio -no-boot-anim)
+start=FAIL: эмулятор не загрузился ни в одной из 3 попыток (4 ГБ; повтор; -memory 2048 -gpu swiftshader_indirect): "detected a hanging thread 'QEMU2 main loop' / CPU0-3, no response for 15 s", затем Segmentation fault: 11 (до adb-устройства не дошло)
+mqtt=не проверено; L2=не проверено; P3 (локальная сеть, targetSdk 36)=не проверено; Lab-экспорт=нет

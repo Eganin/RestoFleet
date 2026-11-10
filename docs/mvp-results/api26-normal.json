@@ -1,0 +1,385 @@
+{
+    "deviceInfo": {
+        "apiLevel": 26,
+        "model": "Android SDK built for arm64",
+        "isEmulator": true,
+        "mode": "normal",
+        "agentVersion": "0.1.0-mvp"
+    },
+    "ts": 1794304049920,
+    "results": [
+        {
+            "id": "L1",
+            "status": "not_checked",
+            "raw": {
+                "samples": "9",
+                "coverageMs": "253085",
+                "gaps": "0",
+                "maxGapMs": "52198",
+                "wakeLock": "held"
+            },
+            "note": "coverage is shorter than 12 h",
+            "ts": 1794304044242
+        },
+        {
+            "id": "L2",
+            "status": "ok",
+            "raw": {
+                "bootAt": "1794304036911",
+                "firstHeartbeatAt": "1794304036991",
+                "delayMs": "80"
+            },
+            "note": null,
+            "ts": 1794304044244
+        },
+        {
+            "id": "L3",
+            "status": "not_checked",
+            "raw": {
+                "scheduled": "true",
+                "lastWatchdogStartAt": "none",
+                "lastWatchdogDeniedAt": "none",
+                "lastStartFailureAt": "none"
+            },
+            "note": "watchdog has not restarted the agent yet",
+            "ts": 1794304044247
+        },
+        {
+            "id": "L4",
+            "status": "limited",
+            "raw": {
+                "notifications": "true",
+                "usageAccess": "false",
+                "ignoreBatteryOptimizations": "false"
+            },
+            "note": "missing: usageAccess, ignoreBatteryOptimizations",
+            "ts": 1794304044249
+        },
+        {
+            "id": "L5",
+            "status": "ok",
+            "raw": {
+                "deviceId": "dev-emu-26",
+                "endpoint": "10.0.2.2:8883"
+            },
+            "note": null,
+            "ts": 1794304044249
+        },
+        {
+            "id": "R1",
+            "status": "ok",
+            "raw": {
+                "level": "100",
+                "charging": "true",
+                "source": "AC"
+            },
+            "note": null,
+            "ts": 1794304044251
+        },
+        {
+            "id": "R2",
+            "status": "ok",
+            "raw": {
+                "tempC": "25.0"
+            },
+            "note": null,
+            "ts": 1794304044251
+        },
+        {
+            "id": "R3",
+            "status": "not_applicable",
+            "raw": {},
+            "note": "ApiLevelTooLow: requires API 29, actual 26",
+            "ts": 1794304044252
+        },
+        {
+            "id": "R4",
+            "status": "ok",
+            "raw": {
+                "type": "CELLULAR",
+                "rssiDbm": "null",
+                "validated": "true"
+            },
+            "note": null,
+            "ts": 1794304044252
+        },
+        {
+            "id": "R5",
+            "status": "unavailable",
+            "raw": {},
+            "note": "PermissionMissing: ACCESS_FINE_LOCATION",
+            "ts": 1794304044253
+        },
+        {
+            "id": "R6",
+            "status": "ok",
+            "raw": {
+                "freeStorageMb": "5762",
+                "availMemoryMb": "3357",
+                "uptimeSec": "16",
+                "os": "8.0.0",
+                "api": "26",
+                "model": "Android SDK built for arm64",
+                "manufacturer": "Google"
+            },
+            "note": null,
+            "ts": 1794304044253
+        },
+        {
+            "id": "R7",
+            "status": "ok",
+            "raw": {
+                "com.android.chrome": "not installed",
+                "ru.restofleet.dummy.waiter": "not installed"
+            },
+            "note": null,
+            "ts": 1794304044254
+        },
+        {
+            "id": "R8",
+            "status": "unavailable",
+            "raw": {},
+            "note": "PermissionMissing: PACKAGE_USAGE_STATS",
+            "ts": 1794304044254
+        },
+        {
+            "id": "R9",
+            "status": "ok",
+            "raw": {
+                "lux": "0.0"
+            },
+            "note": null,
+            "ts": 1794304044261
+        },
+        {
+            "id": "R10",
+            "status": "not_applicable",
+            "raw": {},
+            "note": "RequiresDeviceOwner",
+            "ts": 1794304044262
+        },
+        {
+            "id": "R11",
+            "status": "unavailable",
+            "raw": {},
+            "note": "Failed: missing sensor: significant_motion",
+            "ts": 1794304044262
+        },
+        {
+            "id": "R12",
+            "status": "ok",
+            "raw": {
+                "events": "0"
+            },
+            "note": "subscription registered, no events yet",
+            "ts": 1794304044263
+        },
+        {
+            "id": "R13",
+            "status": "unavailable",
+            "raw": {},
+            "note": "PermissionMissing: READ_PHONE_STATE",
+            "ts": 1794304044264
+        },
+        {
+            "id": "R14",
+            "status": "ok",
+            "raw": {
+                "events": "1",
+                "last_event": "CELLULAR validated=true",
+                "last_at": "1794304037747"
+            },
+            "note": null,
+            "ts": 1794304044264
+        },
+        {
+            "id": "P1",
+            "status": "ok",
+            "raw": {
+                "google_204": "expected=ok actual=ok httpStatus=204 totalMs=584",
+                "nonexistent": "expected=dns_fail actual=dns_fail httpStatus=- totalMs=5181",
+                "blackhole": "expected=timeout actual=timeout httpStatus=- totalMs=3018",
+                "refused": "expected=conn_refused actual=conn_refused httpStatus=- totalMs=22",
+                "expired_badssl": "expected=tls_error actual=tls_error httpStatus=- totalMs=791",
+                "httpbin_503": "expected=http_5xx actual=http_5xx httpStatus=503 totalMs=941"
+            },
+            "note": null,
+            "ts": 1794304049448
+        },
+        {
+            "id": "P2",
+            "status": "ok",
+            "raw": {
+                "dnsMs": "1",
+                "connectMs": "65",
+                "tlsMs": "74",
+                "ttfbMs": "461",
+                "totalMs": "463"
+            },
+            "note": null,
+            "ts": 1794304049912
+        },
+        {
+            "id": "P3",
+            "status": "ok",
+            "raw": {
+                "result": "conn_refused",
+                "totalMs": "3"
+            },
+            "note": null,
+            "ts": 1794304049916
+        },
+        {
+            "id": "P4",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794304049916
+        },
+        {
+            "id": "C1",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794304049916
+        },
+        {
+            "id": "C2",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794304049916
+        },
+        {
+            "id": "C3",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794304049916
+        },
+        {
+            "id": "C4",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794304049916
+        },
+        {
+            "id": "D1",
+            "status": "unavailable",
+            "raw": {
+                "mode": "NORMAL"
+            },
+            "note": "not_device_owner",
+            "ts": 1794304049918
+        },
+        {
+            "id": "D2",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794304049918
+        },
+        {
+            "id": "D3",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794304049918
+        },
+        {
+            "id": "D4",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794304049918
+        },
+        {
+            "id": "D5",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794304049918
+        },
+        {
+            "id": "D6",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794304049918
+        },
+        {
+            "id": "D7",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794304049918
+        },
+        {
+            "id": "M1",
+            "status": "ok",
+            "raw": {
+                "endpoint": "10.0.2.2:8883",
+                "connId": "k-0399999f-33d"
+            },
+            "note": null,
+            "ts": 1794304049918
+        },
+        {
+            "id": "M2",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794304049918
+        },
+        {
+            "id": "M3",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794304049918
+        },
+        {
+            "id": "M4",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794304049918
+        },
+        {
+            "id": "M5",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794304049918
+        },
+        {
+            "id": "M6",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794304049918
+        },
+        {
+            "id": "M7",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794304049918
+        },
+        {
+            "id": "RS1",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794304049918
+        },
+        {
+            "id": "RS2",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794304049918
+        }
+    ]
+}
