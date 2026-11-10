@@ -260,4 +260,43 @@ class CapabilitiesTest {
             listOf(Command.ShowMessage("x".repeat(1001), Level.INFO) to "text_too_long"),
         )
     }
+
+    // Строки матрицы MVP-A (docs/stages/0-mvp-feasibility.md), меняющие поведение команд: правила уже в Capabilities,
+    // тесты фиксируют их по ID строки. Остальные ⚠️/❌ (R3, R5, R8, R11, R13, L4, RS1, RS2, P1/P2) относятся к
+    // коллекторам, Lab или ресурсам и в Capabilities не попадают.
+
+    @Test
+    fun matrixC2_C3_D5_launchStrategyWithoutOverlayAndDeviceOwner() {
+        // C2 (⚠️): без overlay и DO — только через уведомление; C3: с overlay — напрямую; D5: под DO — напрямую
+        val cases = listOf(
+            Capabilities(AgentMode.NORMAL, 36, emptySet()) to LaunchStrategy.VIA_NOTIFICATION,
+            Capabilities(AgentMode.NORMAL, 36, setOf(Permission.SYSTEM_ALERT_WINDOW)) to LaunchStrategy.DIRECT_OVERLAY,
+            Capabilities(AgentMode.DEVICE_OWNER, 36, emptySet()) to LaunchStrategy.DIRECT_DO,
+            Capabilities(AgentMode.NORMAL, 26, emptySet()) to LaunchStrategy.VIA_NOTIFICATION,
+        )
+        cases.forEach { (caps, expected) ->
+            assertWithMessage("$caps").that(caps.launchStrategy()).isEqualTo(expected)
+        }
+    }
+
+    @Test
+    fun matrixD4_C1C2_underKioskShowMessageAndForeignLaunchAreRefused() {
+        // D4+C1/C2 (✅, решение 141): под lock task сообщение и запуск чужого пакета — kiosk_active, свой пакет — нет
+        val kiosk = Capabilities(AgentMode.DEVICE_OWNER, 36, emptySet(), true, setOf(waiter))
+        assertThat(kiosk.kioskRefusal(Command.ShowMessage("текст", Level.INFO))).isEqualTo("kiosk_active")
+        assertThat(kiosk.kioskRefusal(Command.LaunchApp("com.android.chrome", null))).isEqualTo("kiosk_active")
+        assertThat(kiosk.kioskRefusal(Command.LaunchApp(waiter, null))).isNull()
+        assertThat(kiosk.kioskRefusal(Command.Beep(500))).isNull()
+    }
+
+    @Test
+    fun matrixD1_D2_D3_deviceOwnerCommandsAreRefusedOutsideDeviceOwnerOnEveryTestedApi() {
+        // D1–D3: Reboot/InstallApk доступны только под DO (на 26 и 36 без DO — requires_device_owner)
+        listOf(26, 36).forEach { api ->
+            val normalCaps = Capabilities(AgentMode.NORMAL, api, emptySet())
+            assertThat(normalCaps.check(Command.Reboot)).isEqualTo("requires_device_owner")
+            assertThat(normalCaps.check(Command.InstallApk(waiter, "https://apk-host/a.apk", sha)))
+                .isEqualTo("requires_device_owner")
+        }
+    }
 }
