@@ -43,8 +43,8 @@ fun interface CredentialInspector {
  *   исключения) остаётся до следующего `save()`;
  * - временные — любой другой `GeneralSecurityException` или `ProviderException` (keystore2 «system error» после OTA,
  *   нехватка памяти), в том числе `UnrecoverableKeyException`: в него `AndroidKeyStoreProvider` заворачивает и
- *   временные ошибки keystore2 («Failed to obtain information about key»): запись и ключ не трогаются, `inspect()` даёт `Unavailable`, `load()` бросает
- *   [CredentialsUnavailableException], сессия повторяет чтение по паузе.
+ *   временные ошибки keystore2 («Failed to obtain information about key»): запись и ключ не трогаются, `inspect()`
+ *   даёт `Unavailable`, `load()` бросает [CredentialsUnavailableException], сессия повторяет чтение по паузе.
  *
  * `Error` не перехватывается. Запись — `commit()`: она должна быть на диске до перезапуска.
  */
