@@ -91,3 +91,36 @@ docker compose exec -T mosquitto rm -rf /tmp/rfopt          # опции уда�
 ```bash
 docker compose down -v      # удаляет том: DynSec-учётки и persistence пропадут
 ```
+
+## Проверки MVP
+
+Цепочка M1–M7, P4, RS1–RS2 на эмуляторе `rf-api36` (результаты — в `docs/stages/0-mvp-feasibility.md`). Пароли в аргументы не попадают: опции оператора лежат в файлах контейнера, учётка агента передаётся через stdin оболочки устройства.
+
+```bash
+# опции оператора внутри контейнера (пароль читается из out/dev-credentials.txt, не печатается)
+cd deploy; PW=$(awk '$1=="operator"{print $2}' out/dev-credentials.txt)
+{ printf 'umask 077\nmkdir -p /tmp/rfopt\n'; for t in mosquitto_sub mosquitto_pub; do
+  printf "cat > /tmp/rfopt/%s <<'EOF'\n-h localhost\n-p 8883\n-V mqttv5\n--cafile /mosquitto/certs/ca.crt\n-u operator\n-P %s\nEOF\n" "$t" "$PW"; done; } | docker compose exec -T mosquitto sh -s; unset PW
+O="docker compose exec -T -e XDG_CONFIG_HOME=/tmp/rfopt mosquitto"
+$O mosquitto_sub -t 'rf/v1/dev/dev-emu-36/#' -v -F '%U %r %q %t %p'          # подписка, время хоста (%U)
+# учётка агента: скрипт с am broadcast собирается в файл 600 и подаётся в `adb shell sh` (пароль не в argv)
+adb -s emulator-5600 shell sh < /tmp/devcfg.sh   # am broadcast -a ru.restofleet.agent.DEV_CONFIG -n ru.restofleet.agent/.DevConfigReceiver --es host 10.0.2.2 --ei port 8883 --es deviceId dev-emu-36 --es password <из файла>
+# M1 негатив: временный сервер на 18883 (ключи в mktemp -d, ca.key только путём), DEV_CONFIG с --ei port 18883
+openssl s_server -accept 18883 -cert "$T/nosan.crt" -key "$T/nosan.key" -quiet   # SAN без 10.0.2.2; либо $T/foreign.{crt,key} — чужой CA
+# M3: сеть
+adb -s emulator-5600 shell 'svc wifi disable; svc data disable'   # enable — вернуть
+# M4: retained desired (через stdin)
+$O mosquitto_pub -r -q 1 -t rf/v1/dev/dev-emu-36/shadow/desired -s < ../docs/protocol/fixtures/shadow-desired.json
+# M5/M6: команда со свежим cmdId и expiresAt (копия фикстуры), MQTT 5
+$O mosquitto_pub -V 5 -q 1 -t rf/v1/dev/dev-emu-36/cmd/req -D publish response-topic rf/v1/dev/dev-emu-36/cmd/res \
+  -D publish correlation-data c-1 -D publish message-expiry-interval 300 -s < /tmp/cmd.json
+adb -s emulator-5600 shell am force-stop ru.restofleet.agent      # M6: остановить агент; затем am start -n ru.restofleet.agent/.MainActivity
+# P4: простой брокера
+docker compose stop mosquitto; sleep 125; docker compose start mosquitto     # подписку держать в цикле: она умирает вместе с брокером
+# RS1/RS2
+adb -s emulator-5600 shell dumpsys meminfo ru.restofleet.agent | grep 'TOTAL PSS'
+adb -s emulator-5600 shell dumpsys netstats detail   # сумма rb+tb по uid агента (uid из /proc/<pid>/status), разница между замерами
+# M7: сеть выключена, кнопка Lab «Сгенерировать N событий» (uiautomator dump -> узел по тексту -> input tap), затем сеть включить
+```
+
+Перед `./mosquitto/test-dynsec-dev.sh` остановить агент (`am force-stop`): тест подключается как `dev-emu-36`. Retained `status` устройства даёт ложное падение теста 1 (15/16): подписка `rf/v1/#` получает его раньше тестового сообщения.
