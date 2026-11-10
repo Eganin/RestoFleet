@@ -10,7 +10,6 @@ import ru.restofleet.agent.domain.port.CredentialStore
 import java.io.IOException
 import java.security.GeneralSecurityException
 import java.security.ProviderException
-import java.security.UnrecoverableKeyException
 import javax.crypto.AEADBadTagException
 
 /** Состояние записи учётки для Lab (L5); `load()` разницы между «нет» и «не расшифровалась» не показывает. */
@@ -39,11 +38,12 @@ fun interface CredentialInspector {
  *
  * Сбои чтения делятся на два вида (решение 174):
  * - окончательные — подменённый тег (`AEADBadTagException`; так же проявляется и потерянный ключ: вместо него создаётся
- *   новый), инвалидированный ключ (`KeyPermanentlyInvalidatedException`, `UnrecoverableKeyException`), битый Base64
+ *   новый), инвалидированный ключ (`KeyPermanentlyInvalidatedException`), битый Base64
  *   или формат: запись стирается, ключ сбрасывается, `load()` возвращает `null`, маркер `unreadable` (класс
  *   исключения) остаётся до следующего `save()`;
  * - временные — любой другой `GeneralSecurityException` или `ProviderException` (keystore2 «system error» после OTA,
- *   нехватка памяти): запись и ключ не трогаются, `inspect()` даёт `Unavailable`, `load()` бросает
+ *   нехватка памяти), в том числе `UnrecoverableKeyException`: в него `AndroidKeyStoreProvider` заворачивает и
+ *   временные ошибки keystore2 («Failed to obtain information about key»): запись и ключ не трогаются, `inspect()` даёт `Unavailable`, `load()` бросает
  *   [CredentialsUnavailableException], сессия повторяет чтение по паузе.
  *
  * `Error` не перехватывается. Запись — `commit()`: она должна быть на диске до перезапуска.
@@ -87,7 +87,7 @@ class KeystoreCredentialStore(
         }
 
     private fun GeneralSecurityException.isPermanent(): Boolean =
-        this is AEADBadTagException || this is KeyPermanentlyInvalidatedException || this is UnrecoverableKeyException
+        this is AEADBadTagException || this is KeyPermanentlyInvalidatedException
 
     private fun erase(reason: String): StoredCredentials {
         cipher.discardKey()

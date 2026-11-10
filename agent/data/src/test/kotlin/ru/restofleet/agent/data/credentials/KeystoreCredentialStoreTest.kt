@@ -120,7 +120,6 @@ class KeystoreCredentialStoreTest {
         val failures = listOf(
             AEADBadTagException("tag"),
             KeyPermanentlyInvalidatedException("invalidated"),
-            UnrecoverableKeyException("unrecoverable"),
             IllegalArgumentException("short blob"),
         )
         for (failure in failures) {
@@ -140,6 +139,9 @@ class KeystoreCredentialStoreTest {
     // I4: временный сбой Keystore (keystore2 «system error», OTA, нехватка памяти) не стирает учётку и ключ
     private val transientFailures = listOf(
         KeyStoreException("keystore"),
+        // AndroidKeyStoreProvider заворачивает в UnrecoverableKeyException и временные ошибки keystore2
+        // («Failed to obtain information about key»), поэтому стирать по нему нельзя
+        UnrecoverableKeyException("Failed to obtain information about key"),
         ProviderException("Keystore operation failed"),
         InvalidKeyException("Keystore operation failed"),
         IllegalBlockSizeException(),
