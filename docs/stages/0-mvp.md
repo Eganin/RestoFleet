@@ -76,9 +76,9 @@ restofleet/
 - [x] Экран Device Owner в Capability Lab (только debug-сборка, решение 140).
 
 ### M3. MQTT и серверные спайки (1–2 дня)
-- [ ] Агент ↔ Mosquitto: M1–M7 (команды через `mosquitto_pub -D publish response-topic … -D publish correlation-data … -D publish message-expiry-interval 300`, просмотр — MQTT Explorer).
-- [ ] Спайк S1: симулятор 1 000 → 10 000 клиентов.
-- [ ] Спайки S2–S3: DynSec на 10 000 клиентов, `disableClient`.
+- [x] Агент ↔ Mosquitto: M1–M7 (команды через `mosquitto_pub -D publish response-topic … -D publish correlation-data … -D publish message-expiry-interval 300`, просмотр — MQTT Explorer).
+- [x] Спайк S1: симулятор 1 000 → 10 000 клиентов.
+- [x] Спайки S2–S3: DynSec на 10 000 клиентов, `disableClient`.
 
 ### M4. Прогон MVP-A и ТЗ v0.3 (1 день)
 - [ ] Прогон матрицы на всех эмуляторах, ночной прогон L1.
