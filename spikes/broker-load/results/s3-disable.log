@@ -1,0 +1,3 @@
+S3: клиент spike-00001 подключён
+S3: disableClient ошибок=0; ответ DynSec через 21 мс; разрыв сессии через 16 мс (SERVER: Mqtt5DisconnectException)
+S3: вход отключённого отклонён=true; enableClient ошибок=0; повторный вход после enable=true

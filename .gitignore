@@ -14,6 +14,6 @@ deploy/out/
 deploy/apk/
 deploy/.env
 deploy/mosquitto/data/
-spikes/**/results/
+spikes/**/results/creds*.csv
 # Superpowers execution workspace
 .superpowers/
