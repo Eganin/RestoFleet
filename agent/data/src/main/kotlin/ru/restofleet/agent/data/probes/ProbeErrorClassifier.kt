@@ -1,6 +1,7 @@
 package ru.restofleet.agent.data.probes
 
 import ru.restofleet.agent.domain.model.ProbeError
+import ru.restofleet.shared.probes.classifyHttpStatus
 import java.io.InterruptedIOException
 import java.net.SocketException
 import java.net.SocketTimeoutException
@@ -10,9 +11,6 @@ import javax.net.ssl.SSLException
 
 /** Сопоставляет исключения и HTTP-статусы классам ошибок проб (1:1 с `ProbeResultDto.error`). */
 object ProbeErrorClassifier {
-    private const val HTTP_CLIENT_ERROR = 400
-    private const val HTTP_SERVER_ERROR = 500
-    private const val HTTP_SERVER_ERROR_END = 599
     private const val OKHTTP_CALL_TIMEOUT = "timeout"
     private const val MAX_CAUSE_DEPTH = 8
     private val DENIED = listOf("eperm", "eacces", "operation not permitted", "permission denied")
@@ -46,11 +44,6 @@ object ProbeErrorClassifier {
 
     private fun isCallTimeout(t: Throwable) = t is InterruptedIOException && t.message == OKHTTP_CALL_TIMEOUT
 
-    /** null — успех (всё ниже 400, включая 204 и редиректы без следования). */
-    fun fromStatus(code: Int): ProbeError? = when {
-        code < HTTP_CLIENT_ERROR -> null
-        code < HTTP_SERVER_ERROR -> ProbeError.HTTP_4XX
-        code <= HTTP_SERVER_ERROR_END -> ProbeError.HTTP_5XX
-        else -> ProbeError.OTHER
-    }
+    /** null — успех (всё ниже 400, включая 204 и редиректы без следования); правило — общее из `shared:probes`. */
+    fun fromStatus(code: Int): ProbeError? = classifyHttpStatus(code)
 }

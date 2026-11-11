@@ -24,6 +24,7 @@ kotlin {
         commonMain.dependencies {
             api(projects.shared.kernel)
             api(projects.shared.shadow)
+            api(projects.shared.probes)
             api(libs.kotlinx.coroutines.core)
         }
         jvmTest.dependencies {

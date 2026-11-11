@@ -19,6 +19,7 @@ dependencies {
     kover(projects.shared.kernel)
     kover(projects.shared.protocol)
     kover(projects.shared.shadow)
+    kover(projects.shared.probes)
     kover(projects.console.core.mvi)
     kover(projects.agent.domain)
     kover(projects.agent.data)

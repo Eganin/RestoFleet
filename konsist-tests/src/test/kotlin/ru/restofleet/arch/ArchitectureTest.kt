@@ -37,6 +37,18 @@ class ArchitectureTest {
     }
 
     @Test
+    fun sharedDomainModulesAreFoundAndDoNotDependOnParts() {
+        // shared:shadow и shared:probes — общий домен агента, бэкенда и симулятора: не знают о частях системы
+        val shared = production.filter { SHARED_DOMAIN_PATH.containsMatchIn(it.normalizedPath) }
+        listOf("/shared/shadow/", "/shared/probes/").forEach { module ->
+            assertWithMessage("files of $module").that(shared.any { module in it.normalizedPath }).isTrue()
+        }
+        shared.assertFalse(testName = "shared domain imports agent, server, console or protocol") { file ->
+            file.imports.any { import -> PARTS.any { import.name.startsWith(it) } }
+        }
+    }
+
+    @Test
     fun presentationDoesNotImportDataOrTransport() {
         presentationFiles.assertFalse(testName = "presentation imports data layer or transport DTO") { file ->
             file.imports.any { import -> isDataLayer(import.name) }
@@ -72,6 +84,11 @@ class ArchitectureTest {
         val PRESENTATION_PATH = Regex("/(presentation|[a-z0-9]+(-[a-z0-9]+)*-ui|console/core/mvi)/src/")
         val COMPOSITION_ROOT_PATH =
             Regex("(/app/src/|/console/app-[a-z]+/src/|/console/root/src/|-component/src/|/di/)")
+
+        val SHARED_DOMAIN_PATH = Regex("/shared/(kernel|shadow|probes)/src/")
+        val PARTS = listOf(
+            "ru.restofleet.agent.", "ru.restofleet.server.", "ru.restofleet.console.", "ru.restofleet.shared.protocol",
+        )
 
         val FORBIDDEN_IN_DOMAIN = listOf(
             "android.", "androidx.", "io.ktor.", "org.jetbrains.exposed.", "kotlinx.serialization.",
