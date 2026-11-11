@@ -61,6 +61,11 @@ class OkHttpControlApi(
         return items(result.body).mapNotNull { it.string("code") }
     }
 
+    /** Вход и один авторизованный запрос: токен получен, соединение с бэкендом открыто и лежит в пуле OkHttp. */
+    override suspend fun prepare() {
+        restaurants()
+    }
+
     override suspend fun sendCommand(deviceId: String, load: CommandLoad): String? {
         val body = buildJsonObject {
             put("type", load.type)
@@ -101,11 +106,6 @@ class OkHttpControlApi(
     }
 
     private fun url(path: String): HttpUrl = root.newBuilder().encodedPath(path).build()
-
-    private fun HttpUrl.get(): Request.Builder = Request.Builder().url(this).get()
-
-    private fun HttpUrl.post(body: JsonObject): Request.Builder =
-        Request.Builder().url(this).post(RfJson.encodeToString(JsonObject.serializer(), body).jsonBody())
 
     private suspend fun <T> optional(block: suspend () -> T): T? = try {
         block()
@@ -182,3 +182,8 @@ private fun items(body: String): List<JsonObject> =
     (parse(body)?.get("items") as? JsonArray)?.filterIsInstance<JsonObject>().orEmpty()
 
 private fun JsonObject.string(key: String): String? = (get(key) as? JsonPrimitive)?.takeIf { it.isString }?.content
+
+private fun HttpUrl.get(): Request.Builder = Request.Builder().url(this).get()
+
+private fun HttpUrl.post(body: JsonObject): Request.Builder =
+    Request.Builder().url(this).post(RfJson.encodeToString(JsonObject.serializer(), body).jsonBody())

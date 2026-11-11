@@ -6,7 +6,7 @@ devices: 1000
 seed: 42
 rampPerSec: 100
 warmupSec: 30
-durationSec: 240
+durationSec: 600
 telemetryIntervalSec: 30
 pollIntervalSec: 30
 jitter: 0.05

@@ -66,4 +66,8 @@ tasks.withType<Test>().configureEach {
     val fixtures = rootProject.layout.projectDirectory.dir("docs/protocol/fixtures")
     inputs.dir(fixtures).withPropertyName("protocolFixtures")
     systemProperty("fixturesDir", fixtures.asFile.absolutePath)
+    // Сценарии эксперимента: разбор, имя = файл, окно ≥ 2 TTL кэша Basic (R-5)
+    val scenarios = rootProject.layout.projectDirectory.dir("tools/experiments/scenarios")
+    inputs.dir(scenarios).withPropertyName("experimentScenarios")
+    systemProperty("scenariosDir", scenarios.asFile.absolutePath)
 }

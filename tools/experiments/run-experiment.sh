@@ -64,15 +64,24 @@ case "$cmd" in
     count=${2:?нужно число устройств}
     prepare_dirs
     backend_with 90000 100000
+    # R-20 (реш. 311): лимит провижининга возвращается и при сбое регистрации (set -e, failed > 0, обрыв)
+    trap 'backend_with 90000 60' EXIT
     log "register: до $count устройств"
     compose --profile experiment run --rm --no-deps -T simulator \
       register --scenario /scenarios/mqtt-5000.yaml --devices "$count" --parallel "${PARALLEL:-8}" \
       2>&1 | tee -a logs/experiments/registration.log
-    backend_with 90000 60
     ;;
   run)
     name=${2:?нужно имя сценария}
+    # R-20 (реш. 311): имя попадает в `rm -rf logs/experiments/<имя>` — только имя файла без пути и `..`,
+    # и оно должно совпадать с `name:` в YAML (это же проверяет ExperimentScenariosTest)
+    if [[ ! $name =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ || $name == *..* ]]; then
+      echo "недопустимое имя сценария: $name" >&2
+      exit 2
+    fi
     [ -f "tools/experiments/scenarios/$name.yaml" ] || { echo "нет сценария $name" >&2; exit 2; }
+    declared=$(sed -n 's/^name: *\([^ #]*\).*/\1/p' "tools/experiments/scenarios/$name.yaml")
+    [ "$declared" = "$name" ] || { echo "в сценарии $name.yaml name: '$declared'" >&2; exit 2; }
     prepare_dirs
     out=logs/experiments/$name
     rm -rf "$out"

@@ -92,6 +92,24 @@ class RestClientsTest {
     }
 
     @Test
+    fun prepareLogsInAndWarmsUpSoTheFirstCommandIsASingleRequest() = runBlocking<Unit> {
+        // R-4: после prepare() первая команда — один POST /commands, без входа
+        val api = OkHttpControlApi(client, base(), "admin") { "pw" }
+        loginOk()
+        respond(200, """{"items":[{"id":"r-1"}]}""")
+        respond(201, """{"cmdId":"c-1","status":"queued"}""")
+
+        api.prepare()
+        val before = server.requestCount
+        assertThat(api.sendCommand("d-1", CommandLoad(60))).isEqualTo("c-1")
+
+        assertThat(server.requestCount - before).isEqualTo(1)
+        assertThat(server.takeRequest().url.encodedPath).isEqualTo("/api/v1/auth/login")
+        assertThat(server.takeRequest().headers["Authorization"]).isEqualTo("Bearer t-1")
+        assertThat(server.takeRequest().url.encodedPath).isEqualTo("/api/v1/devices/d-1/commands")
+    }
+
+    @Test
     fun expiredTokenLeadsToOneNewLoginAndFailuresAreNull() = runBlocking<Unit> {
         val api = OkHttpControlApi(client, base(), "admin") { "pw" }
         loginOk("old")

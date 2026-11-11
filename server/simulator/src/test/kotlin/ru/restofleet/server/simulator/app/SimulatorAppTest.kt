@@ -141,6 +141,8 @@ class SimulatorAppTest {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when (request.url.encodedPath) {
                 "/api/v1/auth/login" -> json(200, """{"accessToken":"t"}""")
+                // Прогрев измерителя до окна (R-4): вход и один авторизованный запрос
+                "/api/v1/restaurants" -> json(200, """{"items":[{"id":"r-1"}]}""")
                 "/api/v1/poll/commands" -> {
                     polls.incrementAndGet()
                     val cmd = pending.poll()

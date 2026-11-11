@@ -95,6 +95,31 @@ class RunExperimentTest {
     }
 
     @Test
+    fun measurerLogsInDuringWarmupSoTheFirstCommandLatencyExcludesLogin() = runTest {
+        // R-4: вход admin (bcrypt) и прогрев соединения — до окна, а не внутри первой команды
+        val control = FakeControl().apply { now = { testScheduler.currentTime } }
+        val run = scenario(TransportMode.MQTT).copy(loss = null)
+
+        val report = experiment(FakeConnector(pushes = true), control)(run, devices)
+
+        assertThat(control.calls.first()).isEqualTo("prepare@${report.rampEndMillis}")
+        assertThat(control.calls.count { it.startsWith("prepare") }).isEqualTo(1)
+        val firstCommand = control.calls.first { it.startsWith("command") }.substringAfter('@').toLong()
+        assertThat(firstCommand).isEqualTo(report.windowStartMillis)
+        assertThat(report.rampEndMillis).isLessThan(report.windowStartMillis)
+    }
+
+    @Test
+    fun runWithoutCommandsDoesNotLogIn() = runTest {
+        val control = FakeControl()
+        val run = scenario(TransportMode.MQTT).copy(loss = null, commands = null)
+
+        experiment(FakeConnector(pushes = true), control)(run, devices)
+
+        assertThat(control.calls).isEmpty()
+    }
+
+    @Test
     fun restRunWaitsForTheNextPollAndRecordsUndelivered() = runTest {
         val connector = FakeConnector(pushes = false)
         val control = FakeControl { deviceId, cmdId ->

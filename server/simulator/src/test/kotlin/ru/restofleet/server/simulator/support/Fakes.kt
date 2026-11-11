@@ -115,7 +115,15 @@ class FakeControl(
     val statuses = HashMap<String, String>()
     val deviceStatus = HashMap<String, () -> String?>()
     var failCommands = false
+
+    /** Вызовы в порядке поступления: `prepare@<время>`, `command@<время>` (время — от [now]). */
+    val calls = mutableListOf<String>()
+    var now: () -> Long = { 0 }
     private var next = 0
+
+    override suspend fun prepare() {
+        calls += "prepare@${now()}"
+    }
 
     override suspend fun restaurants() = restaurantIds
 
@@ -125,6 +133,7 @@ class FakeControl(
     }
 
     override suspend fun sendCommand(deviceId: String, load: CommandLoad): String? {
+        calls += "command@${now()}"
         if (failCommands) return null
         val cmdId = "c-${next++}"
         statuses[cmdId] = "queued"

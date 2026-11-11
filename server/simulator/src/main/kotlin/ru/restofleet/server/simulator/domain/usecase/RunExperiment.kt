@@ -57,7 +57,9 @@ class RunExperiment(
         devices.forEachIndexed { index, device -> run.start(this, index, device, device.deviceId in victims) }
         val rampEnd = clock.nowMillis()
         run.phase = ExperimentRun.PHASE_WARMUP
-        delay(scenario.warmupSec * MS_IN_SEC)
+        // R-4: вход измерителя — в прогреве, иначе он попадает в задержку первой команды окна
+        if (scenario.commands != null) control.prepare()
+        (rampEnd + scenario.warmupSec * MS_IN_SEC - clock.nowMillis()).takeIf { it > 0 }?.let { delay(it) }
 
         run.phase = ExperimentRun.PHASE_WINDOW
         val windowStart = clock.nowMillis()
