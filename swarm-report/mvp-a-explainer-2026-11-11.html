@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RestoFleet MVP-A</title>
+<meta name="description" content="Что такое MVP-A RestoFleet, как работает агент и брокер, что проверено и как это протестировать вручную.">
+<style>
+:root {
+  --bg: #f6f6f3;
+  --surface: #ffffff;
+  --surface-2: #f0f0eb;
+  --text: #1c1d1f;
+  --muted: #5d6166;
+  --border: #e0e0da;
+  --accent: #0a66c2;
+  --accent-soft: #e5f0fb;
+  --ok: #1d7a41;
+  --ok-soft: #e3f4e9;
+  --warn: #9a5b00;
+  --warn-soft: #fbf0dc;
+  --na: #5f6670;
+  --na-soft: #ececec;
+  --bad: #b3261e;
+  --bad-soft: #fbe5e3;
+  --code-bg: #f1f1ec;
+  --code-text: #23262a;
+  --shadow: 0 1px 2px rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111314;
+    --surface: #1a1d1f;
+    --surface-2: #212528;
+    --text: #e7e7e4;
+    --muted: #a2a7ab;
+    --border: #2d3236;
+    --accent: #63aefc;
+    --accent-soft: #15283b;
+    --ok: #57c785;
+    --ok-soft: #15301f;
+    --warn: #f1b54f;
+    --warn-soft: #362810;
+    --na: #a3a9b0;
+    --na-soft: #272b2f;
+    --bad: #f08a80;
+    --bad-soft: #3a1b18;
+    --code-bg: #202427;
+    --code-text: #e1e3e4;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111314;
+  --surface: #1a1d1f;
+  --surface-2: #212528;
+  --text: #e7e7e4;
+  --muted: #a2a7ab;
+  --border: #2d3236;
+  --accent: #63aefc;
+  --accent-soft: #15283b;
+  --ok: #57c785;
+  --ok-soft: #15301f;
+  --warn: #f1b54f;
+  --warn-soft: #362810;
+  --na: #a3a9b0;
+  --na-soft: #272b2f;
+  --bad: #f08a80;
+  --bad-soft: #3a1b18;
+  --code-bg: #202427;
+  --code-text: #e1e3e4;
+  --shadow: none;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px 64px; }
+header.hero { padding: 40px 0 24px; }
+.eyebrow { color: var(--muted); font-size: 14px; letter-spacing: .02em; }
+h1 { font-size: 34px; line-height: 1.2; margin: 6px 0 12px; }
+h2 { font-size: 24px; margin: 48px 0 12px; padding-top: 8px; border-top: 1px solid var(--border); }
+h3 { font-size: 18px; margin: 28px 0 8px; }
+p { margin: 8px 0 12px; }
+a { color: var(--accent); }
+.lead { font-size: 18px; color: var(--text); max-width: 760px; }
+.muted { color: var(--muted); }
+.small { font-size: 14px; }
+code, pre, kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13.5px; }
+code { background: var(--code-bg); color: var(--code-text); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre {
+  position: relative;
+  background: var(--code-bg); color: var(--code-text);
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 34px 16px 14px; margin: 10px 0 16px;
+  overflow-x: auto; line-height: 1.5;
+}
+pre code { background: none; padding: 0; }
+.copy {
+  position: absolute; top: 6px; right: 6px;
+  font: 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--surface); color: var(--muted);
+  border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; cursor: pointer;
+}
+.copy:hover { color: var(--text); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
+nav.toc a {
+  text-decoration: none; color: var(--text); font-size: 14px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px;
+}
+nav.toc a:hover { border-color: var(--accent); color: var(--accent); }
+.grid { display: grid; gap: 12px; }
+.g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 860px) { .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g3 { grid-template-columns: 1fr; } }
+@media (max-width: 620px) { .g2, .g4 { grid-template-columns: 1fr; } h1 { font-size: 28px; } }
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px; box-shadow: var(--shadow); min-width: 0;
+}
+.card h3 { margin-top: 0; }
+.stat .num { font-size: 28px; font-weight: 650; line-height: 1.1; }
+.stat .lbl { color: var(--muted); font-size: 14px; margin-top: 4px; }
+.callout {
+  border-left: 4px solid var(--accent); background: var(--accent-soft);
+  padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0;
+}
+.callout.warn { border-color: var(--warn); background: var(--warn-soft); }
+.table-wrap { overflow-x: auto; margin: 10px 0 18px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+th { background: var(--surface-2); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: none; }
+td.nw { white-space: nowrap; }
+.b { display: inline-block; font-size: 12.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.b.ok { color: var(--ok); background: var(--ok-soft); }
+.b.warn { color: var(--warn); background: var(--warn-soft); }
+.b.na { color: var(--na); background: var(--na-soft); }
+.b.bad { color: var(--bad); background: var(--bad-soft); }
+ol.steps { counter-reset: s; list-style: none; padding: 0; margin: 12px 0; }
+ol.steps > li { counter-increment: s; position: relative; padding: 0 0 14px 44px; }
+ol.steps > li::before {
+  content: counter(s); position: absolute; left: 0; top: 0;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent); font-weight: 650; font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+ul.tight { margin: 6px 0 12px; padding-left: 20px; }
+ul.tight li { margin: 3px 0; }
+.diagram { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin: 12px 0 18px; }
+.diagram svg { display: block; min-width: 720px; width: 100%; height: auto; }
+.svg-box { fill: var(--surface-2); stroke: var(--border); stroke-width: 1.5; }
+.svg-box.acc { fill: var(--accent-soft); stroke: var(--accent); }
+.svg-box.ghost { fill: none; stroke: var(--border); stroke-dasharray: 6 5; }
+.svg-t { fill: var(--text); font: 600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.svg-s { fill: var(--muted); font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.svg-l { stroke: var(--accent); stroke-width: 2; fill: none; }
+.svg-l.dash { stroke: var(--muted); stroke-dasharray: 5 4; }
+.svg-a { fill: var(--accent); }
+.svg-a.m { fill: var(--muted); }
+details { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin: 10px 0; }
+details summary { cursor: pointer; font-weight: 600; }
+footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">RestoFleet · этап 0 · отчёт на 11.11.2026</div>
+  <h1>MVP-A: проверка осуществимости на эмуляторах</h1>
+  <p class="lead">Android-агент собирает телеметрию с планшета ресторана и по MQTT 5 через TLS отправляет её на брокер Mosquitto. Обратно агент принимает настройки и команды. MVP-A проверяет эту цепочку на эмуляторах Android 8 и Android 16, до того как на ней будут строиться курсовая, практика и диплом.</p>
+  <nav class="toc" aria-label="Содержание">
+    <a href="#what">Что такое MVP</a>
+    <a href="#how">Как работает</a>
+    <a href="#inside">Под капотом</a>
+    <a href="#protocol">Протокол</a>
+    <a href="#security">Безопасность</a>
+    <a href="#results">Результаты</a>
+    <a href="#test">Как протестировать</a>
+    <a href="#next">Что дальше</a>
+  </nav>
+</header>
+
+<section class="grid g4" aria-label="Ключевые цифры">
+  <div class="card stat"><div class="num">1289</div><div class="lbl">unit-тестов, 0 падений</div></div>
+  <div class="card stat"><div class="num">93,3 %</div><div class="lbl">покрытие строк (Kover)</div></div>
+  <div class="card stat"><div class="num">16/16</div><div class="lbl">проверок ACL брокера</div></div>
+  <div class="card stat"><div class="num">1000</div><div class="lbl">MQTT-клиентов без потерь</div></div>
+</section>
+
+<!-- ============================================================ -->
+<h2 id="what">Что такое MVP</h2>
+
+<p>RestoFleet — IoT-платформа для мониторинга и удалённого управления Android-устройствами ресторанной сети: планшетами кухни, зала и сборки. Работа рассчитана на три этапа: <b>курсовая → практика → диплом</b>. До старта курсовой нужно убедиться, что самые рискованные части вообще можно сделать на Android. Этим и занимается <b>MVP</b>.</p>
+
+<div class="grid g2">
+  <div class="card">
+    <h3>MVP-A — эмуляторы <span class="b ok">закрыт</span></h3>
+    <p class="small">Нужен до курсовой. Проверено на эмуляторах API 26 (Android 8.0, минимальная версия проекта) и API 36 (Android 16, targetSdk), а также на эмуляторе API 36 в режиме Device Owner. Стенд — локальный docker compose.</p>
+  </div>
+  <div class="card">
+    <h3>MVP-B — реальные устройства <span class="b na">впереди</span></h3>
+    <p class="small">Курсовую не блокирует, но должен закончиться до Device Owner в дипломе. В него входят планшет на Android 8.0 (сброс и Device Owner), телефон на Android 12, промежуточные API 29/31/33/35, API 37, ночной прогон и замер ресурсов на release-сборке.</p>
+  </div>
+</div>
+
+<h3>Что входит в MVP-A, а что нет</h3>
+<div class="table-wrap"><table>
+  <tr><th>Есть</th><th>Нет (будет на следующих этапах)</th></tr>
+  <tr>
+    <td><ul class="tight">
+      <li><b>Android-агент:</b> служба, телеметрия, проверки сети, команды, Device Owner</li>
+      <li><b>Capability Lab</b> — отладочный экран: что доступно на этом устройстве</li>
+      <li><b>Брокер Mosquitto 2.1.2:</b> TLS, Dynamic Security, persistence</li>
+      <li><b>Общий модуль протокола</b> <code>shared:protocol</code> с golden-фикстурами</li>
+      <li><b>APK-хост</b> (nginx) для проверки тихой установки</li>
+      <li><b>Спайки нагрузки</b> брокера и JVM-клиентов (S1–S3)</li>
+    </ul></td>
+    <td><ul class="tight">
+      <li><b>Бэкенд</b> (Ktor + PostgreSQL) — курсовая. Пока его роль играет «оператор»: <code>mosquitto_sub</code>/<code>mosquitto_pub</code></li>
+      <li><b>Консоль</b> (Compose Multiplatform) — практика (Android) и диплом (Desktop)</li>
+      <li><b>Провижининг</b> по токену и QR. Пока учётка передаётся debug-командой через adb</li>
+      <li><b>Симулятор</b> тысяч устройств — курсовая. В MVP был только спайк</li>
+    </ul></td>
+  </tr>
+</table></div>
+
+<div class="callout">
+  <b>Правило проекта:</b> требование, получившее в матрице MVP ❌, не реализуется. ⚠️ означает, что требование остаётся, а ограничение записывается в ТЗ и в доменную модель <code>Capabilities</code>. В MVP-A нет ни одного ❌.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="how">Как это работает</h2>
+
+<div class="diagram" role="img" aria-label="Схема MVP-A: агент на эмуляторе подключается по MQTT 5 и TLS к брокеру Mosquitto; оператор подписывается и отправляет команды; APK-хост раздаёт тестовое приложение">
+<svg viewBox="0 0 980 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="svg-a"/></marker>
+    <marker id="arm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="svg-a m"/></marker>
+  </defs>
+  <!-- emulator -->
+  <rect x="20" y="40" width="300" height="250" rx="12" class="svg-box"/>
+  <text x="36" y="66" class="svg-t">Эмулятор Android (API 26 / 36)</text>
+  <rect x="40" y="84" width="260" height="190" rx="10" class="svg-box acc"/>
+  <text x="56" y="108" class="svg-t">Агент ru.restofleet.agent</text>
+  <text x="56" y="132" class="svg-s">• служба переднего плана (specialUse)</text>
+  <text x="56" y="152" class="svg-s">• телеметрия каждые 30 с (R1–R14)</text>
+  <text x="56" y="172" class="svg-s">• проверки HTTPS и шлюза (P1–P4)</text>
+  <text x="56" y="192" class="svg-s">• команды C1–C4, Device Owner D1–D6</text>
+  <text x="56" y="212" class="svg-s">• outbox в Room (до 10 000 записей)</text>
+  <text x="56" y="232" class="svg-s">• учётка в Android Keystore</text>
+  <text x="56" y="252" class="svg-s">• Capability Lab (43 проверки)</text>
+  <!-- broker -->
+  <rect x="400" y="40" width="250" height="150" rx="12" class="svg-box acc"/>
+  <text x="416" y="66" class="svg-t">Mosquitto 2.1.2</text>
+  <text x="416" y="90" class="svg-s">только TLS, порт 8883</text>
+  <text x="416" y="110" class="svg-s">Dynamic Security: роль device, ACL по %u</text>
+  <text x="416" y="130" class="svg-s">анонимы запрещены, clientId = deviceId</text>
+  <text x="416" y="150" class="svg-s">persistence, retained status/desired</text>
+  <text x="416" y="174" class="svg-s">docker compose · свой CA стенда</text>
+  <!-- apk host -->
+  <rect x="400" y="230" width="250" height="90" rx="12" class="svg-box"/>
+  <text x="416" y="256" class="svg-t">APK-хост (nginx 1.30.6)</text>
+  <text x="416" y="280" class="svg-s">HTTPS 8443, только GET/HEAD</text>
+  <text x="416" y="300" class="svg-s">waiter-4.13/4.14.apk + .sha256</text>
+  <!-- operator -->
+  <rect x="730" y="40" width="230" height="150" rx="12" class="svg-box"/>
+  <text x="746" y="66" class="svg-t">Оператор (вместо бэкенда)</text>
+  <text x="746" y="90" class="svg-s">mosquitto_sub: подписка rf/v1/#</text>
+  <text x="746" y="110" class="svg-s">mosquitto_pub: desired, cmd/req</text>
+  <text x="746" y="130" class="svg-s">роль operator-dev</text>
+  <!-- future -->
+  <rect x="730" y="230" width="230" height="90" rx="12" class="svg-box ghost"/>
+  <text x="746" y="256" class="svg-t">Бэкенд и консоль</text>
+  <text x="746" y="280" class="svg-s">курсовая / практика / диплом</text>
+  <text x="746" y="300" class="svg-s">консоль к брокеру не ходит</text>
+  <!-- links -->
+  <path d="M300,120 L398,105" class="svg-l" marker-end="url(#ar)"/>
+  <path d="M398,135 L300,150" class="svg-l" marker-end="url(#ar)"/>
+  <text x="318" y="96" class="svg-s">MQTT 5 / TLS</text>
+  <text x="304" y="176" class="svg-s">status, telemetry,</text>
+  <text x="304" y="192" class="svg-s">events, cmd/res ↑</text>
+  <text x="304" y="208" class="svg-s">desired, cmd/req ↓</text>
+  <path d="M652,100 L728,100" class="svg-l" marker-end="url(#ar)"/>
+  <path d="M728,130 L652,130" class="svg-l" marker-end="url(#ar)"/>
+  <path d="M398,275 L300,240" class="svg-l dash" marker-end="url(#arm)"/>
+  <text x="318" y="300" class="svg-s">D3: тихая установка</text>
+  <path d="M845,228 L845,192" class="svg-l dash" marker-end="url(#arm)"/>
+  <text x="20" y="370" class="svg-s">С эмулятора стенд виден по адресу 10.0.2.2. Этот адрес есть в SAN серверного сертификата.</text>
+</svg>
+</div>
+
+<ol class="steps">
+  <li><b>Агент получает учётку.</b> В MVP-A её передаёт debug-приёмник <code>DevConfigReceiver</code> через <code>adb</code>. Учётка шифруется AES-GCM ключом из Android Keystore и переживает перезагрузку.</li>
+  <li><b>Агент подключается к брокеру</b> по TLS. Доверяет он только CA стенда (пиннинг, проверка SAN). В CONNECT заранее кладётся «завещание» (LWT) <code>offline</code>.</li>
+  <li><b>Агент публикует</b> retained <code>status: online</code> и подписывается на свои <code>shadow/desired</code> и <code>cmd/req</code>.</li>
+  <li><b>Каждые 30 секунд</b> (интервал задаёт сервер через <code>desired</code>) агент собирает телеметрию и выполняет проверки доступности, результаты уходят в MQTT.</li>
+  <li><b>При обрыве связи</b> события копятся в outbox, а брокер сам публикует LWT <code>offline</code>. После восстановления агент досылает всё по порядку.</li>
+  <li><b>Оператор отправляет команду.</b> Агент сразу отвечает <code>received</code>, выполняет её и отвечает итогом (<code>succeeded</code>/<code>failed</code>/<code>unsupported</code>).</li>
+</ol>
+
+<!-- ============================================================ -->
+<h2 id="inside">Под капотом</h2>
+
+<h3>Модули и слои</h3>
+<p>Весь код на Kotlin. Архитектура Clean Architecture: слой <b>domain</b> ничего не знает об Android, MQTT, Room и Koin. Правило зависимостей закреплено разбиением на Gradle-модули и архитектурными тестами Konsist. DI — Koin, только через конструктор. Convention-плагинов нет, все версии в <code>gradle/libs.versions.toml</code>.</p>
+<div class="table-wrap"><table>
+  <tr><th>Модуль</th><th>Что внутри</th><th class="nw">Тестов</th></tr>
+  <tr><td><code>shared:kernel</code>, <code>shared:protocol</code></td><td><code>Outcome</code>, <code>DomainError</code>, <code>Clock</code>, <code>DeviceId</code>, дерево топиков <code>Topics</code>, DTO протокола и JSON. Golden-фикстуры лежат в <code>docs/protocol/fixtures</code></td><td>37</td></tr>
+  <tr><td><code>agent:domain</code></td><td>Сценарии: <code>CollectTelemetry</code>, <code>PublishOrBuffer</code>, <code>FlushOutbox</code>, <code>HandleIncomingCommand</code>, <code>ExecuteCommand</code>, <code>ApplyDesiredShadow</code>, <code>RunCapabilityChecks</code>. Порты и модель <code>Capabilities</code></td><td>218</td></tr>
+  <tr><td><code>agent:data</code></td><td>Сборщики считываний, HTTPS-пробы (OkHttp), MQTT-сессия (HiveMQ 1.4.2), outbox (Room), Keystore, DevicePolicyManager</td><td>765</td></tr>
+  <tr><td><code>agent:presentation</code></td><td>Capability Lab, экран Device Owner, мастер разрешений. MVI на Compose</td><td>163</td></tr>
+  <tr><td><code>agent:app</code></td><td>Точка сборки: служба <code>AgentService</code>, <code>BootReceiver</code>, сторож WorkManager, <code>AdminReceiver</code>, debug-приёмник учётки</td><td>91</td></tr>
+  <tr><td><code>console:core:mvi</code></td><td>База MVI для будущей консоли (<code>MviStore</code>, <code>Reducer</code>)</td><td>10</td></tr>
+  <tr><td><code>konsist-tests</code></td><td>Архитектурные правила: domain без Android и фреймворков, только внедрение через конструктор и т. д.</td><td>5</td></tr>
+  <tr><td><code>tools:dummy-waiter</code></td><td>Подставное «приложение официанта»: цель тихой установки и событий пакетов</td><td>—</td></tr>
+  <tr><td><code>spikes:broker-load</code></td><td>Одноразовый спайк: 1000 MQTT-клиентов на JVM, DynSec на 1000 учёток</td><td>—</td></tr>
+</table></div>
+
+<h3>Жизненный цикл агента</h3>
+<ul class="tight">
+  <li><b>Служба переднего плана</b> типа <code>specialUse</code> с постоянным уведомлением. Тип выбран потому, что на него не распространяется запрет Android 15 на запуск из <code>BOOT_COMPLETED</code>.</li>
+  <li><b>Автозапуск после перезагрузки</b> через <code>BootReceiver</code>. На API 26 агент выходит в сеть примерно через 1 с после загрузки системы.</li>
+  <li><b>Сторож WorkManager</b> раз в 15 минут проверяет, жива ли служба.</li>
+  <li><b><code>PARTIAL_WAKE_LOCK</code></b> держится, пока работает цикл, иначе во сне тики останавливаются. Сам цикл крутится на IO-диспетчере, а не на главном потоке.</li>
+  <li><b>Журнал жизненного цикла и heartbeat</b> пишутся в файлы с починкой оборванного хвоста.</li>
+</ul>
+
+<h3>Подключение к брокеру</h3>
+<p><code>MqttBrokerSession</code> реализует доменные порты <code>BrokerSession</code> и <code>MessagePublisher</code>. Библиотека HiveMQ спрятана за тонкой границей <code>MqttLink</code>, поэтому сессию можно тестировать без сети. Подключение идёт в таком порядке:</p>
+<ol class="steps">
+  <li>Прочитать учётку. При временном сбое Keystore агент повторяет попытку и учётку не стирает.</li>
+  <li>Загрузить CA стенда. Если CA нет, агент не подключается (<code>ca_missing</code>).</li>
+  <li>Отправить CONNECT с завещанием <code>status offline/lwt</code> и свежим <code>connId</code> на каждую попытку.</li>
+  <li>Опубликовать retained <code>online</code> с тем же <code>connId</code>. По нему отличают LWT старой сессии от новой.</li>
+  <li>Подписаться на <code>shadow/desired</code> и <code>cmd/req</code> с QoS 1, затем дослать outbox.</li>
+</ol>
+<p><b>Повторы:</b> обычные ошибки — через 1…120 с с нарастанием. Неверная учётка (<code>auth_failed</code>) — через 15 → 30 → 60 мин, чтобы не бить брокер. Вытеснение сессией с тем же clientId (<code>session_taken_over</code>) — через 5 мин с разбросом. Смена учётки перезапускает сессию сразу.</p>
+
+<h3>Outbox: доставка без потерь</h3>
+<ul class="tight">
+  <li>События, <code>shadow/reported</code> и <code>cmd/res</code> сначала записываются в Room и удаляются только после PUBACK брокера.</li>
+  <li>Телеметрия и пробы при наличии связи идут сразу (QoS 0). Без связи они тоже попадают в буфер.</li>
+  <li>Вместимость 10 000 записей. При переполнении вытесняется наименее важное: сначала телеметрия.</li>
+  <li>Досылка идёт пачками по 50, порядок <code>seq</code> сохраняется. Итог команды не ждёт, пока уйдёт вся накопленная телеметрия.</li>
+  <li>Если брокер окончательно отверг запись (PUBACK <code>0x87</code>, <code>0x90</code>, <code>0x97</code>, <code>0x99</code>), она удаляется, чтобы не блокировать очередь.</li>
+</ul>
+
+<h3>Команды</h3>
+<ul class="tight">
+  <li>Команда приходит в <code>cmd/req</code> со свойствами MQTT 5: <code>Response Topic</code>, <code>Correlation Data</code>, <code>Message Expiry</code>. В теле команды есть <code>cmdId</code> и <code>expiresAt</code>.</li>
+  <li>Агент сразу отвечает <code>received</code>, выполняет команду и отвечает итогом. Correlation Data возвращается в ответе.</li>
+  <li>Команду с истёкшим <code>expiresAt</code> агент не выполняет. Повторы отсекаются по журналу обработанных команд (200 последних): каждая команда выполняется не больше одного раза.</li>
+  <li>Подтверждение (ack) брокеру уходит после обработки, а не при получении. Поэтому команда не теряется, если агент упал посреди работы.</li>
+  <li>Модель <code>Capabilities</code> (режим normal/DO, API, разрешения, киоск) решает, можно ли выполнить команду. Если нельзя, агент отвечает <code>unsupported</code> с причиной, а под киоском — <code>failed/kiosk_active</code> вместо ложного успеха.</li>
+</ul>
+<div class="table-wrap"><table>
+  <tr><th>Команда</th><th>Что делает</th></tr>
+  <tr><td class="nw">C1 <code>show_message</code></td><td>Уведомление высокого приоритета или полноэкранное</td></tr>
+  <tr><td class="nw">C2 <code>launch_app</code></td><td>Открыть приложение. Без overlay — через уведомление</td></tr>
+  <tr><td class="nw">C3 <code>launch_app</code> из фона</td><td>Без участия пользователя, через <code>SYSTEM_ALERT_WINDOW</code> или права Device Owner</td></tr>
+  <tr><td class="nw">C4 <code>beep</code></td><td>Сигнал по потоку будильника, звучит и в беззвучном режиме</td></tr>
+  <tr><td class="nw"><code>reboot</code>, <code>install_update</code></td><td>Только для Device Owner. Перезагрузка в два шага: сначала итог пишется в outbox, после загрузки он досылается. Установка разрешена только для пакетов из списка отслеживаемых и только с проверкой SHA-256</td></tr>
+</table></div>
+
+<h3>Тень: desired и reported</h3>
+<p>Сервер публикует retained <code>shadow/desired</code> с версией: интервал телеметрии, пороги, отслеживаемые приложения, цели проб. Агент получает его при каждом подключении, применяет и отвечает <code>shadow/reported</code> с <code>appliedVersion</code>. Неверный интервал (вне 10…3600 с) не применяется: остаётся прежний, а причина пишется в <code>errors</code>.</p>
+
+<h3>Device Owner</h3>
+<p>Если агент назначен владельцем устройства (<code>dpm set-device-owner</code> на эмуляторе без аккаунтов, на реальном устройстве — после сброса), ему доступны:</p>
+<ul class="tight">
+  <li>перезагрузка;</li>
+  <li>тихая установка APK по URL с проверкой SHA-256 через <code>PackageInstaller</code>;</li>
+  <li>киоск (lock task);</li>
+  <li>запуск приложений из фона;</li>
+  <li>самовыдача разрешений: геолокации, уведомлений, <code>READ_PHONE_STATE</code>. Usage Access так выдать нельзя;</li>
+  <li>чтение серийного номера (в отчёт он попадает только в маске) и температур через <code>HardwarePropertiesManager</code>.</li>
+</ul>
+<p>Экран, где эти действия запускаются вручную, существует <b>только в debug-сборке</b>. В release DO-команды приходят лишь по MQTT и ограничены отслеживаемыми пакетами.</p>
+
+<h3>Capability Lab</h3>
+<p>Отладочный экран агента. По каждой из 43 проверок он показывает статус <code>ok</code> / <code>limited</code> / <code>unavailable</code> / <code>not_checked</code>, сырые значения и причину. Отчёт экспортируется в JSON (<code>Android/data/ru.restofleet.agent/files/</code>, без IMEI, MAC и серийного номера) или отправляется в MQTT событием <code>capability_check</code>. Результаты прогонов лежат в <code>docs/mvp-results/</code>.</p>
+
+<!-- ============================================================ -->
+<h2 id="protocol">Протокол <code>rf/v1</code></h2>
+<p>Все топики устройства лежат под <code>rf/v1/dev/{deviceId}/…</code>. Брокер разрешает устройству только направления из таблицы, а <code>{deviceId}</code> подставляется из имени учётки (<code>%u</code>). Поэтому устройство не может писать в чужие топики и не может подключиться под чужим clientId.</p>
+<div class="table-wrap"><table>
+  <tr><th>Топик</th><th>Кто пишет</th><th>Что внутри</th></tr>
+  <tr><td><code>status</code></td><td>агент · брокер (LWT)</td><td>retained <code>online</code>/<code>offline</code>, <code>connId</code>, <code>bootId</code>, модель, версия ОС</td></tr>
+  <tr><td><code>telemetry</code></td><td>агент</td><td>батарея, температура, тепловое состояние, сеть, диск, память, uptime, активное приложение, версии приложений</td></tr>
+  <tr><td><code>probe</code></td><td>агент</td><td>результаты HTTPS-проверок: класс ошибки, фазы DNS/TCP/TLS/TTFB</td></tr>
+  <tr><td><code>events</code></td><td>агент</td><td>смена сети, пакеты, жизненный цикл, <code>capability_check</code>, <code>debug_seq</code></td></tr>
+  <tr><td><code>shadow/reported</code></td><td>агент</td><td>применённая версия настроек и ошибки</td></tr>
+  <tr><td><code>cmd/res</code></td><td>агент</td><td><code>received</code> → итог команды</td></tr>
+  <tr><td><code>shadow/desired</code></td><td>сервер (оператор)</td><td>retained настройки с версией</td></tr>
+  <tr><td><code>cmd/req</code></td><td>сервер (оператор)</td><td>команда с <code>cmdId</code>, <code>type</code>, <code>params</code>, <code>expiresAt</code></td></tr>
+</table></div>
+
+<details>
+  <summary>Примеры сообщений (из golden-фикстур)</summary>
+<pre><code>// rf/v1/dev/{id}/status — retained
+{ "state": "online", "ts": 1793865600000, "connId": "k-7f3a9c", "agentVersion": "0.1.0-mvp",
+  "mode": "normal", "role": "kitchen", "bootId": "b7f2c1d0",
+  "device": { "model": "sdk_gphone64_arm64", "manufacturer": "Google", "osVersion": "16", "apiLevel": 36 } }
+
+// тот же топик, LWT от брокера при обрыве
+{ "state": "offline", "ts": 1793865600000, "connId": "k-7f3a9c", "reason": "lwt" }
+
+// rf/v1/dev/{id}/telemetry
+{ "ts": 1793865630000, "seq": 18234,
+  "battery": { "level": 87, "charging": true, "plugged": "ac", "tempC": 38.4 },
+  "thermal": { "status": "LIGHT", "headroom": 0.62 },
+  "net": { "type": "wifi", "rssi": -67, "validated": true },
+  "storage": { "freeMb": 5120 }, "memory": { "availMb": 1430 }, "uptimeSec": 360021,
+  "foregroundApp": "com.android.chrome",
+  "apps": [ { "pkg": "com.android.chrome", "versionName": "130.0", "versionCode": 0 } ] }
+
+// rf/v1/dev/{id}/cmd/req
+{ "cmdId": "c-01J9Z3", "type": "show_message",
+  "params": { "text": "Перезагрузите роутер", "level": "warning" }, "expiresAt": 1793866100000 }
+
+// rf/v1/dev/{id}/cmd/res
+{ "cmdId": "c-01J9Z3", "status": "received", "ts": 1793865800000 }</code></pre>
+</details>
+
+<!-- ============================================================ -->
+<h2 id="security">Безопасность</h2>
+<div class="grid g2">
+  <div class="card">
+    <h3>Транспорт и брокер</h3>
+    <ul class="tight small">
+      <li>Только TLS на 8883, порта 1883 нет, анонимы запрещены.</li>
+      <li>Свой CA стенда. Агент доверяет только ему и только в debug-сборке, в release CA стенда не доверяется.</li>
+      <li>Dynamic Security: роль <code>device</code> «всё запрещено, кроме своих топиков», <code>clientId</code> привязан к учётке.</li>
+      <li>Пароль устройства — 32 случайных байта, хранится в <code>deploy/out/</code> вне git.</li>
+      <li><code>disableClient</code> разрывает сессию устройства за 16 мс.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>Агент и процесс</h3>
+    <ul class="tight small">
+      <li>Учётка зашифрована ключом Android Keystore. В открытом виде её нет ни в SharedPreferences, ни в логах.</li>
+      <li>Ключ и учётка стираются только при необратимой порче, при временных сбоях они сохраняются.</li>
+      <li>Опасные debug-функции (экран DO, ручные команды, приём учётки) в release отсутствуют. Это проверяют тесты <code>*ReleaseTest</code> и задача <code>verifyReleaseNoDebugSurface</code>.</li>
+      <li>Пароли не попадают в аргументы команд на хосте: скрипты передают их через stdin. Исключение: внутри эмулятора пароль виден в аргументах <code>am broadcast</code> debug-приёмника. Это принятое ограничение отладочного инструмента.</li>
+      <li>Перед каждым коммитом история проверяется на утечку секретов.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="results">Результаты MVP-A</h2>
+<p class="muted small">Обозначения: <span class="b ok">✅ работает</span> <span class="b warn">⚠️ с ограничением</span> <span class="b na">— MVP-B</span> <span class="b na">⏳ не проверено</span>. Полная матрица с уликами — <code>docs/stages/0-mvp-feasibility.md</code>.</p>
+
+<div class="table-wrap"><table>
+  <tr><th>Группа</th><th>Итог</th><th>Главное</th></tr>
+  <tr><td>Цепочка MQTT M1–M7</td><td><span class="b ok">✅ 7 из 7</span></td><td>TLS с CA стенда; чужой и неверный сертификат отвергаются. Чужой топик — <code>not_authorized</code>. LWT за 23–43 с. Retained desired применяется за &lt; 1 с. Команда <code>received → succeeded</code> за 30 мс. Офлайн-команда доставляется при подключении, просроченная — нет. 500 событий после офлайна дошли без пропусков и дублей</td></tr>
+  <tr><td>Жизненный цикл L1–L5</td><td><span class="b ok">✅ L2, L5</span> <span class="b warn">⚠️ L4</span> <span class="b na">⏳ L3</span> <span class="b na">— L1</span></td><td>Автозапуск после перезагрузки и хранение учётки работают на 26 и 36. Мастер разрешений: Usage Access и исключение из оптимизации батареи выдаются вручную. <b>Сторож (L3) не проверен.</b> Ночной прогон (L1) — на реальном планшете</td></tr>
+  <tr><td>Считывания R1–R14</td><td><span class="b ok">✅ 8</span> <span class="b warn">⚠️ 5</span> <span class="b warn">R13: ⚠️ 26 / ✅ 36</span></td><td>⚠️ означает: недоступно без разрешения или датчика, и агент сообщает это статусом, а не падает. Нет thermal на API 26, SSID без геолокации, активное приложение без Usage Access, на эмуляторе нет датчика significant motion, событий пакетов не было за прогон</td></tr>
+  <tr><td>Проверки сети P1–P4</td><td><span class="b ok">✅</span> <span class="b warn">⚠️ P1/P2 на 36</span></td><td>Классы ошибок и фазы соединения работают. На 36 в экспорте Lab тестовая цель по умолчанию отвечала по таймауту, а рабочие пробы цикла дают 200/204/200. Проверки идут и копятся при недоступном брокере</td></tr>
+  <tr><td>Команды C1–C4</td><td><span class="b ok">✅ C1, C3, C4</span> <span class="b warn">⚠️ C2</span></td><td>C2 без overlay запускает приложение через уведомление</td></tr>
+  <tr><td>Device Owner D1–D7</td><td><span class="b ok">✅ D1–D3, D5</span> <span class="b warn">⚠️ D4, D6</span> <span class="b na">⏳ D7</span></td><td>Тихая установка, перезагрузка, запуск из фона. Киоск работает, с Chrome не проверялся. Usage Access политикой DO не выдаётся. Регистрация по QR — MVP-B</td></tr>
+  <tr><td>Спайки S1–S3</td><td><span class="b warn">⚠️ S1</span> <span class="b ok">✅ S2, S3</span></td><td>1000 клиентов в одном JVM-процессе: heap ≈ 114 МБ, 32,9 сообщ/с, потерь 0. 10 000 клиентов не запускали, оценка в пределах цели (heap ≤ 1,1 ГБ). 1000 учёток DynSec создаются за 0,56 с</td></tr>
+  <tr><td>Ресурсы RS1–RS2</td><td><span class="b warn">⚠️</span></td><td>Память 102–105 МБ при цели 60, трафик ≈ 1,7 МБ/ч при цели 0,85. Замер сделан на debug-сборке без R8, а трафик посчитан по всему устройству, поэтому цели оставлены, решающий замер на release — в MVP-B</td></tr>
+</table></div>
+
+<div class="callout warn">
+  <b>Что не проверено:</b>
+  <ul class="tight">
+    <li>реальные устройства и Device Owner после сброса;</li>
+    <li>API 29, 31, 33, 35;</li>
+    <li>API 37: эмулятор 37.2.13.0 падает на образе android-37.0;</li>
+    <li>сторож L3;</li>
+    <li>ночной прогон L1;</li>
+    <li>регистрация по QR (D7);</li>
+    <li>10 000 клиентов;</li>
+    <li>ресурсы на release-сборке.</li>
+  </ul>
+  Для курсовой эти пункты не блокеры, но цифры в ТЗ после MVP-B могут измениться.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="test">Как протестировать</h2>
+<p>Четыре уровня, от быстрого к подробному. Все команды выполняются из корня репозитория. Пароли читаются из файлов и на экран не выводятся. Не вставляйте их в чаты и тикеты.</p>
+
+<h3>Уровень 1. Сборка и тесты (≈ 5 мин, без устройства)</h3>
+<pre><code>./gradlew build detekt koverVerifyCi :konsist-tests:test --continue</code></pre>
+<p>Ожидается <code>BUILD SUCCESSFUL</code>: 1289 тестов, lint и detekt без ошибок, покрытие выше порогов (domain и data ≥ 90 %, проект ≥ 80 %). Отчёт покрытия — <code>build/reports/kover/</code>. Для сборки нужен <code>local.properties</code> с <code>sdk.dir</code>.</p>
+
+<h3>Уровень 2. Стенд</h3>
+<p>Первый запуск на новой машине (из <code>deploy/</code>). Шаги с пометкой «один раз» выполняются один раз:</p>
+<pre><code>cd deploy
+cp .env.example .env &amp;&amp; sed -i '' "s|change-me|$(openssl rand -base64 32 | tr -d '/+=')|" .env   # один раз
+./certs/make-ca.sh                                   # один раз: CA и серверный сертификат
+docker compose --profile init run --rm dynsec-init   # один раз: администратор DynSec
+docker compose up -d --wait                          # брокер и APK-хост
+mosquitto/dynsec-dev.sh                              # роли и dev-учётки, пароли → out/dev-credentials.txt
+../tools/dev/build-dummy-apk.sh 13                   # один раз: APK для проверки установки</code></pre>
+<p>Проверка стенда:</p>
+<pre><code>cd deploy
+./test-stand.sh                  # TLS, отказ анонимам и чужому паролю, нет 1883, нет ca.key в контейнере
+mosquitto/test-dynsec-dev.sh     # ACL устройств: ожидается 16 PASS из 16</code></pre>
+<p class="small muted">CA стенда встраивается в debug-сборку агента при сборке. Поэтому агента нужно собирать после <code>make-ca.sh</code>, иначе он не подключится (<code>ca_missing</code>).</p>
+
+<h3>Уровень 3. Автоматический прогон на эмуляторе</h3>
+<pre><code>./gradlew :agent:app:assembleDebug
+tools/emulators/run-matrix.sh rf-api36 36</code></pre>
+<p>Скрипт делает следующее:</p>
+<ul class="tight">
+  <li>поднимает эмулятор без окна и ставит агента;</li>
+  <li>передаёт учётку через stdin;</li>
+  <li>ждёт <code>online</code> и телеметрию;</li>
+  <li>проверяет автозапуск после <code>adb reboot</code>;</li>
+  <li>делает экспорт из Lab.</li>
+</ul>
+<p>Итог пишется в <code>docs/mvp-results/api36-summary.txt</code>. Скрипт перезаписывает файлы, которые лежат в git. Если результат не нужен, откатите их: <code>git checkout docs/mvp-results</code>.</p>
+
+<h3>Уровень 4. Вручную, с интерфейсом</h3>
+<ol class="steps">
+  <li><b>Эмулятор и агент.</b> Запустите AVD <code>rf-api36</code> из Device Manager в Android Studio и запустите конфигурацию <code>agent.app</code>. <code>tools.dummy-waiter</code> запускать не нужно, это цель для команд.</li>
+  <li><b>Терминал A — подписка оператора</b> (пароль оператора попадает только в файл с правами 600 внутри контейнера):
+<pre><code>cd deploy; PW=$(awk '$1=="operator"{print $2}' out/dev-credentials.txt)
+{ printf 'umask 077\nmkdir -p /tmp/rfopt\n'; for t in mosquitto_sub mosquitto_pub; do
+  printf "cat &gt; /tmp/rfopt/%s &lt;&lt;'EOF'\n-h localhost\n-p 8883\n-V mqttv5\n--cafile /mosquitto/certs/ca.crt\n-u operator\n-P %s\nEOF\n" "$t" "$PW"; done; } | docker compose exec -T mosquitto sh -s; unset PW
+O() { docker compose exec -T -e XDG_CONFIG_HOME=/tmp/rfopt mosquitto "$@"; }
+O mosquitto_sub -t 'rf/v1/dev/dev-emu-36/#' -v -F '%U %t %p'</code></pre></li>
+  <li><b>Терминал B — учётка для агента</b> (из корня репозитория):
+<pre><code>PW="$(awk '$1=="dev-emu-36"{print $2}' deploy/out/dev-credentials.txt)"
+printf 'am broadcast -a ru.restofleet.agent.DEV_CONFIG -n ru.restofleet.agent/.DevConfigReceiver --es host 10.0.2.2 --ei port 8883 --es deviceId dev-emu-36 --es password %s\n' "$PW" | adb shell sh
+unset PW</code></pre>
+  Ожидается <code>Broadcast completed: result=-1, data="ok"</code>. Если пришло <code>result=0</code>, в <code>data</code> будет код ошибки.</li>
+  <li><b>Пройдите чек-лист</b> ниже.</li>
+</ol>
+
+<div class="table-wrap"><table>
+  <tr><th>Действие</th><th>Ожидаемый результат</th><th>ID</th></tr>
+  <tr><td>Передать учётку</td><td>В терминале A: retained <code>status</code> с <code>online</code> и <code>connId</code>, затем <code>telemetry</code> с интервалом из <code>desired</code></td><td>M1</td></tr>
+  <tr><td>Lab → «Уведомления», «Доступ к статистике», «Батарея»</td><td>Открываются системные настройки, разрешения выдаются</td><td>L4</td></tr>
+  <tr><td>Lab → «Запустить всё»</td><td>У каждой проверки свой статус. Проверки DO и ручные — <code>not_checked</code></td><td>—</td></tr>
+  <tr><td>«Экспорт», затем «В MQTT»</td><td>«Отчёт сохранён: …», в терминале A приходит событие <code>capability_check</code></td><td>—</td></tr>
+  <tr><td>«Пакет цели» = <code>ru.restofleet.dummy.waiter</code>, нажать C1…C4</td><td>C1 — сообщение, C2 — открывается dummy-waiter, C3 — нажать и уйти на Home: через 30 с приложение открывается из фона, C4 — сигнал</td><td>C1–C4</td></tr>
+  <tr><td>Отладка → «Публикация в чужой топик»</td><td>«Чужой топик: not_authorized»</td><td>M2</td></tr>
+  <tr><td><code>adb shell 'svc wifi disable; svc data disable'</code>, затем <code>enable</code></td><td>Через ~30–40 с — <code>offline</code> с тем же <code>connId</code>. После включения — <code>online</code> с новым <code>connId</code></td><td>M3</td></tr>
+  <tr><td>Сеть выключена → «Сгенерировать N событий» → включить сеть</td><td>События досылаются, <code>seq</code> без пропусков и дублей</td><td>M7, P4</td></tr>
+  <tr><td><code>adb reboot</code>, приложение не открывать</td><td><code>online</code> снова, не позже чем через 3 мин</td><td>L2</td></tr>
+  <tr><td>Команда по MQTT (ниже)</td><td>В <code>cmd/res</code>: <code>received</code> → <code>succeeded</code>, на экране сообщение</td><td>M5</td></tr>
+  <tr><td>Та же команда с <code>expiresAt</code> в прошлом</td><td>Не выполняется</td><td>M6</td></tr>
+</table></div>
+
+<p><b>Команда по MQTT.</b> В фикстуре срок <code>expiresAt</code> уже истёк, поэтому собирается свежая копия:</p>
+<pre><code>python3 -I -c 'import json,time;d=json.load(open("docs/protocol/fixtures/cmd-req-show-message.json"));d["cmdId"]="c-man-%d"%time.time();d["expiresAt"]=int(time.time()*1000)+300000;print(json.dumps(d,ensure_ascii=False))' &gt; /tmp/cmd.json
+cd deploy
+O() { docker compose exec -T -e XDG_CONFIG_HOME=/tmp/rfopt mosquitto "$@"; }
+O mosquitto_pub -V 5 -q 1 -t rf/v1/dev/dev-emu-36/cmd/req -D publish response-topic rf/v1/dev/dev-emu-36/cmd/res \
+  -D publish correlation-data c-1 -D publish message-expiry-interval 300 -s &lt; /tmp/cmd.json</code></pre>
+
+<details>
+  <summary>По желанию: Device Owner на <code>rf-api36-do</code></summary>
+  <p>На обычном <code>rf-api36</code> агент не Device Owner, и проверки экрана «Владелец» там не пройдут. Запустите AVD <code>rf-api36-do</code>, установите агента и передайте ему учётку <code>dev-do-36</code> той же командой (поменяйте имя в двух местах).</p>
+  <ul class="tight">
+    <li><b>«Запустить все проверки DO».</b></li>
+    <li><b>Тихая установка (D3).</b> Адрес APK: <code>https://10.0.2.2:8443/waiter-4.13.apk</code>, затем «Подтянуть хэш» и запуск D3. Приложение ставится без диалогов. Для проверки обновления есть <code>waiter-4.14.apk</code>.</li>
+    <li><b>Перезагрузка (D2).</b> Агент просит подтверждение, перезагружает устройство и возвращается сам.</li>
+  </ul>
+</details>
+
+<p><b>Уборка после проверки:</b></p>
+<pre><code>cd deploy
+docker compose exec -T mosquitto rm -rf /tmp/rfopt   # удалить файлы опций оператора
+# docker compose down -v  — сносит стенд целиком вместе с учётками; пароли в out/ после этого не работают</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="next">Что дальше</h2>
+<div class="grid g3">
+  <div class="card">
+    <h3>MVP-B</h3>
+    <p class="small">Реальный планшет на Android 8.0 (сброс, Device Owner, регистрация по QR, ночь с выключенным экраном), телефон на Android 12, API 29/31/33/35 и 37, сторож L3, замер памяти и трафика на release-сборке.</p>
+  </div>
+  <div class="card">
+    <h3>Курсовая</h3>
+    <p class="small">Минимальное ядро: протокол + агент + брокер + бэкенд Ktor + симулятор устройств + эксперимент MQTT против REST-polling. Консоли пока нет.</p>
+  </div>
+  <div class="card">
+    <h3>Практика и диплом</h3>
+    <p class="small">Практика: тревоги, инциденты, Android-консоль. Диплом: Device Owner в продукте, Desktop-консоль, масштаб 10 000 устройств, развёртывание на VPS.</p>
+  </div>
+</div>
+
+<h3>Где что лежит</h3>
+<div class="table-wrap"><table>
+  <tr><th>Файл</th><th>Что там</th></tr>
+  <tr><td><code>TZ_RestoFleet.md</code></td><td>ТЗ v0.3 с поправками по итогам MVP-A</td></tr>
+  <tr><td><code>docs/architecture.md</code></td><td>Архитектура для всех этапов</td></tr>
+  <tr><td><code>docs/stages/0-mvp-feasibility.md</code></td><td>Матрица проверок с уликами</td></tr>
+  <tr><td><code>docs/reports/0-mvp/</code></td><td>Отчёты по вехам M0–M4 и журнал решений (<code>decisions.md</code>)</td></tr>
+  <tr><td><code>docs/mvp-results/</code></td><td>JSON-отчёты Lab и сводки прогонов эмуляторов</td></tr>
+  <tr><td><code>deploy/README.md</code></td><td>Стенд: запуск, учётки, подписка оператора, все команды проверок</td></tr>
+  <tr><td><code>tools/emulators/README.md</code></td><td>Создание AVD и автоматический прогон</td></tr>
+  <tr><td><code>docs/handoff.md</code></td><td>Точка входа для новой сессии и журнал задач</td></tr>
+</table></div>
+
+<footer>
+  RestoFleet · MVP-A · состояние на 11.11.2026. Стек: Kotlin 2.4.21, AGP 9.3.1, Gradle 9.8.2, Koin 4.2.2, HiveMQ MQTT Client 1.4.2, OkHttp 5.5.1, Room 2.8.5, Jetpack Compose, Mosquitto 2.1.2, nginx 1.30.6.
+</footer>
+
+</div>
+<script>
+(function () {
+  var blocks = document.querySelectorAll('pre');
+  for (var i = 0; i < blocks.length; i++) {
+    (function (pre) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'copy';
+      btn.textContent = 'Копировать';
+      btn.addEventListener('click', function () {
+        var code = pre.querySelector('code');
+        var text = (code || pre).textContent;
+        var done = function () { btn.textContent = 'Скопировано'; setTimeout(function () { btn.textContent = 'Копировать'; }, 1500); };
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done, function () { btn.textContent = 'Не удалось'; });
+          } else {
+            var ta = document.createElement('textarea');
+            ta.value = text; document.body.appendChild(ta); ta.select();
+            document.execCommand('copy'); document.body.removeChild(ta); done();
+          }
+        } catch (e) { btn.textContent = 'Не удалось'; }
+      });
+      pre.appendChild(btn);
+    })(blocks[i]);
+  }
+})();
+</script>
+</body>
+</html>

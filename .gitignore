@@ -17,3 +17,5 @@ deploy/mosquitto/data/
 spikes/**/results/creds*.csv
 # Superpowers execution workspace
 .superpowers/
+# Run logs (tools/emulators/run-matrix.sh)
+logs/

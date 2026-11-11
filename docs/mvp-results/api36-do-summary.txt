@@ -1,0 +1,14 @@
+avd=rf-api36-do api=36 sdk=36 boot_s=29
+install=ok
+device_owner=ok (уже назначен)
+devconfig: result=-1 data="ok" 
+mqtt_online=ok connId=k-e493be7a-461 after_s=4 mode=device_owner
+mqtt_telemetry=ok seq=2 ts=1794386120595
+D3_install_4.13: status=succeeded result={"package":"ru.restofleet.dummy.waiter","versionCode":"13","versionName":"4.13"} installed=4.13
+D3_update_4.14: status=succeeded result={"package":"ru.restofleet.dummy.waiter","versionCode":"14","versionName":"4.14"} installed=4.14
+D5_launch_bg: status=succeeded result={"strategy":"DIRECT_DO","target":"package","package":"ru.restofleet.dummy.waiter"} foreground=yes
+L2_reboot=ok boot_s=29 online_after_boot_s=36 connId=k-a1bf96b6-599
+D2_reboot_cmd: status=succeeded
+export_tap=ok
+export_pull=ok file=docs/mvp-results/api36-device_owner.json
+mqtt_log=logs/run-matrix/api36-do-20261111-133405-mqtt.log messages=31 cmd/req=4 cmd/res=8 events=12 status=4 telemetry=3

@@ -4,14 +4,94 @@
 
 ## Текущее состояние
 
-- **Этап:** MVP-A закрыт (эмуляторы); следующий — MVP-B / курсовая · **ветка:** `stage/0-mvp`
-- **План:** `docs/superpowers/plans/2026-11-05-mvp-a.md`
-- **Последняя завершённая задача:** 4.4 — ТЗ v0.3, закрытие MVP-A (отчёты `docs/reports/0-mvp/README.md`); слияния в `main` и тега `mvp-a` нет — решение пользователя
-- **Раунд исправлений M3:** закрыт, перепроверен в M4.
-- **Следующая задача:** MVP-B (реальные устройства, API 37, 29/31/33/35) и/или курсовая — `docs/stages/1-coursework.md`
-- **Блокеры:** GitHub-remote не настроен (CI заработает после пуша)
-- **Как поднять стенд:** `deploy/README.md` (4 команды + `./test-stand.sh`); нужен `local.properties` с `sdk.dir` для сборки.
-- **Исполнение:** M0 — в основной сессии; M1–M4 — субагенты (исполнитель + ревьюер на задачу).
+- **Этап:** MVP-A закрыт 10.11.2026 (эмуляторы API 26 и 36, DO на 36). **Следующий этап — курсовая (К):** `docs/stages/1-coursework.md`. MVP-B (реальные устройства) курсовую не блокирует и идёт параллельно, когда появятся планшет и телефон: `docs/stages/0-mvp.md`, задача M5.
+- **Ветка:** `main` @ `c978ffe`. 11.11 пользователь переименовал `stage/0-mvp` в `main` (`git branch -M main`), поэтому ветки `stage/0-mvp` и тега `mvp-a` нет. Ветку курсовой создать от `main`: `git switch -c stage/1-coursework`. Восстановить ветку MVP и тег при желании можно так: `git branch stage/0-mvp c978ffe && git tag -a mvp-a -m "MVP-A closed" c978ffe`. Это решает пользователь.
+- **Не закоммичено на 11.11.** Перед созданием ветки спросить пользователя, куда коммитить:
+  - `tools/emulators/run-matrix.sh` (+ README): флаги `--window`, `--do` и MQTT-лог прогона;
+  - `deploy/README.md`: функция `O()` вместо `$O`, чтобы работало в zsh;
+  - `.gitignore`: `logs/`;
+  - `docs/stages/0-mvp.md`: RS → ⚠️;
+  - этот файл;
+  - `docs/mvp-results/api36-device_owner.json` и `api36-do-summary.txt`;
+  - `swarm-report/mvp-a-explainer-2026-11-11.html` и `mvp-a-use-cases-2026-11-11.html`;
+  - `gradle/gradle-daemon-jvm.properties` (создан Android Studio, JDK 21; коммитить ли — решает пользователь).
+- **План К:** ещё не написан. Первый шаг — `docs/superpowers/plans/<дата>-coursework.md` по `docs/stages/1-coursework.md` и разделу «Старт этапа К» ниже, затем согласовать с пользователем.
+- **Последняя завершённая работа:** 11.11 — переход на AGP 9.3.1 (решение 187), DO-режим автопрогона, HTML-отчёты MVP-A.
+- **Блокеры:** нет. Пушит пользователь сам (HTTPS + токен). CI GitHub Actions заработает после пуша.
+- **Как поднять стенд:** `deploy/README.md` + `./test-stand.sh`. Для сборки нужен `local.properties` с `sdk.dir`.
+- **Исполнение MVP-A:** M0 — в основной сессии, M1–M4 — субагенты.
+
+## Старт этапа К — что нужно знать новой сессии
+
+### Порядок чтения
+1. Этот раздел.
+2. `CLAUDE.md`.
+3. `docs/architecture.md`, разд. 1–10 и 12.
+4. `docs/stages/1-coursework.md` — объём, задачи К1–К4, приёмка S1/S2′/S4/S5/S7′.
+5. По ссылкам из файла этапа: `TZ_RestoFleet.md` v0.3 (разд. 7 — протокол, 13.2 — эксперимент, 16.3 — записка), `docs/stages/0-mvp-feasibility.md` (что ✅/⚠️, что не реализуется) и `docs/reports/0-mvp/decisions.md` (решения 1–187).
+
+Обзор MVP для людей: `swarm-report/mvp-a-explainer-2026-11-11.html` и `mvp-a-use-cases-2026-11-11.html` (22 сценария).
+
+### Что из К уже сделано в MVP-A — не переделывать, а доводить
+| Пункт К | Состояние после MVP-A | Где |
+|---|---|---|
+| К1 `shared:protocol` | Черновик DTO для всех сообщений и 15 golden-фикстур, round-trip тесты. Нужно финализировать по ТЗ 7.2 + P1–P10 и добавить фикстуры на каждый статус команды | `shared/protocol`, `docs/protocol/fixtures` |
+| К1 `shared:shadow`, `shared:probes` | **Нет.** Автомат up↔down по `failThreshold` (FR-AG-44) не сделан: агент не публикует `probe_state` (решение 3.6b) | — |
+| К2 MQTT-сессия | **Есть:**<ul><li>LWT с `connId`, `cleanStart=false`, Session Expiry 24 ч, keepalive 30 с;</li><li>повтор 1…120 с, `auth_failed` 15→60 мин, `session_taken_over` 5 мин;</li><li>пиннинг CA стенда (только debug)</li></ul> | `agent/data/.../mqtt` (`MqttBrokerSession`, `HiveMqLink`, `MqttSessionConfigFactory` в `MqttSessionConfig.kt`, `ReconnectBackoff`, `SessionSupervisor`) |
+| К2 outbox на Room | **Есть.** 10 000 записей, приоритеты, пачки по 50, удаление окончательных отказов PUBACK | `agent/data/.../outbox` (Room), `agent/domain/.../usecase/PublishOrBuffer`, `FlushOutbox` |
+| К2 Keystore (FR-AG-12) | **Есть.** AES-GCM; временный сбой учётку не стирает | `KeystoreCredentialStore` |
+| К2 провижининг по коду (FR-AG-10) | **Нет.** Сейчас только debug `DevConfigReceiver` через adb | — |
+| К2 use cases агента | **Есть:** `CollectTelemetry`, `ApplyDesiredShadow`, `ExecuteCommand` + `Capabilities`, `HandleIncomingCommand`, `FlushOutbox`, переподключение.<br>**Частично:** `RunProbes` (`ProbeLoop` без up/down).<br>**Нет:** `EvaluateThresholds` (FR-AG-40/41), `Provision` | `agent/domain` |
+| К2 мастер и экран статуса | **Нет.** Есть только кнопки разрешений в Capability Lab (`AndroidWizardPermissions`) | `agent/presentation` |
+| К3 брокер | **Есть.** Роль `device` с ACL по `%u` и направлениям, `clientid = deviceId`, persistence; `test-dynsec-dev.sh` 16/16 | `deploy/mosquitto` |
+| К3 бэкенд `server:*` | **Нет:** каталога `server/` ещё нет. Образец работы с DynSec через `$CONTROL` — одноразовый `spikes/broker-load` (без тестов, переносить только идеи) | — |
+| К4 симулятор | **Нет.** Решено: Kotlin/JVM (S1 ⚠️: 1 000 клиентов без потерь, 10 000 — экстраполяция). Образец нагрузки — `spikes/broker-load` | — |
+
+### Что решить в начале К (с пользователем или через Ruling в журнале плана)
+1. **Пороги (FR-AG-40/41).** По ТЗ и `1-coursework.md` 4.3 их проверяет агент (`EvaluateThresholds`, этап К). KDoc `DesiredShadow` в MVP говорит обратное: «агент сам не применяет, проверяет бэкенд». Привести код к ТЗ.
+2. **Задержка событий до 60 с при живой связи** (наблюдение 11.11, DO-прогон). `PublishOrBuffer` шлёт сразу, только если outbox пуст, иначе ставит в очередь, а досылка идёт при подключении и раз в 60 с (`SessionSupervisor.DEFAULT_FLUSH_INTERVAL_MS`). Решить: досылать сразу, как только очередь опустела или пришло новое сообщение.
+3. **Двойные `package_changed`.** На одно удаление или обновление приходит два события. Решить, где дедуплицировать: в агенте или в `IngestBatch`.
+4. **`seq` телеметрии сбрасывается** при перезапуске агента, а `bootId` есть только в `status`. Ключ дедупликации и порядка для ingest — вместе с OQ-2 (ТЗ v0.3).
+5. **OQ-1:** `expiresAt` сравнивается с часами устройства. При уходе часов вперёд больше чем на 5 мин все команды получают `expired`.
+6. **Курсовая без UI консоли** — согласовать с преподавателем (риск из `1-coursework.md`). Запасной вариант — 2 экрана за ≈ 2 дня.
+7. **Не проверено в MVP-A и нужно К2:** сторож L3, ночной прогон L1 (экран эмулятора не засыпает как у планшета). RS1/RS2 ⚠️ — release-замер можно сделать на эмуляторе раньше MVP-B.
+8. **Матрица R12:** стоит ⚠️ («событий не было»), но в DO-прогоне 11.11 события `package_changed` пришли. Обновить при следующей правке матрицы.
+
+### Инструменты
+- **Гейт перед каждым коммитом:** `./gradlew build detekt koverVerifyCi :konsist-tests:test --continue` → rc=0. Холодная сборка ≈ 7 мин, тёплая — 2–3 мин. 1289 тестов, покрытие строк 93,3 %.
+- **Стенд:** `deploy/README.md`. Проверки: `./test-stand.sh` и `mosquitto/test-dynsec-dev.sh` (16/16).
+- **Эмуляторы:** `tools/emulators/run-matrix.sh rf-api36 36 [--window]` и `run-matrix.sh rf-api36-do 36 --do [--window]`. Весь MQTT-обмен прогона пишется в `logs/run-matrix/` (вне git). Подробности — `tools/emulators/README.md`.
+- **Оператор вручную:** функция `O() { docker compose exec -T -e XDG_CONFIG_HOME=/tmp/rfopt mosquitto "$@"; }`. Форма `$O` в zsh (оболочка пользователя) не работает. Отправка команды одной строкой (`rfcmd`) — в `mvp-a-use-cases-2026-11-11.html`, раздел «Подготовка».
+- **Версии:** Kotlin 2.4.21, **AGP 9.3.1** (Android Studio пользователя поддерживает не выше; после обновления Studio можно вернуть 9.5.x, решение 187), Gradle 9.8.2, compileSdk 37, targetSdk 36, minSdk 26.
+
+### Правила (подробно — `CLAUDE.md`, `docs/plan.md` и память проекта)
+- **Код:** весь на Kotlin, Clean Architecture (domain без Android, Ktor, Exposed, сериализации и Koin), Koin только через конструктор, в том числе в Ktor. Без convention-плагинов: версии и SDK-уровни — в `gradle/libs.versions.toml`. Presentation — MVI по канону.
+- **Тесты:** TDD, JUnit 4 + **Truth**, MockK. Kover: domain и data ≥ 90 %, проект ≥ 80 %. Требования с ❌ в матрице не реализуются (в MVP-A ❌ нет).
+- **Git:**
+  - ветка на этап (`stage/1-coursework`);
+  - коммит только после гейта rc=0;
+  - **без трейлеров `Co-Authored-By` и `Generated with`**;
+  - не сливать в `main`, не ставить теги, не пушить без явной просьбы.
+- **Секреты:**
+  - не выводить и не коммитить `deploy/.env`, `deploy/out/`, `deploy/certs/out/`, `deploy/apk/`;
+  - пароли передавать только через файлы и stdin, не через argv, echo или grep;
+  - проверка утечки — только числом: `grep -cFf <файл шаблонов 600>`.
+
+  Репозиторий на GitHub публичный (`Eganin/RetroFleet`).
+- **Эмулятор в сессии агента:**
+  - только свои AVD `rf-api36` и `rf-api36-do`;
+  - запуск только `-no-window -no-audio -no-boot-anim -port 5600`, один эмулятор одновременно;
+  - чужие AVD (Kiosk_Tab_29, Kiosk_Tab_36, Medium_Phone, Pixel_4, Pixel_9a, e2e_avd) не трогать;
+  - пользователь сам может запускать с окном (`--window`).
+- **Окружение:** `python3 -I`; `timeout` на macOS нет; свободного места должно быть ≥ 15 ГБ.
+- **Процесс** (пожелания пользователя):
+  - меньше агентов и повторных проверок;
+  - ревью и валидация — в конце вехи;
+  - неоднозначности — через Ruling в журнале, без вопросов в ночных прогонах;
+  - отчёты — сырьё для текста курсовой: обновлять этот файл и `docs/reports/1-coursework/` после каждой задачи.
+
+### Фраза для старта новой сессии
+> Работаем над этапом «курсовая». Прочитай `docs/handoff.md` (раздел «Старт этапа К»), `CLAUDE.md`, `docs/architecture.md` (разд. 1–10, 12) и `docs/stages/1-coursework.md`. Сначала спроси меня про незакоммиченные файлы, затем создай ветку `stage/1-coursework` от `main`, напиши план `docs/superpowers/plans/<дата>-coursework.md` с учётом того, что уже сделано в MVP-A, и согласуй его со мной.
 
 ## Журнал
 
@@ -60,3 +140,6 @@
 | 2026-11-10 | Раунд исправлений по ревью M3 (I1–I5, M6, M7, M11, M17) | см. `git log` | решения 170–178; 1286 тестов (data 765, domain 215), строки: data 91,7 %, domain 96,5 %, проект 93,9 %; полная сборка rc=0; `test-dynsec-dev.sh` проверен только `bash -n`, живой прогон 16/16 — за контроллером |
 | 2026-11-10 | 3.9, M4: закрытие M3, прогон эмуляторов 26/36 (37 не стартует), ТЗ v0.3 | см. `git log` | MVP-A закрыт: ⚠️ RS1/RS2 (debug, цели сохраняются), ⚠️ S1 на 1 000; MVP-B — остальное |
 | 2026-11-11 | AGP 9.5.1 → 9.3.1 (совместимость с Android Studio) | см. `git log` | решение 187; подавление lint в `SerialCollector` перенесено на функцию; полная сборка rc=0 |
+| 2026-11-11 | `run-matrix.sh`: `--window`, MQTT-лог прогона (`logs/run-matrix/`), `--do` (D3 установка и обновление, D5, D2 командами по MQTT), отказ при занятом AVD | не закоммичено | прогоны `rf-api36` и `rf-api36-do` rc=0; в DO-логе пришли `package_changed` (R12), события задерживались до 60 с при непустом outbox |
+| 2026-11-11 | HTML-отчёты MVP-A (обзор, 22 сценария); `deploy/README.md`: `O()` вместо `$O` для zsh; `0-mvp.md`: RS → ⚠️ | не закоммичено | `swarm-report/mvp-a-*-2026-11-11.html` |
+| 2026-11-11 | Handoff к курсовой: раздел «Старт этапа К» | не закоммичено | следующий шаг — план `docs/superpowers/plans/<дата>-coursework.md` |
