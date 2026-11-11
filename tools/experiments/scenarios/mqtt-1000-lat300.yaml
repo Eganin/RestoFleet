@@ -1,0 +1,19 @@
+# Эксперимент «MQTT vs REST-polling» (КМ4, ТЗ 13.2): MQTT через Toxiproxy +300 мс
+# Запуск: tools/experiments/run-experiment.sh mqtt-1000-lat300
+name: mqtt-1000-lat300
+mode: mqtt
+devices: 1000
+seed: 42
+rampPerSec: 100
+warmupSec: 30
+durationSec: 240
+telemetryIntervalSec: 30
+jitter: 0.05
+mix: { kitchen: 2, hall: 3, assembly: 1 }
+commands: { perMinute: 60, type: ping, ttlSec: 300 }
+loss: { devices: 10, mode: silent, timeoutSec: 120 }
+network: latency300
+endpoints:
+  api: http://backend-devices:8080
+  control: http://backend-ctl:8080
+  broker: { host: toxiproxy, port: 18883 }

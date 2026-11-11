@@ -1,0 +1,20 @@
+# Эксперимент «MQTT vs REST-polling» (КМ4, ТЗ 13.2): REST-polling, опрос 30 с, N = 100
+# Запуск: tools/experiments/run-experiment.sh rest30-100
+name: rest30-100
+mode: rest
+devices: 100
+seed: 42
+rampPerSec: 100
+warmupSec: 30
+durationSec: 240
+telemetryIntervalSec: 30
+pollIntervalSec: 30
+jitter: 0.05
+mix: { kitchen: 2, hall: 3, assembly: 1 }
+commands: { perMinute: 60, type: ping, ttlSec: 300 }
+loss: { devices: 10, mode: silent, timeoutSec: 150 }
+network: baseline
+endpoints:
+  api: http://backend-devices:8080
+  control: http://backend-ctl:8080
+  broker: { host: mosquitto, port: 8883 }

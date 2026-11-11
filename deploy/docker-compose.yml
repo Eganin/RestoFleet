@@ -122,6 +122,13 @@ services:
     secrets: [postgres-password, backend-mqtt-password, jwt-secret]
     volumes:
       - ./certs/out/public/ca.crt:/certs/ca.crt:ro
+    # Эксперимент КМ4 (реш. 280): устройства симулятора ходят к бэкенду по сети default (`backend-devices`),
+    # измеритель — по отдельной сети control (`backend-ctl`), чтобы его запросы не попадали в трафик устройств
+    networks:
+      default:
+        aliases: [backend-devices]
+      control:
+        aliases: [backend-ctl]
     depends_on:
       postgres:
         condition: service_healthy
@@ -169,6 +176,41 @@ services:
       retries: 6
       start_period: 3s
 
+  # Симулятор устройств и измеритель эксперимента «MQTT vs REST-polling» (КМ4, profile experiment; deploy/README.md,
+  # «Эксперимент»). Запуск — только `run --rm --no-deps` из tools/experiments/run-experiment.sh: без --no-deps compose
+  # пересоздал бы бэкенд с другими RF_* (реш. 289). Ограничения CPU/ОЗУ — чтобы симулятор на одной машине с сервером
+  # не забирал всё (1-coursework.md 4.6). NET_ADMIN — `tc netem` (потери пакетов), SETUID/SETGID — переход точки
+  # входа на uid 10001; capabilities у самого процесса нет. Пароль admin — секрет; кэш учёток — out/sim (600).
+  simulator:
+    image: restofleet/simulator:dev
+    build:
+      context: ../server/simulator
+    profiles: ["experiment"]
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cpus: ${RF_SIM_CPUS:-2}
+    mem_limit: ${RF_SIM_MEM:-3g}
+    cap_drop: [ALL]
+    cap_add: [NET_ADMIN, SETUID, SETGID]
+    security_opt: ["no-new-privileges:true"]
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    environment:
+      RF_SIM_NETEM: ${RF_SIM_NETEM:-}
+      RF_SIM_NETEM_HOST: ${RF_SIM_NETEM_HOST:-mosquitto}
+      JAVA_OPTS: -Xmx${RF_SIM_HEAP:-2g} -XX:+ExitOnOutOfMemoryError
+    secrets: [admin-password]
+    volumes:
+      - ./certs/out/public/ca.crt:/certs/ca.crt:ro
+      - ./out/sim:/var/lib/simulator
+      - ../tools/experiments/scenarios:/scenarios:ro
+      - ../logs/experiments:/results
+    networks: [default, control]
+
   # Однократно: docker compose --profile init run --rm dynsec-init
   dynsec-init:
     image: eclipse-mosquitto:2.1.2-alpine
@@ -190,6 +232,12 @@ secrets:
     file: ./out/jwt-secret
   admin-password:
     file: ./out/admin-password
+
+networks:
+  default: {}
+  # Только измеритель эксперимента ↔ бэкенд (реш. 280): наружу не выходит
+  control:
+    internal: true
 
 volumes:
   mosquitto-data:

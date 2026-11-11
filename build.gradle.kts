@@ -29,6 +29,7 @@ dependencies {
     kover(projects.server.data)
     kover(projects.server.api)
     kover(projects.server.app)
+    kover(projects.server.simulator)
 }
 
 kover {

@@ -91,6 +91,34 @@ class ArchitectureTest {
     }
 
     @Test
+    fun simulatorDomainIsFoundAndUsesOnlySharedDomain() {
+        // server:simulator (КМ4, реш. 279): слои — пакеты одного модуля; domain — без фреймворков, протокола и HiveMQ,
+        // из своих — только shared:kernel/shadow/probes
+        val domain = production.filter { SIMULATOR_DOMAIN in it.normalizedPath }
+        assertWithMessage("server:simulator domain files").that(domain).isNotEmpty()
+        domain.assertFalse(testName = "simulator domain imports framework or outer layer") { file ->
+            file.imports.any { import ->
+                val foreignPart = import.name.startsWith("ru.restofleet.") &&
+                    SIMULATOR_DOMAIN_ALLOWED.none { import.name.startsWith(it) }
+                FORBIDDEN_IN_DOMAIN.any { import.name.startsWith(it) } || foreignPart
+            }
+        }
+    }
+
+    @Test
+    fun simulatorDataDoesNotImportAppAndSimulatorUsesNoOtherServerModule() {
+        val simulator = production.filter { "/server/simulator/src/" in it.normalizedPath }
+        simulator.filter { SIMULATOR_DATA in it.normalizedPath }
+            .assertFalse(testName = "simulator data imports app") { file ->
+                file.imports.any { it.name.startsWith("ru.restofleet.server.simulator.app") }
+            }
+        // Симулятор ходит к бэкенду только по протоколу (MQTT, REST), а не через его классы
+        simulator.assertFalse(testName = "simulator imports backend or agent modules") { file ->
+            file.imports.any { import -> SIMULATOR_FOREIGN.any { import.name.startsWith(it) } }
+        }
+    }
+
+    @Test
     fun presentationDoesNotImportDataOrTransport() {
         presentationFiles.assertFalse(testName = "presentation imports data layer or transport DTO") { file ->
             file.imports.any { import -> isDataLayer(import.name) }
@@ -124,8 +152,21 @@ class ArchitectureTest {
     private companion object {
         val DOMAIN_PATH = Regex("/(domain|[a-z0-9]+(-[a-z0-9]+)*-domain|shared/(kernel|shadow|probes))/src/")
         val PRESENTATION_PATH = Regex("/(presentation|[a-z0-9]+(-[a-z0-9]+)*-ui|console/core/mvi)/src/")
-        val COMPOSITION_ROOT_PATH =
-            Regex("(/app/src/|/console/app-[a-z]+/src/|/console/root/src/|-component/src/|/di/)")
+        val COMPOSITION_ROOT_PATH = Regex(
+            "(/app/src/|/console/app-[a-z]+/src/|/console/root/src/|-component/src/|/di/|" +
+                "/server/simulator/src/main/kotlin/ru/restofleet/server/simulator/app/)",
+        )
+
+        const val SIMULATOR_DOMAIN = "/server/simulator/src/main/kotlin/ru/restofleet/server/simulator/domain/"
+        const val SIMULATOR_DATA = "/server/simulator/src/main/kotlin/ru/restofleet/server/simulator/data/"
+        val SIMULATOR_DOMAIN_ALLOWED = listOf(
+            "ru.restofleet.server.simulator.domain.", "ru.restofleet.shared.kernel.", "ru.restofleet.shared.shadow.",
+            "ru.restofleet.shared.probes.",
+        )
+        val SIMULATOR_FOREIGN = listOf(
+            "ru.restofleet.server.domain.", "ru.restofleet.server.data.", "ru.restofleet.server.api.",
+            "ru.restofleet.server.app.", "ru.restofleet.agent.",
+        )
 
         val SHARED_DOMAIN_PATH = Regex("/shared/(kernel|shadow|probes)/src/")
         val PARTS = listOf(
