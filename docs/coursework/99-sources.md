@@ -29,8 +29,8 @@
 27. Android Keystore system // Android Developers. — URL: https://developer.android.com/privacy-and-security/keystore (дата обращения: 11.11.2026). — Текст : электронный.
 28. DevicePolicyManager // Android Developers. API reference. — URL: https://developer.android.com/reference/android/app/admin/DevicePolicyManager (дата обращения: 11.11.2026). — Текст : электронный.
 29. Lock task mode // Android Developers. — URL: https://developer.android.com/work/dpc/dedicated-devices/lock-task-mode (дата обращения: 11.11.2026). — Текст : электронный.
-30. ГОСТ 34.602-2020. Информационные технологии. Комплекс стандартов на автоматизированные системы. Техническое задание на создание автоматизированной системы : межгосударственный стандарт : дата введения 2022-01-01. — Текст : непосредственный.
-31. Мартин, Р. Чистая архитектура. Искусство разработки программного обеспечения / Р. Мартин ; пер. с англ. — Санкт-Петербург : Питер, 2018. — 352 с. — Текст : непосредственный.
+30. ГОСТ 34.602-2020. Информационные технологии. Комплекс стандартов на автоматизированные системы. Техническое задание на создание автоматизированной системы : межгосударственный стандарт : издание официальное : утверждён и введён в действие Приказом Федерального агентства по техническому регулированию и метрологии от 19 ноября 2021 г. № 1522-ст : взамен ГОСТ 34.602-89 : дата введения 2022-01-01 / разработан АО «ВНИИС», ООО ИАВЦ. — Москва : Российский институт стандартизации, 2021. — 12 с. — Текст : непосредственный.
+31. Мартин, Р. Чистая архитектура. Искусство разработки программного обеспечения / Р. Мартин ; перевод с английского. — Санкт-Петербург : Питер, 2018. — 352 с. — (Библиотека программиста). — ISBN 978-5-4461-0772-8. — Текст : непосредственный.
 32. Koin Documentation. — URL: https://insert-koin.io/docs/ (дата обращения: 11.11.2026). — Текст : электронный.
 33. Ktor Documentation // JetBrains. — URL: https://ktor.io/docs/ (дата обращения: 11.11.2026). — Текст : электронный.
 34. HiveMQ MQTT Client : репозиторий // GitHub. — URL: https://github.com/hivemq/hivemq-mqtt-client (дата обращения: 11.11.2026). — Текст : электронный.
@@ -41,3 +41,13 @@
 39. Dynamic Security plugin : README // Eclipse Mosquitto, GitHub. — URL: https://github.com/eclipse-mosquitto/mosquitto/blob/master/plugins/dynamic-security/README.md (дата обращения: 11.11.2026). — Текст : электронный.
 40. Provos, N. A Future-Adaptable Password Scheme / N. Provos, D. Mazières // Proceedings of the FREENIX Track: 1999 USENIX Annual Technical Conference. — Monterey, 1999. — URL: https://www.usenix.org/legacy/events/usenix99/provos/provos.pdf (дата обращения: 11.11.2026). — Текст : электронный.
 41. Jones, M. RFC 7519. JSON Web Token (JWT) / M. Jones, J. Bradley, N. Sakimura. — IETF, 2015. — URL: https://www.rfc-editor.org/rfc/rfc7519 (дата обращения: 11.11.2026). — Текст : электронный.
+42. Save data in a local database using Room // Android Developers. — URL: https://developer.android.com/training/data-storage/room (дата обращения: 11.11.2026). — Текст : электронный.
+43. Events // OkHttp : документация, GitHub. — URL: https://github.com/square/okhttp/blob/master/docs/features/events.md (дата обращения: 11.11.2026). — Текст : электронный.
+44. Exposed Documentation // JetBrains. — URL: https://www.jetbrains.com/help/exposed/home.html (дата обращения: 11.11.2026). — Текст : электронный.
+45. Redgate Flyway Documentation // Redgate. — URL: https://documentation.red-gate.com/flyway (дата обращения: 11.11.2026). — Текст : электронный.
+46. OpenAPI Specification v3.0.3 // OpenAPI Initiative. — 2020. — URL: https://spec.openapis.org/oas/v3.0.3.html (дата обращения: 11.11.2026). — Текст : электронный.
+47. Docker Compose // Docker Docs. — URL: https://docs.docker.com/compose/ (дата обращения: 11.11.2026). — Текст : электронный.
+48. Toxiproxy : репозиторий // GitHub. — URL: https://github.com/Shopify/toxiproxy (дата обращения: 11.11.2026). — Текст : электронный.
+49. Testcontainers for Java. — URL: https://java.testcontainers.org/ (дата обращения: 11.11.2026). — Текст : электронный.
+50. What is Konsist? // Konsist Documentation. — URL: https://docs.konsist.lemonappdev.com/ (дата обращения: 11.11.2026). — Текст : электронный.
+51. Kover : репозиторий // GitHub. — URL: https://github.com/Kotlin/kotlinx-kover (дата обращения: 11.11.2026). — Текст : электронный.
