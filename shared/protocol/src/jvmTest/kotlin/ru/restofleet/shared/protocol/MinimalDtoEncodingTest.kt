@@ -14,6 +14,8 @@ import ru.restofleet.shared.protocol.dto.CommandRequestDto
 import ru.restofleet.shared.protocol.dto.DeviceInfoDto
 import ru.restofleet.shared.protocol.dto.DeviceStateDto
 import ru.restofleet.shared.protocol.dto.EventDto
+import ru.restofleet.shared.protocol.dto.FgAbsentEventDto
+import ru.restofleet.shared.protocol.dto.FgChangedEventDto
 import ru.restofleet.shared.protocol.dto.MemoryDto
 import ru.restofleet.shared.protocol.dto.NetChangedEventDto
 import ru.restofleet.shared.protocol.dto.NetDto
@@ -28,6 +30,7 @@ import ru.restofleet.shared.protocol.dto.StorageDto
 import ru.restofleet.shared.protocol.dto.TelemetryConfigDto
 import ru.restofleet.shared.protocol.dto.TelemetryDto
 import ru.restofleet.shared.protocol.dto.ThermalDto
+import ru.restofleet.shared.protocol.dto.ThresholdEventDto
 import ru.restofleet.shared.protocol.dto.ThresholdsDto
 
 /**
@@ -89,6 +92,9 @@ class MinimalDtoEncodingTest {
             PackageChangedEventDto(ts = 1, pkg = "p", change = "removed"),
             NetChangedEventDto(ts = 1, net = NetDto(type = "wifi", validated = true)),
             CapabilityCheckEventDto(ts = 1, checkId = "R1", status = "OK"),
+            ThresholdEventDto(ts = 1, metric = "battery_low", state = "enter", value = 19.0, limit = 20.0),
+            FgChangedEventDto(ts = 1, from = "a.b", to = "c.d"),
+            FgAbsentEventDto(ts = 1, pkg = "a.b", sinceTs = 0, limitMin = 10),
         )
         val types = events.map {
             (RfJson.encodeToJsonElement(EventDto.serializer(), it) as JsonObject)["type"]
@@ -99,6 +105,9 @@ class MinimalDtoEncodingTest {
                 JsonPrimitive("package_changed"),
                 JsonPrimitive("net_changed"),
                 JsonPrimitive("capability_check"),
+                JsonPrimitive("threshold"),
+                JsonPrimitive("fg_changed"),
+                JsonPrimitive("fg_absent"),
             )
             .inOrder()
     }
@@ -123,6 +132,15 @@ class MinimalDtoEncodingTest {
             id = "a", type = "http", url = "https://x", intervalSec = 30, timeoutMs = 5_000, failThreshold = 3,
         )
         assertThat(keysOf(ProbeTargetDto.serializer(), target)).contains("reference")
+        assertThat(keysOf(ProbeTargetDto.serializer(), target)).doesNotContain("expectedStatus")
+    }
+
+    @Test
+    fun minimalFgEventsOmitUnknownApps() {
+        val changed = FgChangedEventDto(ts = 1)
+        assertThat(keysOf(EventDto.serializer(), changed)).containsExactly("type", "ts")
+        val absent = FgAbsentEventDto(ts = 1, pkg = "a.b", sinceTs = 0, limitMin = 10)
+        assertThat(keysOf(EventDto.serializer(), absent)).containsExactly("type", "ts", "pkg", "sinceTs", "limitMin")
     }
 
     @Test

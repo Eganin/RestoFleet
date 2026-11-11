@@ -1,0 +1,12 @@
+{
+  "version": 13,
+  "telemetry": { "intervalSec": 30 },
+  "thresholds": { "batteryLowPct": 20, "tempHighC": 45.0, "fgAbsentMin": 10 },
+  "watchedApps": [ "com.android.chrome" ],
+  "probes": [
+    { "id": "api", "type": "http", "url": "https://api.company.example/health", "intervalSec": 30, "timeoutMs": 5000, "failThreshold": 3, "reference": false }
+  ],
+  "appliedVersion": 13,
+  "appliedAt": 1793866005000,
+  "errors": [ "telemetryIntervalSec:out_of_range", "probes:duplicate_id:api", "watchedApps:invalid_name:Chrome" ]
+}

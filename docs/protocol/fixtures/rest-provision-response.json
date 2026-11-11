@@ -1,0 +1,7 @@
+{
+  "deviceId": "d-01J9ZK2M4Q",
+  "password": "EXAMPLE-not-a-real-secret-0000000000000",
+  "restaurantId": "r-msk-001",
+  "role": "kitchen",
+  "mqtt": { "host": "10.0.2.2", "port": 8883 }
+}

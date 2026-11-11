@@ -1,0 +1,1 @@
+{ "type": "threshold", "ts": 1793865750000, "metric": "battery_low", "state": "enter", "value": 19.0, "limit": 20.0 }

@@ -1,0 +1,19 @@
+{
+  "telemetry": {
+    "ts": 1793865630000,
+    "seq": 42,
+    "battery": { "level": 71, "charging": false, "plugged": "none", "tempC": 33.5 },
+    "net": { "type": "wifi", "rssi": -58, "validated": true },
+    "storage": { "freeMb": 2048 },
+    "memory": { "availMb": 900 },
+    "uptimeSec": 7200,
+    "apps": []
+  },
+  "probe": {
+    "ts": 1793865630000,
+    "results": [ { "id": "api", "ok": true, "status": 200, "totalMs": 120 } ]
+  },
+  "events": [
+    { "type": "threshold", "ts": 1793865625000, "metric": "battery_low", "state": "exit", "value": 22.0, "limit": 20.0 }
+  ]
+}

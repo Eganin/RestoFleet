@@ -45,4 +45,9 @@ data class ProbeTargetDto(
     val timeoutMs: Long,
     val failThreshold: Int,
     val reference: Boolean = false,
+    /**
+     * Ожидаемый HTTP-статус (FR-AG-30, реш. 219): `null` — успех любой код ниже 400; иначе успех только при точном
+     * совпадении. Агент возвращает поле в `reported` как есть, иначе `delta` тени не опустеет.
+     */
+    val expectedStatus: Int? = null,
 )
