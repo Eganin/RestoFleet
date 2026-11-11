@@ -2,7 +2,7 @@
 # Версии проверены 05.11.2026 — см. docs/superpowers/plans/2026-11-05-mvp-a.md, раздел «Версии».
 [versions]
 kotlin = "2.4.21"
-agp = "9.5.1"
+agp = "9.3.1"
 ksp = "2.3.13"
 android-compileSdk = "37"
 android-targetSdk = "36"

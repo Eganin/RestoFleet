@@ -16,8 +16,7 @@ import ru.restofleet.agent.domain.model.UnavailableReason
 class SerialCollector(
     private val apiLevel: ApiLevel = ApiLevel.Device,
     private val role: DeviceOwnerRole,
-    @SuppressLint("HardwareIds", "MissingPermission") // доступ подтверждается ролью DO, а не манифестом
-    private val getSerial: () -> String = { Build.getSerial() },
+    private val getSerial: () -> String = ::readBuildSerial,
 ) {
     @Suppress("SwallowedException") // SecurityException = нет доступа к серийному номеру
     fun read(): Reading<String> = guarded {
@@ -46,3 +45,8 @@ class SerialCollector(
         const val DEVICE_OWNER_ONLY_API = 29
     }
 }
+
+// Доступ подтверждается ролью DO, а не манифестом; SecurityException обрабатывает read(). Подавление стоит на функции,
+// а не на параметре конструктора: lint AGP 9.3 не распространяет его на лямбду по умолчанию.
+@SuppressLint("HardwareIds", "MissingPermission")
+private fun readBuildSerial(): String = Build.getSerial()

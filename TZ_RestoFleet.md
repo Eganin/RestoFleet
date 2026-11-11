@@ -713,7 +713,7 @@ MDM-системы и режима киоска на устройствах не
 | Компонент | Технологии |
 |---|---|
 | Общий код (KMP: Android + JVM) | Kotlin 2.4.21, kotlinx.coroutines 1.11.0, kotlinx.serialization 1.12.0, Koin 4.2.2; модули `shared:kernel` (`Outcome`, `DomainError`, `Clock`), `shared:protocol` (DTO, топики, golden-фикстуры), `shared:shadow`, `shared:probes` |
-| Android-агент | AGP 9.5.1, Foreground Service, WorkManager 2.12.0, Room 2.8.5 + KSP 2.3.13 (буфер), Android Keystore (шифрование записи учётки), OkHttp 5.5.1 (`EventListener` для поэтапных замеров), HiveMQ MQTT Client 1.4.2 (MQTT 5; запасной план — Eclipse Paho MQTTv5, на Android 8 HiveMQ работает — проверено на эмуляторе API 26), DevicePolicyManager, Compose (BOM 2026.09.00) и MVI (`console:core:mvi`) для экранов |
+| Android-агент | AGP 9.3.1, Foreground Service, WorkManager 2.12.0, Room 2.8.5 + KSP 2.3.13 (буфер), Android Keystore (шифрование записи учётки), OkHttp 5.5.1 (`EventListener` для поэтапных замеров), HiveMQ MQTT Client 1.4.2 (MQTT 5; запасной план — Eclipse Paho MQTTv5, на Android 8 HiveMQ работает — проверено на эмуляторе API 26), DevicePolicyManager, Compose (BOM 2026.09.00) и MVI (`console:core:mvi`) для экранов |
 | Консоль оператора | Compose Multiplatform 1.12.2: Android-таргет (П), Desktop-таргет (Д); Decompose 3, Ktor Client (REST + WebSocket), Koin, библиотека графиков (Vico или аналог) |
 | Backend | Kotlin/JVM, Ktor 3.6.1 (Netty, ContentNegotiation, StatusPages, Auth-JWT, RateLimit, WebSockets — П), Koin 4.2.2 (`koin-ktor`), Exposed DSL 1.x, HikariCP, pgjdbc, Flyway, HiveMQ MQTT Client 1.4.2 (MQTT 5, shared subscriptions), hoplite, bcrypt, OpenAPI + Swagger UI |
 | БД | PostgreSQL 17 (образ `timescale/timescaledb:2.x-pg17`); гипертаблицы TimescaleDB — Д |
