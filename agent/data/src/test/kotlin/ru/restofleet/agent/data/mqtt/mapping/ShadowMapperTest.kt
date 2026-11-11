@@ -27,6 +27,16 @@ class ShadowMapperTest {
     }
 
     @Test
+    fun expectedStatusIsCarriedToTheDomain() {
+        // FR-AG-30, реш. 219: агент обязан вернуть поле в reported, иначе delta тени не опустеет
+        val dto = Fixtures.decode("shadow-desired-expected-status", ShadowDesiredDto.serializer())
+
+        val shadow = ShadowMapper.fromDto(dto)
+
+        assertThat(shadow.probes.single().expectedStatus).isEqualTo(204)
+    }
+
+    @Test
     fun thresholdsAreKeptForTheReportedEcho() {
         val shadow = ShadowMapper.fromDto(Fixtures.decode("shadow-desired", ShadowDesiredDto.serializer()))
 

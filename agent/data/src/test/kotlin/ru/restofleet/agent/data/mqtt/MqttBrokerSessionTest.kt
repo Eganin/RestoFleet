@@ -14,6 +14,7 @@ import org.junit.Test
 import ru.restofleet.agent.domain.command.Command
 import ru.restofleet.agent.domain.model.MessageKind
 import ru.restofleet.agent.domain.model.OutgoingMessage
+import ru.restofleet.agent.domain.model.DeviceRole
 import ru.restofleet.agent.domain.port.BrokerSettings
 import ru.restofleet.agent.domain.port.CredentialStore
 import ru.restofleet.agent.domain.port.SessionState
@@ -160,6 +161,26 @@ class MqttBrokerSessionTest {
 
         assertThat(s.status.value.error).isEqualTo(MqttError.CaInvalid)
         assertThat(factory.settingsSeen).isEmpty()
+    }
+
+    @Test
+    fun onlineCarriesTheRoleOfTheStoredCredentials() = runTest {
+        // Реш. 210, план 3.7: роль из провижининга хранится с учёткой и уходит в status.role
+        memory.value = settings.copy(role = DeviceRole.HALL, restaurantId = "r-1")
+        val l = link("k-1")
+        session().connect()
+        runCurrent()
+
+        assertThat(text(l.published.single())).contains("\"role\":\"hall\"")
+    }
+
+    @Test
+    fun onlineWithoutRoleOmitsTheField() = runTest {
+        val l = link("k-1")
+        session().connect()
+        runCurrent()
+
+        assertThat(text(l.published.single())).doesNotContain("\"role\"")
     }
 
     @Test

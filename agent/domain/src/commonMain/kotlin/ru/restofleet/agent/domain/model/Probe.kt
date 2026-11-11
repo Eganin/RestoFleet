@@ -3,9 +3,10 @@ package ru.restofleet.agent.domain.model
 import ru.restofleet.shared.probes.ProbeErrorClass
 
 /**
- * Цель HTTPS-пробы: [id] попадает в результат, [timeoutMs] — потолок всей пробы. [intervalSec] задаёт период цикла
- * проб, а [failThreshold] и [reference] агент пока не использует (`probe_state` отложен), они хранятся для эхо в
- * `shadow/reported`.
+ * Цель HTTPS-пробы: [id] попадает в результат, [timeoutMs] — потолок всей пробы, [intervalSec] — период плановых проб
+ * (не чаще минимума `ProbeSchedule`), [failThreshold] — K неудач подряд до `down` (FR-AG-34). [expectedStatus] — точный
+ * ожидаемый HTTP-код (FR-AG-30, реш. 219), `null` — успех любой код ниже 400. [reference] агент не использует, поле
+ * возвращается в `shadow/reported` как эхо, как и все остальные.
  */
 data class ProbeTarget(
     val id: String,
@@ -14,6 +15,7 @@ data class ProbeTarget(
     val intervalSec: Int = 30,
     val failThreshold: Int = 3,
     val reference: Boolean = false,
+    val expectedStatus: Int? = null,
 )
 
 /**

@@ -1,7 +1,6 @@
 package ru.restofleet.agent
 
 import android.Manifest
-import android.content.ActivityNotFoundException
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -36,12 +35,20 @@ import com.arkivanov.essenty.instancekeeper.instanceKeeper
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.component.inject
+import org.koin.core.parameter.parametersOf
 import ru.restofleet.agent.data.lifecycle.ServiceStarter
-import ru.restofleet.agent.presentation.lab.LabContainer
-import ru.restofleet.agent.presentation.lab.viewmodel.LabViewModel
-import ru.restofleet.agent.presentation.lab.viewmodel.model.SettingsTarget
+import ru.restofleet.agent.presentation.root.RootContainer
+import ru.restofleet.agent.presentation.root.viewmodel.RootViewModel
+import ru.restofleet.agent.presentation.setup.SetupContainer
+import ru.restofleet.agent.presentation.setup.viewmodel.SetupViewModel
+import ru.restofleet.agent.presentation.status.StatusContainer
+import ru.restofleet.agent.presentation.status.viewmodel.StatusViewModel
 
-/** Верхняя полоса (версия, запрос уведомлений, ручной запуск агента), вкладки Lab и Device Owner. */
+/**
+ * Верхняя полоса (версия, запрос уведомлений, ручной запуск агента) и экраны агента (план 3.6): без учётки — мастер
+ * настройки, с учёткой — экран статуса; Capability Lab с вкладкой Device Owner — только debug, из мастера и статуса.
+ * ViewModel живут в `InstanceKeeper` (переживают поворот), роутер держит контекст приложения, а не Activity.
+ */
 class MainActivity : ComponentActivity(), KoinComponent {
     private val starter: ServiceStarter by inject()
     private val settingsIntents: SettingsIntents by inject()
@@ -49,9 +56,10 @@ class MainActivity : ComponentActivity(), KoinComponent {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         starter.ensureRunning(REASON_ACTIVITY)
-        // ViewModel живёт в InstanceKeeper (переживает поворот экрана); onDestroy вызывается при окончательном закрытии
-        val lab = instanceKeeper().getOrCreate(LabViewModel::class) { get<LabViewModel>() }
-        val deviceOwner = getKoin().getOrNull<DeviceOwnerTab>()?.content(instanceKeeper())
+        val keeper = instanceKeeper()
+        val root = keeper.getOrCreate(RootViewModel::class) { get<RootViewModel>() }
+        val router = AgentRouter(root, applicationContext, settingsIntents)
+        val lab = getKoin().getOrNull<LabScreen>()?.content(keeper, router::openSettings)
         setContent {
             MaterialTheme {
                 Surface(Modifier.fillMaxSize()) {
@@ -61,22 +69,30 @@ class MainActivity : ComponentActivity(), KoinComponent {
                             notificationsGranted = ::notificationsGranted,
                             onStart = { starter.ensureRunning(REASON_MANUAL) },
                         )
-                        AgentTabHost(
-                            lab = { LabContainer(lab, onOpenSettings = ::openSettings) },
-                            deviceOwner = deviceOwner,
+                        RootContainer(
+                            viewModel = root,
+                            setup = {
+                                val setup = remember {
+                                    keeper.getOrCreate(SetupViewModel::class) {
+                                        get<SetupViewModel> { parametersOf(router) }
+                                    }
+                                }
+                                SetupContainer(setup)
+                            },
+                            status = {
+                                val status = remember {
+                                    keeper.getOrCreate(StatusViewModel::class) {
+                                        get<StatusViewModel> { parametersOf(router) }
+                                    }
+                                }
+                                StatusContainer(status)
+                            },
+                            lab = lab,
                             modifier = Modifier.weight(1f),
                         )
                     }
                 }
             }
-        }
-    }
-
-    private fun openSettings(target: SettingsTarget) {
-        try {
-            startActivity(settingsIntents.forTarget(target))
-        } catch (_: ActivityNotFoundException) {
-            // на устройстве нет такого экрана настроек: кнопка просто ничего не открывает
         }
     }
 

@@ -12,6 +12,7 @@ import ru.restofleet.agent.data.collectors.NetworkChangeObserver
 import ru.restofleet.agent.data.collectors.PackageEventsObserver
 import ru.restofleet.agent.data.deviceadmin.DeviceOwnerRole
 import ru.restofleet.agent.data.mqtt.AndroidBootIdSource
+import ru.restofleet.agent.data.mqtt.ConflatedFlushTrigger
 import ru.restofleet.agent.data.mqtt.DeviceFacts
 import ru.restofleet.agent.data.mqtt.EventPump
 import ru.restofleet.agent.data.mqtt.HiveMqLink
@@ -19,6 +20,7 @@ import ru.restofleet.agent.data.mqtt.JsonPayloadEncoder
 import ru.restofleet.agent.data.mqtt.MqttBrokerSession
 import ru.restofleet.agent.data.mqtt.MqttLinkFactory
 import ru.restofleet.agent.data.mqtt.MqttSessionCheck
+import ru.restofleet.agent.data.mqtt.SessionConnectionMonitor
 import ru.restofleet.agent.data.mqtt.SessionRuntime
 import ru.restofleet.agent.data.mqtt.SessionSupervisor
 import ru.restofleet.agent.data.mqtt.StatusPayloads
@@ -28,17 +30,25 @@ import ru.restofleet.agent.data.probes.ProbeLoop
 import ru.restofleet.agent.data.shadow.AppliedTelemetryInterval
 import ru.restofleet.agent.data.shadow.FileShadowStore
 import ru.restofleet.agent.domain.capability.CapabilityCheck
+import ru.restofleet.agent.domain.diagnostics.DiagnosticsCommands
+import ru.restofleet.agent.domain.diagnostics.OnDemandChecks
 import ru.restofleet.agent.domain.port.BrokerSession
+import ru.restofleet.agent.domain.port.ConnectionMonitor
+import ru.restofleet.agent.domain.port.FlushTrigger
 import ru.restofleet.agent.domain.port.MessagePublisher
 import ru.restofleet.agent.domain.port.PayloadEncoder
 import ru.restofleet.agent.domain.port.ShadowStore
+import ru.restofleet.agent.domain.probe.ProbeStates
 import ru.restofleet.agent.domain.usecase.ApplyDesiredShadow
+import ru.restofleet.agent.domain.usecase.EvaluateThresholds
 import ru.restofleet.agent.domain.usecase.FlushOutbox
 import ru.restofleet.agent.domain.usecase.HandleIncomingCommand
 import ru.restofleet.agent.domain.usecase.PublishEvent
 import ru.restofleet.agent.domain.usecase.PublishOrBuffer
+import ru.restofleet.agent.domain.usecase.PublishPackageChange
 import ru.restofleet.agent.domain.usecase.PublishProbeResult
 import ru.restofleet.agent.domain.usecase.PublishTelemetry
+import ru.restofleet.agent.domain.usecase.RunProbes
 import ru.restofleet.shared.kernel.IdGenerator
 import ru.restofleet.shared.kernel.UuidIdGenerator
 import java.io.File
@@ -57,8 +67,9 @@ private const val CONN_ID_LENGTH = 12
 
 /**
  * Проводка Koin MQTT-сессии, досылки и публикации; логики здесь нет. Нужны извне: `Clock`, `AGENT_DISPATCHER`,
- * `CaSource` (debug/release в `agent:app`), `ExecuteCommand`, `Outbox`, `ProcessedCommands`, `CredentialStore`,
- * `CredentialChanges`, `DeviceOwnerRole`, `WatchedApps`, наблюдатели сети и пакетов.
+ * `CaSource` и `ProbeSchedule` (debug/release в `agent:app`), `ExecuteCommand`, `Outbox`, `ProcessedCommands`,
+ * `CredentialStore`, `CredentialChanges`, `DeviceOwnerRole`, `WatchedApps`, `ProbeExecutor`, `CollectTelemetry`,
+ * наблюдатели сети и пакетов.
  */
 val mqttModule: Module = module {
     single<PayloadEncoder> { JsonPayloadEncoder() }
@@ -99,13 +110,20 @@ val mqttModule: Module = module {
     }
     single<BrokerSession> { get<MqttBrokerSession>() }
     single<MessagePublisher> { get<MqttBrokerSession>() }
+    // Экран статуса видит сессию через порт (состояние, connId, код ошибки)
+    single<ConnectionMonitor> { SessionConnectionMonitor(get<MqttBrokerSession>().status) }
 
-    single { PublishOrBuffer(get(), get(), get()) { Log.w(TAG, it) } }
+    // Постановка в outbox при живой связи будит досылку сразу (реш. 203)
+    single { ConflatedFlushTrigger() }
+    single<FlushTrigger> { get<ConflatedFlushTrigger>() }
+    single { PublishOrBuffer(get(), get(), get(), get<FlushTrigger>()) { Log.w(TAG, it) } }
     single { FlushOutbox(get(), get(), log = { Log.w(TAG, it) }) }
     single { HandleIncomingCommand(get(), get(), get(), get(), get(), get()) }
     single { ApplyDesiredShadow(get(), get(), get(), get()) }
     single { PublishTelemetry(get(), get(), get()) }
     single { PublishEvent(get(), get(), get()) }
+    single { PublishPackageChange(get(), get()) }
+    single { EvaluateThresholds(get(), get()) }
 
     single {
         SessionSupervisor(
@@ -116,6 +134,7 @@ val mqttModule: Module = module {
             applyDesired = get(),
             flush = get(),
             outbox = get(),
+            flushRequests = get<ConflatedFlushTrigger>().requests,
             log = { Log.i(TAG, it) },
         )
     }
@@ -126,20 +145,27 @@ val mqttModule: Module = module {
             packageEvents = { watched -> get<PackageEventsObserver>().events(watched) },
             watched = get(),
             publishEvent = get(),
+            publishPackageChange = get(),
             clock = get(),
             log = { Log.i(TAG, it) },
         )
     }
     single { PublishProbeResult(get(), get(), get()) }
+    // Автоматы up ↔ down целей: один на процесс, их читает и экран статуса
+    single { ProbeStates() }
+    single { RunProbes(get(), get(), get(), get()) }
+    // Минимальный интервал проб (ProbeSchedule) задаёт composition root: debug — стенд 5 с, release — 30 с
     single {
         ProbeLoop(
             scope = get(SESSION_SCOPE),
             shadow = get(),
-            executor = get(),
-            publish = { results -> get<PublishProbeResult>()(results) },
+            run = { target -> get<RunProbes>()(listOf(target)) },
+            schedule = get(),
             log = { Log.i(TAG, it) },
         )
     }
+    // run_probe и collect_diagnostics (FR-AG-62, 64): исполнитель команд ExecuteCommand получает их через порт
+    single<OnDemandChecks> { DiagnosticsCommands(get(), get(), get(), get(), get()) }
     single { AppliedTelemetryInterval(get(), TELEMETRY_INTERVAL_MS) }
     single { SessionRuntime(get(), get(), get(), get(), get()) { Log.i(TAG, it) } }
 

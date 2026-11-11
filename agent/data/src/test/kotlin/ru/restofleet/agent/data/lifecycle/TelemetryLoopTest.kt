@@ -203,6 +203,35 @@ class TelemetryLoopTest {
     }
 
     @Test
+    fun tickEvaluatesThresholdsAfterPublishing() = runTest {
+        val heartbeat = HeartbeatLog(File(tmp.root, "hb"), clock)
+        val order = mutableListOf<String>()
+        val tick = TelemetryTick(
+            collect, heartbeat, emptyList(), {},
+            publish = { order += "publish:${it.seq}" },
+            evaluate = { order += "evaluate:${it.seq}" },
+        )
+
+        tick()
+
+        assertThat(order).containsExactly("publish:7", "evaluate:7").inOrder()
+    }
+
+    @Test
+    fun thresholdFailureIsIsolatedAndLoggedWithoutDetail() = runTest {
+        val heartbeat = HeartbeatLog(File(tmp.root, "hb"), clock)
+        val logged = mutableListOf<String>()
+        val tick = TelemetryTick(
+            collect, heartbeat, emptyList(), logged::add,
+            evaluate = { throw IllegalStateException("secret") },
+        )
+
+        tick()
+
+        assertThat(logged.last()).isEqualTo("thresholds failed: IllegalStateException")
+    }
+
+    @Test
     fun publishFailureDoesNotFailTheTickOrSkipTheHeartbeat() = runTest {
         val heartbeat = HeartbeatLog(File(tmp.root, "hb"), clock)
         val logged = mutableListOf<String>()

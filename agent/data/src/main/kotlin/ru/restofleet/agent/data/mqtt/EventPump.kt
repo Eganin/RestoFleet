@@ -13,15 +13,16 @@ import ru.restofleet.agent.domain.model.AgentEvent
 import ru.restofleet.agent.domain.model.NetworkState
 import ru.restofleet.agent.domain.port.WatchedApps
 import ru.restofleet.agent.domain.usecase.PublishEvent
+import ru.restofleet.agent.domain.usecase.PublishPackageChange
 import ru.restofleet.shared.kernel.Clock
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * Источники событий M1, которые уже есть потоками: смена сети (R14) и пакеты отслеживаемых приложений (R12) идут в
- * топик `events` через [PublishEvent]. `probe_state` не публикуется (отложен, решение 162), пробы шлёт `ProbeLoop`.
- * Сбой
- * публикации одного события не прерывает приём; упавший источник подписывается заново через [retryDelayMs]. В лог
- * идёт только класс исключения.
+ * Источники событий, которые есть потоками: смена сети (R14) идёт в топик `events` через [PublishEvent], пакеты
+ * отслеживаемых приложений (R12) — через [PublishPackageChange] (дубль в окне 5 с отбрасывается, реш. 204).
+ * `probe_state` шлёт `RunProbes`, пороги и передний план — `EvaluateThresholds` из цикла телеметрии. Сбой публикации
+ * одного события не прерывает приём; упавший источник подписывается заново через [retryDelayMs]. В лог идёт только
+ * класс исключения.
  */
 class EventPump(
     private val scope: CoroutineScope,
@@ -29,6 +30,7 @@ class EventPump(
     private val packageEvents: (Set<String>) -> Flow<PackageChange>,
     private val watched: WatchedApps,
     private val publishEvent: PublishEvent,
+    private val publishPackageChange: PublishPackageChange,
     private val clock: Clock,
     private val retryDelayMs: Long = DEFAULT_RETRY_MS,
     private val log: (String) -> Unit = {},
@@ -47,14 +49,13 @@ class EventPump(
             scope.launch {
                 resilient("packages") {
                     packageEvents(watched.packages()).collect { change ->
-                        publish(
-                            AgentEvent.PackageChanged(
-                                ts = clock.nowMillis(),
-                                pkg = change.pkg,
-                                change = AgentEvent.PackageChanged.Change.valueOf(change.change.name),
-                                versionCode = change.versionCode,
-                            ),
-                        )
+                        guarded("publish PackageChanged") {
+                            publishPackageChange(
+                                change.pkg,
+                                AgentEvent.PackageChanged.Change.valueOf(change.change.name),
+                                change.versionCode,
+                            )
+                        }
                     }
                 }
             },

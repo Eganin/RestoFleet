@@ -1,5 +1,6 @@
 package ru.restofleet.agent.data.mqtt
 
+import ru.restofleet.agent.domain.model.DeviceRole
 import ru.restofleet.shared.protocol.RfJson
 import ru.restofleet.shared.protocol.dto.DeviceInfoDto
 import ru.restofleet.shared.protocol.dto.DeviceStateDto
@@ -14,8 +15,8 @@ fun interface BootIdSource {
 }
 
 /**
- * Полезная нагрузка `status`: `online` с `connId` подключения и `offline` при остановке сервиса. `role` агенту
- * неизвестна (назначается сервером), поэтому поле опускается.
+ * Полезная нагрузка `status`: `online` с `connId` подключения и `offline` при остановке сервиса. `role` — из
+ * сохранённой учётки (провижининг, реш. 210); у учётки `DEV_CONFIG` роли нет, и поле опускается.
  */
 class StatusPayloads(
     private val facts: DeviceFacts,
@@ -23,13 +24,14 @@ class StatusPayloads(
     private val deviceOwner: () -> Boolean,
     private val bootId: BootIdSource,
 ) {
-    fun online(connId: String, ts: Long): ByteArray = encode(
+    fun online(connId: String, ts: Long, role: DeviceRole? = null): ByteArray = encode(
         StatusDto(
             state = DeviceStateDto.ONLINE,
             ts = ts,
             connId = connId,
             agentVersion = agentVersion,
             mode = if (deviceOwner()) "device_owner" else "normal",
+            role = role?.code,
             bootId = bootId.bootId(),
             device = DeviceInfoDto(facts.model, facts.manufacturer, facts.osVersion, facts.apiLevel),
         ),

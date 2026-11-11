@@ -93,12 +93,14 @@ class FileShadowStore(private val file: File) : ShadowStore {
         val intervalSec: Int,
         val failThreshold: Int,
         val reference: Boolean,
+        /** С КМ3 (реш. 219); файл тени MVP поля не имеет — `null`. */
+        val expectedStatus: Int? = null,
     ) {
-        fun toDomain() = ProbeTarget(id, url, timeoutMs, intervalSec, failThreshold, reference)
+        fun toDomain() = ProbeTarget(id, url, timeoutMs, intervalSec, failThreshold, reference, expectedStatus)
 
         companion object {
             fun from(p: ProbeTarget) =
-                StoredProbe(p.id, p.url, p.timeoutMs, p.intervalSec, p.failThreshold, p.reference)
+                StoredProbe(p.id, p.url, p.timeoutMs, p.intervalSec, p.failThreshold, p.reference, p.expectedStatus)
         }
     }
 }

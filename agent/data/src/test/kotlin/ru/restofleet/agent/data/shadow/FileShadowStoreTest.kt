@@ -21,11 +21,26 @@ class FileShadowStoreTest {
         version = 12,
         telemetryIntervalSec = 45,
         watchedApps = listOf("com.android.chrome", "ru.x"),
-        probes = listOf(ProbeTarget("api", "https://api.example/health", 5000, 60, 4, true)),
+        probes = listOf(ProbeTarget("api", "https://api.example/health", 5000, 60, 4, true, expectedStatus = 204)),
         thresholds = Thresholds(15, 50.5, 7),
     )
 
     private fun file() = File(tmp.root, "shadow.json")
+
+    @Test
+    fun fileWrittenBeforeExpectedStatusIsStillReadable() = runTest {
+        // Файл тени MVP (без поля expectedStatus) после обновления агента не теряется
+        file().writeText(
+            """{"version":5,"telemetryIntervalSec":30,"watchedApps":[],""" +
+                """"probes":[{"id":"api","url":"https://a.example/","timeoutMs":5000,"intervalSec":30,""" +
+                """"failThreshold":3,"reference":false}],"batteryLowPct":20,"tempHighC":45.0,"fgAbsentMin":10}""",
+        )
+
+        val loaded = FileShadowStore(file()).load()
+
+        assertThat(loaded!!.probes.single().expectedStatus).isNull()
+        assertThat(loaded.version).isEqualTo(5)
+    }
 
     @Test
     fun emptyStoreHasNothingApplied() = runTest {

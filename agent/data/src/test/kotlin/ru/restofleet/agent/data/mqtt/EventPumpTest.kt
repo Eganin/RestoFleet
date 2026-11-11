@@ -17,6 +17,7 @@ import ru.restofleet.agent.domain.model.NetworkState
 import ru.restofleet.agent.domain.model.NetworkType
 import ru.restofleet.agent.domain.port.WatchedApps
 import ru.restofleet.agent.domain.usecase.PublishEvent
+import ru.restofleet.agent.domain.usecase.PublishPackageChange
 import ru.restofleet.shared.kernel.Clock
 
 class EventPumpTest {
@@ -46,6 +47,7 @@ class EventPumpTest {
         },
         watched = WatchedApps { setOf("com.android.chrome") },
         publishEvent = publishEvent,
+        publishPackageChange = PublishPackageChange(publishEvent, Clock { 500 }),
         clock = Clock { 500 },
         retryDelayMs = 10_000,
         log = { log += it },
@@ -60,6 +62,18 @@ class EventPumpTest {
         runCurrent()
 
         assertThat(events).containsExactly(AgentEvent.NetworkChanged(500, NetworkState(NetworkType.WIFI, -50, true)))
+    }
+
+    @Test
+    fun duplicatePackageChangeIsSentOnce() = runTest {
+        // Реш. 204: система присылает одно обновление дважды — событие одно
+        pump().start()
+        runCurrent()
+
+        repeat(2) { packages.trySend(PackageChange("com.android.chrome", PackageChange.Change.REPLACED, 14)) }
+        runCurrent()
+
+        assertThat(events).hasSize(1)
     }
 
     @Test

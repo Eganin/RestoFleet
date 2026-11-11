@@ -3,7 +3,7 @@ package ru.restofleet.agent
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
-import ru.restofleet.agent.presentation.lab.viewmodel.model.SettingsTarget
+import ru.restofleet.agent.presentation.common.SettingsTarget
 
 /** Intent-ы экранов настроек для кнопок L4 Capability Lab. */
 class SettingsIntents(private val packageName: String) {

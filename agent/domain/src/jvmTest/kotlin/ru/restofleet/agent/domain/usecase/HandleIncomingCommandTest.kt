@@ -140,7 +140,8 @@ class HandleIncomingCommandTest {
 
     @Test
     fun expiredCommandFailsWithoutExecution() = runTest {
-        handle(incoming(Command.Beep(500), rawType = "beep", expiresAt = now - 1))
+        // Истекла больше чем на допуск часов (5 мин, реш. 206)
+        handle(incoming(Command.Beep(500), rawType = "beep", expiresAt = now - CLOCK_SKEW_MS - 1))
 
         assertThat(beeper.calls).isEmpty()
         assertThat(sent()).containsExactly(
@@ -155,6 +156,15 @@ class HandleIncomingCommandTest {
         handle(incoming(Command.Beep(500), rawType = "beep", expiresAt = now))
 
         assertThat(beeper.calls).hasSize(1)
+    }
+
+    @Test
+    fun commandExpiredWithinClockSkewToleranceIsStillExecuted() = runTest {
+        // Часы устройства ушли вперёд до 5 мин: команда, «истёкшая» по ним, исполняется (реш. 206, OQ-1)
+        handle(incoming(Command.Beep(500), rawType = "beep", expiresAt = now - CLOCK_SKEW_MS))
+
+        assertThat(beeper.calls).hasSize(1)
+        assertThat(sent().last()).startsWith("res:c1:succeeded:")
     }
 
     @Test
@@ -433,5 +443,9 @@ class HandleIncomingCommandTest {
         broken(incoming())
 
         assertThat(sent().last()).isEqualTo(res("failed", "Failed(reason=exception:IllegalStateException)"))
+    }
+
+    private companion object {
+        const val CLOCK_SKEW_MS = 5 * 60_000L
     }
 }

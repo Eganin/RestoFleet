@@ -66,6 +66,8 @@ internal object CommandMapper {
                 "reboot" -> Command.Reboot
                 "install_update" -> Command.InstallApk(p.text("package"), p.text("url"), p.text("sha256"))
                 "lock_task" -> Command.LockTask(p.text("pkg"), p.optionalText("url"))
+                "run_probe" -> Command.RunProbe(p.text("target"))
+                "collect_diagnostics" -> Command.CollectDiagnostics
                 else -> return Parsed.UnknownType
             },
         )

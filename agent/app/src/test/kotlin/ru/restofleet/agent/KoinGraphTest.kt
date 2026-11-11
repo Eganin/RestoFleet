@@ -81,6 +81,23 @@ import ru.restofleet.agent.domain.usecase.RunCapabilityChecks
 import ru.restofleet.agent.domain.usecase.RunCommandCheck
 import ru.restofleet.agent.presentation.deviceowner.viewmodel.DeviceOwnerViewModel
 import ru.restofleet.agent.presentation.lab.viewmodel.LabViewModel
+import ru.restofleet.agent.presentation.common.SettingsTarget
+import ru.restofleet.agent.presentation.root.viewmodel.RootViewModel
+import ru.restofleet.agent.presentation.setup.api.ISetupRouter
+import ru.restofleet.agent.presentation.setup.viewmodel.SetupViewModel
+import ru.restofleet.agent.presentation.status.api.IStatusRouter
+import ru.restofleet.agent.presentation.status.viewmodel.StatusViewModel
+import ru.restofleet.agent.data.mqtt.ConflatedFlushTrigger
+import ru.restofleet.agent.data.provisioning.ProvisioningTrust
+import ru.restofleet.agent.domain.diagnostics.DiagnosticsCommands
+import ru.restofleet.agent.domain.diagnostics.OnDemandChecks
+import ru.restofleet.agent.domain.port.FlushTrigger
+import ru.restofleet.agent.domain.usecase.EvaluateThresholds
+import ru.restofleet.agent.domain.usecase.GetAgentStatus
+import ru.restofleet.agent.domain.usecase.Provision
+import ru.restofleet.agent.domain.usecase.RunProbes
+import ru.restofleet.shared.probes.ProbeSchedule
+import org.koin.core.parameter.parametersOf
 import ru.restofleet.shared.kernel.Outcome
 
 @RunWith(RobolectricTestRunner::class)
@@ -198,6 +215,29 @@ class KoinGraphTest {
         assertThat(intent.getStringExtra("pkg")).isEqualTo("com.android.chrome")
         assertThat(intent.getStringExtra("url")).isEqualTo("https://x.test/")
         assertThat(intent.extras!!.keySet()).containsExactly("pkg", "url")
+    }
+
+    @Test
+    fun courseworkAgentGraphResolves() {
+        // КМ3: пробы через автомат, пороги, внеочередные проверки, досылка по сигналу, провижининг и экраны
+        val koin = GlobalContext.get()
+        val router = object : ISetupRouter, IStatusRouter {
+            override fun openSettings(target: SettingsTarget) = Unit
+            override fun openStatus() = Unit
+            override fun openLab() = Unit
+        }
+
+        assertThat(koin.get<RunProbes>()).isNotNull()
+        assertThat(koin.get<EvaluateThresholds>()).isNotNull()
+        assertThat(koin.get<OnDemandChecks>()).isInstanceOf(DiagnosticsCommands::class.java)
+        assertThat(koin.get<FlushTrigger>()).isSameInstanceAs(koin.get<ConflatedFlushTrigger>())
+        assertThat(koin.get<ProbeSchedule>().minIntervalSec).isEqualTo(ProbeSchedule.STAND_MIN_INTERVAL_SEC)
+        assertThat(koin.get<ProvisioningTrust>()).isInstanceOf(ProvisioningTrust.PinnedStandCa::class.java)
+        assertThat(koin.get<Provision>()).isNotNull()
+        assertThat(koin.get<GetAgentStatus>()).isNotNull()
+        assertThat(koin.get<RootViewModel>()).isNotNull()
+        assertThat(koin.get<SetupViewModel> { parametersOf(router) }.uiState.value.labAvailable).isTrue()
+        assertThat(koin.get<StatusViewModel> { parametersOf(router) }.uiState.value.labAvailable).isTrue()
     }
 
     @Test

@@ -35,5 +35,6 @@ internal object ShadowMapper {
         intervalSec = intervalSec,
         failThreshold = failThreshold,
         reference = reference,
+        expectedStatus = expectedStatus,
     )
 }

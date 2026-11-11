@@ -11,12 +11,14 @@ import ru.restofleet.agent.domain.model.AgentEvent.PackageChanged.Change
 import ru.restofleet.agent.domain.model.NetworkState
 import ru.restofleet.agent.domain.model.NetworkType
 import ru.restofleet.agent.domain.model.ProbeError
+import ru.restofleet.agent.domain.model.ThresholdMetric
 import ru.restofleet.shared.protocol.RfJson
 import ru.restofleet.shared.protocol.dto.AgentLifecycleEventDto
 import ru.restofleet.shared.protocol.dto.CapabilityCheckEventDto
 import ru.restofleet.shared.protocol.dto.EventDto
 import ru.restofleet.shared.protocol.dto.PackageChangedEventDto
 import ru.restofleet.shared.protocol.dto.ProbeStateEventDto
+import ru.restofleet.shared.protocol.dto.ThresholdEventDto
 
 class EventMapperTest {
     private fun check(fixture: String, event: AgentEvent) =
@@ -35,6 +37,39 @@ class EventMapperTest {
         val dto = EventMapper.toDto(AgentEvent.ProbeStateChanged(1, "api", up = true, error = null, failures = 0))
 
         assertThat(dto).isEqualTo(ProbeStateEventDto(ts = 1, target = "api", state = "up", error = null, failures = 0))
+    }
+
+    @Test
+    fun thresholdEnterAndExitMatchFixtures() {
+        check(
+            "event-threshold-enter",
+            AgentEvent.ThresholdCrossed(1793865750000, ThresholdMetric.BATTERY_LOW, true, 19.0, 20.0),
+        )
+        check(
+            "event-threshold-exit",
+            AgentEvent.ThresholdCrossed(1793869350000, ThresholdMetric.TEMP_HIGH, false, 42.5, 45.0),
+        )
+    }
+
+    @Test
+    fun everyThresholdMetricHasItsWireName() {
+        val names = ThresholdMetric.entries.map {
+            (EventMapper.toDto(AgentEvent.ThresholdCrossed(1, it, true, 1.0, 1.0)) as ThresholdEventDto).metric
+        }
+
+        assertThat(names).containsExactly("battery_low", "temp_high", "thermal").inOrder()
+    }
+
+    @Test
+    fun foregroundEventsMatchFixtures() {
+        check(
+            "event-fg-changed",
+            AgentEvent.ForegroundChanged(1793865760000, "com.android.chrome", "com.android.settings"),
+        )
+        check(
+            "event-fg-absent",
+            AgentEvent.ForegroundAbsent(1793866360000, "com.android.chrome", 1793865760000, 10, "com.android.settings"),
+        )
     }
 
     @Test

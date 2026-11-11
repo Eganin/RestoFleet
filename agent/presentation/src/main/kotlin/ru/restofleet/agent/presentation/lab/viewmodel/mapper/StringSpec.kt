@@ -5,7 +5,7 @@ import ru.restofleet.agent.presentation.R
 import ru.restofleet.agent.presentation.common.StringSpec
 import ru.restofleet.agent.presentation.lab.viewmodel.LabMessage
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabCommand
-import ru.restofleet.agent.presentation.lab.viewmodel.model.SettingsTarget
+import ru.restofleet.agent.presentation.common.SettingsTarget
 
 /** Какой ресурс и с какими аргументами показать для сообщения Lab. */
 fun LabMessage.toStringSpec(): StringSpec = when (this) {

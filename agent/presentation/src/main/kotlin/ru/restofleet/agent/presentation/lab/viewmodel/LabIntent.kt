@@ -2,7 +2,7 @@ package ru.restofleet.agent.presentation.lab.viewmodel
 
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabCommand
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabFilter
-import ru.restofleet.agent.presentation.lab.viewmodel.model.SettingsTarget
+import ru.restofleet.agent.presentation.common.SettingsTarget
 import ru.restofleet.agent.domain.capability.CheckId
 import ru.restofleet.console.core.mvi.contract.MviIntent
 

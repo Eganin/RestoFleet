@@ -4,7 +4,7 @@ import androidx.compose.runtime.Immutable
 import ru.restofleet.agent.presentation.common.Badge
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabCommand
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabFilter
-import ru.restofleet.agent.presentation.lab.viewmodel.model.SettingsTarget
+import ru.restofleet.agent.presentation.common.SettingsTarget
 
 data class TabUi(val filter: LabFilter, val label: String, val selected: Boolean)
 

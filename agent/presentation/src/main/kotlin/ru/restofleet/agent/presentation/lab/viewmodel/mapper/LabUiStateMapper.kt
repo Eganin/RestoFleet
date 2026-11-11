@@ -14,7 +14,7 @@ import ru.restofleet.agent.presentation.lab.viewmodel.TabUi
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabCommand
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabFilter
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabSession
-import ru.restofleet.agent.presentation.lab.viewmodel.model.SettingsTarget
+import ru.restofleet.agent.presentation.common.SettingsTarget
 
 /**
  * `LabSession -> LabUiState`. Чистый Kotlin без Android: подписи вкладок и шапки — константы здесь

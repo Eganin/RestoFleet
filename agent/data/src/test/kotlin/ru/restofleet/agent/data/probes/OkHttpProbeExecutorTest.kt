@@ -114,6 +114,22 @@ class OkHttpProbeExecutorTest {
     }
 
     @Test
+    fun expectedStatusRequiresExactMatch() {
+        // FR-AG-30, реш. 219: ожидается 204, а пришёл 200 — неуспех класса `other`; совпадение — успех
+        server.enqueue(MockResponse.Builder().code(200).build())
+        server.enqueue(MockResponse.Builder().code(204).build())
+        val target = ProbeTarget("t", httpUrl(), 2_000, expectedStatus = 204)
+
+        val (mismatch, match) = runBlocking { listOf(executor().probe(target), executor().probe(target)) }
+
+        assertThat(mismatch.ok).isFalse()
+        assertThat(mismatch.httpStatus).isEqualTo(200)
+        assertThat(mismatch.error).isEqualTo(ProbeError.OTHER)
+        assertThat(match.ok).isTrue()
+        assertThat(match.error).isNull()
+    }
+
+    @Test
     fun serverErrorsAreNotRetried() {
         server.enqueue(MockResponse.Builder().code(503).build())
         server.enqueue(MockResponse.Builder().code(200).build())

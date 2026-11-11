@@ -44,6 +44,9 @@ object ProbeErrorClassifier {
 
     private fun isCallTimeout(t: Throwable) = t is InterruptedIOException && t.message == OKHTTP_CALL_TIMEOUT
 
-    /** null — успех (всё ниже 400, включая 204 и редиректы без следования); правило — общее из `shared:probes`. */
-    fun fromStatus(code: Int): ProbeError? = classifyHttpStatus(code)
+    /**
+     * null — успех: без [expected] всё ниже 400 (включая 204 и редиректы без следования), с [expected] — только точное
+     * совпадение (FR-AG-30, реш. 219); правило — общее из `shared:probes`.
+     */
+    fun fromStatus(code: Int, expected: Int? = null): ProbeError? = classifyHttpStatus(code, expected)
 }

@@ -11,24 +11,23 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import ru.restofleet.agent.domain.model.ProbeResult
 import ru.restofleet.agent.domain.model.ProbeTarget
-import ru.restofleet.agent.domain.port.ProbeExecutor
 import ru.restofleet.agent.domain.port.ShadowStore
+import ru.restofleet.shared.probes.ProbeSchedule
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * Минимальный цикл проб: цели из сохранённой тени, каждая опрашивается раз в свой `intervalSec` (первая проба сразу)
- * через [executor], результат уходит в [publish] (`PublishProbeResult`: офлайн ждёт в outbox). Смена набора целей
- * перезапускает цикл; прочие изменения тени (интервал телеметрии, пороги) его не трогают. Каждая проба и публикация
- * изолированы (канон 78: сбой не останавливает цикл, `Error` не ловится), в лог идёт только класс исключения.
- * `probe_state` (переходы по `failThreshold`) не делается (решение 3.6b).
+ * Расписание плановых проб: цели из сохранённой тени, каждая проверяется раз в свой `intervalSec`, но не чаще
+ * минимума [schedule] (`shared:probes`, НФТ «нагрузка проверок», реш. 228: 30 с, на стенде 5 с); первая проба сразу.
+ * Сам прогон — [run] (`RunProbes`: автомат `up ↔ down`, `probe_state`, отчёт `probe`, офлайн — outbox). Смена набора
+ * целей перезапускает цикл; прочие изменения тени (интервал телеметрии, пороги) его не трогают. Каждый прогон
+ * изолирован (канон 78: сбой не останавливает цикл, `Error` не ловится), в лог идёт только класс исключения.
  */
 class ProbeLoop(
     private val scope: CoroutineScope,
     private val shadow: ShadowStore,
-    private val executor: ProbeExecutor,
-    private val publish: suspend (List<ProbeResult>) -> Unit,
+    private val run: suspend (ProbeTarget) -> Unit,
+    private val schedule: ProbeSchedule = ProbeSchedule(),
     private val log: (String) -> Unit = {},
 ) {
     private var job: Job? = null
@@ -63,9 +62,9 @@ class ProbeLoop(
     }
 
     private suspend fun runTarget(target: ProbeTarget) {
-        val intervalMs = maxOf(target.intervalSec, MIN_INTERVAL_SEC) * MS_IN_SECOND
+        val intervalMs = schedule.intervalMs(target.intervalSec)
         while (currentCoroutineContext().isActive) {
-            guarded("probe") { publish(listOf(executor.probe(target))) }
+            guarded("probe") { run(target) }
             delay(intervalMs)
         }
     }
@@ -83,8 +82,6 @@ class ProbeLoop(
     }
 
     private companion object {
-        const val MIN_INTERVAL_SEC = 5
-        const val MS_IN_SECOND = 1_000L
         const val RESTART_DELAY_MS = 10_000L
     }
 }

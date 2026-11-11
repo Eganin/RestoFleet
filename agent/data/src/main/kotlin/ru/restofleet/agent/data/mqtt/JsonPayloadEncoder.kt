@@ -69,6 +69,7 @@ class JsonPayloadEncoder : PayloadEncoder {
                     timeoutMs = it.timeoutMs,
                     failThreshold = it.failThreshold,
                     reference = it.reference,
+                    expectedStatus = it.expectedStatus,
                 )
             },
             appliedVersion = s.version,

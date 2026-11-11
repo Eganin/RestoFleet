@@ -108,6 +108,8 @@ class SessionSupervisorTest {
 
     private fun result(text: String) = OutgoingMessage(MessageKind.COMMAND_RESULT, text.toByteArray(), 1, createdAt = 1)
 
+    private val trigger = ConflatedFlushTrigger()
+
     private fun TestScope.supervisor(log: MutableList<String> = mutableListOf()) = SessionSupervisor(
         scope = backgroundScope,
         session = session,
@@ -116,6 +118,7 @@ class SessionSupervisorTest {
         applyDesired = applyShadow,
         flush = flush,
         outbox = outbox,
+        flushRequests = trigger.requests,
         log = { log += it },
     )
 
@@ -325,6 +328,39 @@ class SessionSupervisorTest {
         advanceTimeBy(1)
         runCurrent()
         assertThat(published).containsExactly("late")
+    }
+
+    @Test
+    fun flushRequestSendsTheOutboxRightAwayInsteadOfWaitingForTheTimer() = runTest {
+        // Реш. 203: событие легло в непустой outbox при живой связи — досылка сразу, а не через 60 с
+        supervisor().start()
+        runCurrent()
+        outbox.enqueue(msg("old"))
+        outbox.enqueue(msg("new"))
+
+        trigger.request()
+        advanceTimeBy(1_000) // темп досылки — 20 сообщений/с; таймер 60 с не наступил
+        runCurrent()
+
+        assertThat(published).containsExactly("old", "new").inOrder()
+        assertThat(outbox.messages).isEmpty()
+    }
+
+    @Test
+    fun flushRequestsAreConflatedAndIgnoredWithoutConnection() = runTest {
+        supervisor().start()
+        runCurrent()
+        session.state.value = SessionState.CONNECTING
+        outbox.enqueue(msg("a"))
+
+        repeat(3) { trigger.request() }
+        runCurrent()
+        assertThat(published).isEmpty()
+
+        session.state.value = SessionState.CONNECTED
+        trigger.request()
+        runCurrent()
+        assertThat(published).containsExactly("a")
     }
 
     @Test

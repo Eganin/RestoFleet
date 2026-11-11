@@ -1,6 +1,8 @@
 package ru.restofleet.agent.data.mqtt.mapping
 
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
+import kotlinx.serialization.json.JsonObject
 import org.junit.Test
 import ru.restofleet.agent.domain.command.Command
 import ru.restofleet.agent.domain.command.Level
@@ -8,6 +10,7 @@ import ru.restofleet.agent.domain.model.IncomingCommand
 import ru.restofleet.shared.kernel.Outcome
 import ru.restofleet.shared.kernel.errorOrNull
 import ru.restofleet.shared.kernel.getOrNull
+import ru.restofleet.shared.protocol.CommandTypes
 import ru.restofleet.shared.protocol.dto.CommandRequestDto
 
 class CommandMapperTest {
@@ -39,6 +42,39 @@ class CommandMapperTest {
                 expiresAt = 1793866100000,
             ),
         )
+    }
+
+    @Test
+    fun runProbeAndCollectDiagnosticsFixturesAreKnownCommands() {
+        // FR-AG-62, 64, реш. 221: агент MVP отвечал на них unknown_type
+        val runProbe = CommandMapper.fromDto(Fixtures.decode("cmd-req-run-probe", CommandRequestDto.serializer()))
+        val diagnostics =
+            CommandMapper.fromDto(Fixtures.decode("cmd-req-collect-diagnostics", CommandRequestDto.serializer()))
+
+        assertThat(runProbe.command).isEqualTo(Command.RunProbe("api"))
+        assertThat(diagnostics.command).isEqualTo(Command.CollectDiagnostics)
+        assertThat(diagnostics.parseError).isNull()
+    }
+
+    @Test
+    fun runProbeWithoutTargetIsAParseError() {
+        val c = CommandMapper.fromDto(
+            CommandRequestDto(cmdId = "c", type = "run_probe", params = JsonObject(emptyMap()), expiresAt = 1),
+        )
+
+        assertThat(c.command).isNull()
+        assertThat(c.parseError).contains("target")
+    }
+
+    @Test
+    fun everyProtocolCommandTypeIsKnownToTheAgent() {
+        // Ни один тип из CommandTypes не должен отвечать unknown_type
+        CommandTypes.ALL.forEach { type ->
+            val c = CommandMapper.fromDto(
+                CommandRequestDto(cmdId = "c", type = type, params = JsonObject(emptyMap()), expiresAt = 1),
+            )
+            assertWithMessage(type).that(c.command != null || c.parseError != null).isTrue()
+        }
     }
 
     @Test

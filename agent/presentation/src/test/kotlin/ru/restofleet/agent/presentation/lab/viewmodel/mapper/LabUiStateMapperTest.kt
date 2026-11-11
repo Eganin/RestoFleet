@@ -6,7 +6,7 @@ import ru.restofleet.agent.presentation.common.Badge
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabCommand
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabFilter
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabSession
-import ru.restofleet.agent.presentation.lab.viewmodel.model.SettingsTarget
+import ru.restofleet.agent.presentation.common.SettingsTarget
 import ru.restofleet.agent.domain.capability.AgentMode
 import ru.restofleet.agent.domain.capability.CheckGroup
 import ru.restofleet.agent.domain.capability.CheckId

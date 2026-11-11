@@ -50,6 +50,17 @@ class ApplyDesiredShadowTest {
     }
 
     @Test
+    fun expectedStatusAndProbeSettingsSurviveValidation() = runTest {
+        // Реш. 219: expectedStatus не теряется на валидации — агент вернёт его в reported, delta опустеет
+        val probe =
+            ProbeTarget("api", "https://api.example/health", 5_000, 15, 2, reference = true, expectedStatus = 204)
+
+        apply(shadow(probes = listOf(probe)))
+
+        assertThat(store.saved.single().probes).containsExactly(probe)
+    }
+
+    @Test
     fun firstShadowWithoutStoredVersionIsApplied() = runTest {
         apply(shadow(1))
 

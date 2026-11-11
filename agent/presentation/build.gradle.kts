@@ -38,6 +38,8 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    // BackHandler навигации агента (Lab → мастер/статус)
+    implementation(libs.androidx.activity.compose)
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit4)
@@ -69,6 +71,12 @@ kover {
                         "*.deviceowner.view.section.DeviceOwnerHeaderKt*",
                         "*.deviceowner.view.section.DeviceOwnerRowKt*", "*.deviceowner.view.section.ApkSectionKt*",
                         "*.common.ObserveEffectsKt*", "*.common.BadgeMarkKt*", "*ComposableSingletons*",
+                        "*.common.StringSpecTextKt*",
+                        "*.setup.SetupScreenKt*", "*.setup.SetupContainerKt*",
+                        "*.setup.view.section.PermissionsSectionKt*",
+                        "*.status.StatusScreenKt*", "*.status.StatusContainerKt*",
+                        "*.status.view.section.ProbesSectionKt*",
+                        "*.root.RootContainerKt*",
                     )
                 }
             }
