@@ -25,6 +25,8 @@ dependencies {
     kover(projects.agent.data)
     kover(projects.agent.presentation)
     kover(projects.agent.app)
+    kover(projects.server.domain)
+    kover(projects.server.data)
 }
 
 kover {

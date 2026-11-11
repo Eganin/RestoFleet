@@ -24,4 +24,4 @@ enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 rootProject.name = "restofleet"
 
-include(":tools:dummy-waiter", ":shared:kernel", ":shared:protocol", ":shared:shadow", ":shared:probes", ":console:core:mvi", ":agent:domain", ":agent:data", ":agent:presentation", ":agent:app", ":konsist-tests", ":spikes:broker-load")
+include(":tools:dummy-waiter", ":shared:kernel", ":shared:protocol", ":shared:shadow", ":shared:probes", ":console:core:mvi", ":agent:domain", ":agent:data", ":agent:presentation", ":agent:app", ":server:domain", ":server:data", ":konsist-tests", ":spikes:broker-load")

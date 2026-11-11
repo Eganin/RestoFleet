@@ -49,6 +49,34 @@ class ArchitectureTest {
     }
 
     @Test
+    fun serverDomainIsFoundAndUsesOnlySharedDomain() {
+        // server:domain (КМ2): только shared:kernel/shadow/probes и свой пакет; без JDBC и фреймворков бэкенда
+        val serverDomain = production.filter { "/server/domain/src/" in it.normalizedPath }
+        assertWithMessage("server:domain files").that(serverDomain).isNotEmpty()
+        serverDomain.assertFalse(testName = "server domain imports outside shared domain") { file ->
+            file.imports.any { import ->
+                import.name.startsWith("ru.restofleet.") && SERVER_DOMAIN_ALLOWED.none { import.name.startsWith(it) }
+            }
+        }
+    }
+
+    @Test
+    fun serverUseCasesAreFound() {
+        // Правило «один invoke» ниже матчит пакеты ..usecase..: убедиться, что серверные use cases туда попадают
+        val useCases = Konsist.scopeFromProduction().classes()
+            .filter { it.resideInPackage("ru.restofleet.server.domain..usecase..") }
+        assertWithMessage("server use cases").that(useCases.size).isAtLeast(MIN_SERVER_USE_CASES)
+    }
+
+    @Test
+    fun serverDataDoesNotImportApiOrApp() {
+        production.filter { "/server/data/src/" in it.normalizedPath }
+            .assertFalse(testName = "server data imports api or app") { file ->
+                file.imports.any { import -> SERVER_OUTER.any { import.name.startsWith(it) } }
+            }
+    }
+
+    @Test
     fun presentationDoesNotImportDataOrTransport() {
         presentationFiles.assertFalse(testName = "presentation imports data layer or transport DTO") { file ->
             file.imports.any { import -> isDataLayer(import.name) }
@@ -93,7 +121,18 @@ class ArchitectureTest {
         val FORBIDDEN_IN_DOMAIN = listOf(
             "android.", "androidx.", "io.ktor.", "org.jetbrains.exposed.", "kotlinx.serialization.",
             "org.koin.", "com.hivemq.", "okhttp3.", "com.arkivanov.", "ru.restofleet.shared.protocol",
+            "org.flywaydb.", "com.zaxxer.", "org.postgresql.", "at.favre.", "java.sql.", "javax.sql.",
         )
+
+        val SERVER_DOMAIN_ALLOWED = listOf(
+            "ru.restofleet.server.domain.", "ru.restofleet.shared.kernel.", "ru.restofleet.shared.shadow.",
+            "ru.restofleet.shared.probes.",
+        )
+
+        val SERVER_OUTER = listOf("ru.restofleet.server.api", "ru.restofleet.server.app")
+
+        /** Сейчас их 30 (КМ2a); порог ловит потерю правила при переносе пакетов. */
+        const val MIN_SERVER_USE_CASES = 30
 
         fun isDataLayer(name: String): Boolean =
             name.contains(".data.") || name.startsWith("ru.restofleet.shared.protocol")
