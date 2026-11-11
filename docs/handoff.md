@@ -4,19 +4,11 @@
 
 ## Текущее состояние
 
-- **Этап:** MVP-A закрыт 10.11.2026 (эмуляторы API 26 и 36, DO на 36). **Следующий этап — курсовая (К):** `docs/stages/1-coursework.md`. MVP-B (реальные устройства) курсовую не блокирует и идёт параллельно, когда появятся планшет и телефон: `docs/stages/0-mvp.md`, задача M5.
-- **Ветка:** `main` @ `c978ffe`. 11.11 пользователь переименовал `stage/0-mvp` в `main` (`git branch -M main`), поэтому ветки `stage/0-mvp` и тега `mvp-a` нет. Ветку курсовой создать от `main`: `git switch -c stage/1-coursework`. Восстановить ветку MVP и тег при желании можно так: `git branch stage/0-mvp c978ffe && git tag -a mvp-a -m "MVP-A closed" c978ffe`. Это решает пользователь.
-- **Не закоммичено на 11.11.** Перед созданием ветки спросить пользователя, куда коммитить:
-  - `tools/emulators/run-matrix.sh` (+ README): флаги `--window`, `--do` и MQTT-лог прогона;
-  - `deploy/README.md`: функция `O()` вместо `$O`, чтобы работало в zsh;
-  - `.gitignore`: `logs/`;
-  - `docs/stages/0-mvp.md`: RS → ⚠️;
-  - этот файл;
-  - `docs/mvp-results/api36-device_owner.json` и `api36-do-summary.txt`;
-  - `swarm-report/mvp-a-explainer-2026-11-11.html` и `mvp-a-use-cases-2026-11-11.html`;
-  - `gradle/gradle-daemon-jvm.properties` (создан Android Studio, JDK 21; коммитить ли — решает пользователь).
-- **План К:** ещё не написан. Первый шаг — `docs/superpowers/plans/<дата>-coursework.md` по `docs/stages/1-coursework.md` и разделу «Старт этапа К» ниже, затем согласовать с пользователем.
-- **Последняя завершённая работа:** 11.11 — переход на AGP 9.3.1 (решение 187), DO-режим автопрогона, HTML-отчёты MVP-A.
+- **Этап:** **курсовая (К) в работе** с 11.11.2026, ночной прогон без пользователя. MVP-A закрыт 10.11.2026; MVP-B (реальные устройства) идёт параллельно, когда появятся планшет и телефон: `docs/stages/0-mvp.md`, задача M5.
+- **Ветка:** `stage/1-coursework` от `main` @ `c978ffe`. Первый коммит ветки `5ef2a37` — незакоммиченные файлы MVP-A (реш. 200). 11.11 пользователь переименовал `stage/0-mvp` в `main`; ветку MVP и тег `mvp-a` восстанавливает пользователь, если захочет: `git branch stage/0-mvp c978ffe && git tag -a mvp-a -m "MVP-A closed" c978ffe`.
+- **План К:** `docs/superpowers/plans/2026-11-11-coursework.md` — вехи КМ1 (протокол, shadow, probes) → КМ2 (бэкенд, брокер, стенд) → КМ3 (агент) → КМ4 (симулятор, эксперимент) → КМ5 (ревью, валидация S1/S2′/S4/S5/S7′) → КМ6 (записка `.docx`, закрытие). Rulings старта — `docs/reports/1-coursework/decisions.md` (200–217), отчёты вех — `docs/reports/1-coursework/K<n>.md`.
+- **Текущая веха:** КМ1 (см. журнал ниже).
+- **Последняя завершённая работа:** 11.11 — ветка, план К, Rulings 200–217.
 - **Блокеры:** нет. Пушит пользователь сам (HTTPS + токен). CI GitHub Actions заработает после пуша.
 - **Как поднять стенд:** `deploy/README.md` + `./test-stand.sh`. Для сборки нужен `local.properties` с `sdk.dir`.
 - **Исполнение MVP-A:** M0 — в основной сессии, M1–M4 — субагенты.
@@ -143,3 +135,4 @@
 | 2026-11-11 | `run-matrix.sh`: `--window`, MQTT-лог прогона (`logs/run-matrix/`), `--do` (D3 установка и обновление, D5, D2 командами по MQTT), отказ при занятом AVD | не закоммичено | прогоны `rf-api36` и `rf-api36-do` rc=0; в DO-логе пришли `package_changed` (R12), события задерживались до 60 с при непустом outbox |
 | 2026-11-11 | HTML-отчёты MVP-A (обзор, 22 сценария); `deploy/README.md`: `O()` вместо `$O` для zsh; `0-mvp.md`: RS → ⚠️ | не закоммичено | `swarm-report/mvp-a-*-2026-11-11.html` |
 | 2026-11-11 | Handoff к курсовой: раздел «Старт этапа К» | не закоммичено | следующий шаг — план `docs/superpowers/plans/<дата>-coursework.md` |
+| 2026-11-11 | Старт К: ветка `stage/1-coursework`, план `2026-11-11-coursework.md`, Rulings 200–217 | см. `git log` | базовый гейт на ветке rc=0 |
