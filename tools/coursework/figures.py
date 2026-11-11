@@ -1,7 +1,7 @@
 """Схемы пояснительной записки курсовой: docs/coursework/img/<id>.png (200 dpi, ширина до 16 см).
 
 Рисует все схемные маркеры [[FIG: id | …]] из docs/coursework/0*.md; снимки экрана (SCREENSHOTS) снимаются
-при валидации и здесь не рисуются. Содержание схем — по описаниям маркеров и тексту вокруг них,
+при валидации, графики эксперимента (EXPERIMENT_CHARTS) строит tools/experiments/analyze.py — здесь они не рисуются. Содержание схем — по описаниям маркеров и тексту вокруг них,
 факты сверены с кодом: shared/protocol (Topics), server/data/.../db/migration/V1__core.sql,
 deploy/docker-compose.yml, deploy/toxiproxy.json, ProbeStateMachine, порты agent:domain.
 
@@ -24,7 +24,9 @@ from matplotlib.path import Path as MPath  # noqa: E402
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "docs" / "coursework"
 OUT = SRC / "img"
-SCREENSHOTS = {"agent-wizard", "agent-status", "swagger-ui"}
+SCREENSHOTS = {"agent-wizard", "agent-status"}
+# Графики главы 4 рисует tools/experiments/analyze.py в docs/experiments/img/<id>.png; build_docx.py берёт их оттуда
+EXPERIMENT_CHARTS = {"traffic", "latency", "server-cpu", "server-mem", "timeline-5000", "detection", "degradation"}
 
 DPI = 200
 WIDTH = 16.0  # см: ширина холста = ширине рисунка в записке, кегли на рисунке — как в печати
@@ -940,11 +942,13 @@ def main(argv):
         path = FIGURES[name]()
         print(f"  {path.relative_to(ROOT)}")
     ids = marker_ids()
-    missing = [i for i in ids if i not in FIGURES and i not in SCREENSHOTS]
+    missing = [i for i in ids if i not in FIGURES and i not in SCREENSHOTS and i not in EXPERIMENT_CHARTS]
     unused = [i for i in FIGURES if i not in ids]
     shots = [i for i in ids if i in SCREENSHOTS]
+    charts = [i for i in ids if i in EXPERIMENT_CHARTS]
     print(f"маркеров {len(ids)}: схем {len([i for i in ids if i in FIGURES])}, снимков экрана {len(shots)} "
-          f"({', '.join(shots)} — снимает валидатор)")
+          f"({', '.join(shots)} — снимает валидатор), графиков эксперимента {len(charts)} "
+          f"(строит tools/experiments/analyze.py)")
     if missing:
         print("ВНИМАНИЕ: маркеры без схемы и не снимки экрана: " + ", ".join(missing))
     if unused:

@@ -18,6 +18,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "docs" / "coursework"
 IMG = SRC / "img"
+# Графики эксперимента строит tools/experiments/analyze.py; рисунок главы 4 берётся прямо оттуда по id маркера
+# (traffic, latency, …), чтобы у графика была одна копия. Свой img/<id>.png записки имеет приоритет.
+IMG_EXTRA = (ROOT / "docs" / "experiments" / "img",)
 OUT = SRC / "RestoFleet-coursework.docx"
 
 TOPIC = ("Разработка системы мониторинга и удалённого управления Android-устройствами "
@@ -98,6 +101,15 @@ class Report:
             for line in lines:
                 print(f"  {line}")
         print(f"\nИтого: ошибок — {self.errors}, предупреждений — {self.warnings}")
+
+
+def figure_path(fig_id):
+    """PNG рисунка: img/<id>.png записки, иначе docs/experiments/img/<id>.png; None — картинки нет нигде."""
+    for folder in (IMG, *IMG_EXTRA):
+        path = folder / f"{fig_id}.png"
+        if path.exists():
+            return path
+    return None
 
 
 def source_files():
@@ -817,8 +829,8 @@ def build_docx(docs, figures, tables, out_path, report):
         pending_gap[0] = True
 
     def add_figure(b):
-        path = IMG / f"{b.fig_id}.png"
-        if path.exists():
+        path = figure_path(b.fig_id)
+        if path is not None:
             img = DocxImage.from_file(str(path))
             w_cm = img.px_width / (img.horz_dpi or 72) * 2.54
             h_cm = img.px_height / (img.vert_dpi or 72) * 2.54
@@ -898,7 +910,7 @@ def build_docx(docs, figures, tables, out_path, report):
                 add_table(b)
             elif b.kind == "figure":
                 counts["figure"] += 1
-                counts["picture" if (IMG / f"{b.fig_id}.png").exists() else "placeholder"] += 1
+                counts["picture" if figure_path(b.fig_id) else "placeholder"] += 1
                 add_figure(b)
             elif b.kind == "code":
                 counts["code"] += 1
@@ -998,10 +1010,14 @@ def main():
     figures, tables = number_document(docs, report)
 
     for num, b in figures.items():
-        exists = (IMG / f"{b.fig_id}.png").exists()
-        report.add("Рисунки", f"{num} {b.fig_id} ({b.file}:{b.line}) — "
-                              + ("img/" + b.fig_id + ".png" if exists else "файла нет, в документе рамка"),
-                   "info" if exists else "warn")
+        path = figure_path(b.fig_id)
+        if path is None:
+            shown = "файла нет, в документе рамка"
+        elif path.parent == IMG:
+            shown = f"img/{path.name}"
+        else:
+            shown = str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else str(path)
+        report.add("Рисунки", f"{num} {b.fig_id} ({b.file}:{b.line}) — {shown}", "info" if path else "warn")
     for num, b in tables.items():
         cap = b.caption.text if b.caption else "—"
         report.add("Таблицы", f"{num} {plain_text(cap)[:70]} ({b.file}:{b.line}, строк: {len(b.rows)})")

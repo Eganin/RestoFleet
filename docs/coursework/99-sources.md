@@ -51,3 +51,6 @@
 49. Testcontainers for Java. — URL: https://java.testcontainers.org/ (дата обращения: 11.11.2026). — Текст : электронный.
 50. What is Konsist? // Konsist Documentation. — URL: https://docs.konsist.lemonappdev.com/ (дата обращения: 11.11.2026). — Текст : электронный.
 51. Kover : репозиторий // GitHub. — URL: https://github.com/Kotlin/kotlinx-kover (дата обращения: 11.11.2026). — Текст : электронный.
+52. sysfs-class-net-statistics // The Linux Kernel Documentation. ABI. — URL: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-net-statistics (дата обращения: 12.11.2026). — Текст : электронный.
+53. docker container stats // Docker Docs. — URL: https://docs.docker.com/reference/cli/docker/container/stats/ (дата обращения: 12.11.2026). — Текст : электронный.
+54. tc-netem(8) — Linux manual page // man7.org. — URL: https://man7.org/linux/man-pages/man8/tc-netem.8.html (дата обращения: 12.11.2026). — Текст : электронный.
