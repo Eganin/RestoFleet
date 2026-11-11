@@ -28,9 +28,11 @@ docker compose up -d --wait                               # брокер и apk-
 | `apk/` | `waiter-4.N.apk` и `waiter-4.N.apk.sha256`, собирает `tools/dev/build-dummy-apk.sh` | **нет** |
 | `mosquitto/mosquitto.conf` | конфигурация брокера | да |
 | `mosquitto/init-dynsec.sh` | однократная инициализация DynSec | да |
-| `mosquitto/dynsec-dev.sh` | роли `device`, `operator-dev` и dev-клиенты (идемпотентно) | да |
+| `mosquitto/dynsec-roles.sh` | роли продукта `device` и `backend-service` (общий файл: его подключают `dynsec-dev.sh` и тесты `server:data`) | да |
+| `mosquitto/dynsec-dev.sh` | роли `device`, `backend-service`, `operator-dev`, dev-клиенты и учётка `backend` (идемпотентно) | да |
 | `mosquitto/test-dynsec-dev.sh` | проверка ACL и идемпотентности на живом стенде | да |
 | `out/dev-credentials.txt` | пароли dev-клиентов, `<username> <password>`, права 600 | **нет** |
+| `out/backend-mqtt-password` | пароль учётки `backend` (одна строка, права 600); его монтирует контейнер бэкенда (КМ2b) | **нет** |
 | `.env` | `DYNSEC_ADMIN_PASSWORD` | **нет** |
 
 SAN серверного сертификата: `localhost`, `mosquitto`, `apk-host`, `127.0.0.1`, `10.0.2.2` (хост из эмулятора), IP машины в LAN (реальные устройства, MVP-B). После смены сети машины — перезапустить `./certs/make-ca.sh <новый IP>` и `docker compose restart mosquitto`; CA при этом не меняется, агент перевыпуска не требует.
@@ -58,7 +60,7 @@ docker compose exec mosquitto mosquitto_sub -h localhost -p 8883 --cafile /mosqu
   -u admin -P "$DYNSEC_ADMIN_PASSWORD" -t '$SYS/broker/version' -C 1
 ```
 
-**`admin` после `dynsec init` имеет полный доступ**: управляет DynSec (`$CONTROL/dynamic-security/#`) и может читать все топики (`subscribePattern #`). Поэтому его пароль хранится только в `deploy/.env` и передаётся лишь одноразовому `dynsec-init` — у брокера его нет ни в окружении, ни в healthcheck (healthcheck проверяет, что анонимный клиент получает CONNACK «not authorised»). Роли `device` и `operator-dev` и учётки устройств создаёт `mosquitto/dynsec-dev.sh` (см. ниже).
+**`admin` после `dynsec init` имеет полный доступ**: управляет DynSec (`$CONTROL/dynamic-security/#`) и может читать все топики (`subscribePattern #`). Поэтому его пароль хранится только в `deploy/.env` и передаётся лишь одноразовому `dynsec-init` — у брокера его нет ни в окружении, ни в healthcheck (healthcheck проверяет, что анонимный клиент получает CONNACK «not authorised»). Роли `device`, `backend-service`, `operator-dev`, учётку `backend` и учётки устройств создаёт `mosquitto/dynsec-dev.sh` (см. ниже): офлайн `mosquitto_ctrl` умеет только `dynsec init`, поэтому роли — на работающем брокере (реш. 231).
 
 ## Учётки устройств (DynSec)
 
@@ -68,6 +70,8 @@ mosquitto/test-dynsec-dev.sh   # проверка ACL: PASS/FAIL, код воз�
 ```
 
 Скрипт создаёт роль `device` (по умолчанию всё запрещено): публикация в `rf/v1/dev/%u/{status,telemetry,probe,events,shadow/reported,cmd/res}`, подписка и получение только `rf/v1/dev/%u/shadow/desired` и `rf/v1/dev/%u/cmd/req`. `%u` — имя клиента, оно же `clientId` (`setClientId`), поэтому устройство не может ни подключиться под чужим `clientId`, ни писать в чужие топики. Клиенты: `dev-emu-26` … `dev-emu-37` (эмуляторы по уровню API), `dev-do-26`, `dev-do-36` (эмуляторы с Device Owner), `dev-acl-test` (роль `device`, только субъект `test-dynsec-dev.sh`: проверка не вытесняет работающих агентов), `operator` (роль `operator-dev`: всё на `rf/v1/#`, `clientId` не фиксирован). `test-dynsec-dev.sh` подключает оператора с `clientId` `acl-test-op-*`, поэтому живую подписку `op-sub` не трогает; перед первым прогоном после обновления выполните `mosquitto/dynsec-dev.sh`, он добавит `dev-acl-test`.
+
+Учётка бэкенда (реш. 230): клиент `backend` с `clientId` `backend` и ролью `backend-service` — shared-подписка `$share/backend/rf/v1/dev/+/{status,telemetry,probe,events,shadow/reported,cmd/res}`, публикация `shadow/desired`, `cmd/req` и `status` (только очистка retained) любому устройству, `$CONTROL/dynamic-security/#` (создание, отключение и удаление учёток устройств). Пароль создаётся один раз, если клиента ещё нет, и пишется только в `out/backend-mqtt-password`. `test-dynsec-dev.sh` проверяет клиента и роль через `getClient`/`getRole`, но не подключается как `backend`: это вытеснило бы работающий бэкенд. Живые проверки ACL этой роли — в интеграционных тестах `server:data` (тот же `dynsec-roles.sh`).
 
 - **Пароли** (`openssl rand -base64 32`) выводятся один раз: в `deploy/out/dev-credentials.txt` (права 600, в git не попадает), по строке `<username> <password>`. В терминал и логи скрипт их не печатает. Агенту/эмулятору пароль берётся оттуда: `awk '$1=="dev-emu-36" {print $2}' out/dev-credentials.txt`.
 - **Повторный запуск** безопасен: ACL применяются заново, существующие клиенты пропускаются (пароль не меняется, файл не дописывается).

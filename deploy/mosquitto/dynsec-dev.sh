@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Провижининг DynSec для dev-стенда: роли device и operator-dev, клиенты dev-emu-26..37, dev-do-26, dev-do-36,
-# dev-acl-test (только для test-dynsec-dev.sh, агентам не выдаётся), operator.
+# Провижининг DynSec для dev-стенда: роли device и backend-service (общий файл dynsec-roles.sh), operator-dev;
+# клиенты dev-emu-26..37, dev-do-26, dev-do-36, dev-acl-test (только для test-dynsec-dev.sh, агентам не выдаётся),
+# operator и backend (учётка бэкенда, clientId = backend, роль backend-service; реш. 230).
 # Идемпотентен: роли и ACL применяются заново, существующие клиенты пропускаются (пароль не меняется).
-# Пароли новых клиентов печатаются ОДИН раз — в deploy/out/dev-credentials.txt (600): "<username> <password>" на строку.
+# Пароли новых клиентов печатаются ОДИН раз — в deploy/out/dev-credentials.txt (600): "<username> <password>" на строку;
+# пароль backend — отдельным файлом deploy/out/backend-mqtt-password (600, одна строка): его монтирует контейнер бэкенда.
 # Команды уходят в контейнер через stdin, поэтому пароли не попадают в argv процессов хоста (в контейнере — на миг).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -14,14 +16,11 @@ set -a; . ./.env; set +a
 : "${DYNSEC_ADMIN_PASSWORD:?DYNSEC_ADMIN_PASSWORD is not set (deploy/.env)}"
 
 creds=out/dev-credentials.txt
+backend_pw_file=out/backend-mqtt-password
 clients=()
 for api in 26 27 28 29 30 31 32 33 34 35 36 37; do clients+=("dev-emu-$api"); done
 # dev-acl-test — субъект test-dynsec-dev.sh: проверка не вытесняет работающих агентов (решение 178)
 clients+=(dev-do-26 dev-do-36 dev-acl-test)
-
-# Топики, доступные устройству на публикацию / на получение (P5: всё остальное запрещено)
-publish_topics=(status telemetry probe events shadow/reported cmd/res)
-receive_topics=(shadow/desired cmd/req)
 
 # Выполняет stdin как sh-скрипт в контейнере брокера; ctrl — обёртка mosquitto_ctrl под admin
 in_broker() {
@@ -40,6 +39,14 @@ mkdir -p out
 chmod 700 out
 touch "$creds"
 chmod 600 "$creds"
+# Пароль backend: новый — только если клиента ещё нет (иначе файл не трогаем). Как и dev-учётки, файл пишется до
+# обращения к брокеру: если создание оборвётся, следующий запуск не найдёт клиента и перезапишет пароль.
+new_backend_pw=""
+if ! has_client backend; then
+  new_backend_pw="$(openssl rand -base64 32)"
+  printf '%s\n' "$new_backend_pw" >"$backend_pw_file"
+  chmod 600 "$backend_pw_file"
+fi
 
 # Новые клиенты: пароль генерируется на хосте и сразу записывается в файл учёток
 new_clients=()
@@ -62,33 +69,16 @@ run() {
 }
 try() { ctrl dynsec "$@" >/dev/null 2>&1 || true; }
 has_role() { ctrl dynsec listRoles 2>&1 | grep -qx "$1"; }
-
-# P5: всё запрещено по умолчанию; отписка безвредна, но запрет ломает чистое отключение
-run setDefaultACLAccess publishClientSend deny
-run setDefaultACLAccess publishClientReceive deny
-run setDefaultACLAccess subscribe deny
-run setDefaultACLAccess unsubscribe allow
-
-has_role device || run createRole device
-has_role operator-dev || run createRole operator-dev
 SH
-  # ACL применяются при каждом запуске: сначала снимаем старые, потом добавляем
-  for t in "${publish_topics[@]}"; do
-    echo "try removeRoleACL device publishClientSend rf/v1/dev/%u/$t"
-    echo "run addRoleACL device publishClientSend rf/v1/dev/%u/$t allow"
-  done
-  for t in "${receive_topics[@]}"; do
-    echo "try removeRoleACL device subscribePattern rf/v1/dev/%u/$t"
-    echo "run addRoleACL device subscribePattern rf/v1/dev/%u/$t allow"
-    echo "try removeRoleACL device publishClientReceive rf/v1/dev/%u/$t"
-    echo "run addRoleACL device publishClientReceive rf/v1/dev/%u/$t allow"
-  done
+  # Роли продукта (device, backend-service) и запрет по умолчанию — общий файл, его же применяют тесты server:data
+  cat mosquitto/dynsec-roles.sh
+  echo 'has_role operator-dev || run createRole operator-dev'
   for acl in publishClientSend publishClientReceive subscribePattern; do
     echo "try removeRoleACL operator-dev $acl rf/v1/#"
     echo "run addRoleACL operator-dev $acl rf/v1/# allow"
   done
 
-  for name in "${new_clients[@]}"; do
+  for name in ${new_clients[@]+"${new_clients[@]}"}; do
     pw="$(openssl rand -base64 32)"
     printf '%s %s\n' "$name" "$pw" >>"$tmp_new"
     if [ "$name" = operator ]; then
@@ -101,6 +91,10 @@ SH
       echo "run addClientRole $name device"
     fi
   done
+  if [ -n "$new_backend_pw" ]; then
+    echo "run createClient backend -i backend -p '$new_backend_pw'"
+    echo "run addClientRole backend backend-service"
+  fi
   # Файл учёток — источник истины: если прошлый запуск оборвался, старую строку нового клиента заменяем
   if [ -s "$tmp_new" ]; then
     keep="$(mktemp)"
@@ -113,9 +107,13 @@ SH
 
 in_broker <"$script" || fail "провижининг DynSec не завершился (см. вывод выше)"
 
+new_backend_pw=""
+has_client backend && [ ! -s "$backend_pw_file" ] \
+  && echo "WARN: клиент backend уже есть в брокере, но нет $backend_pw_file (пароль не менялся)" >&2
+
 for name in "${clients[@]}" operator; do
   has_client "$name" && [ -z "$(awk -v n="$name" '$1==n' "$creds")" ] \
     && echo "WARN: клиент $name уже есть в брокере, но его пароля нет в $creds (пароль не менялся)" >&2
 done
 
-echo "DynSec: роли device, operator-dev готовы; новых клиентов: ${#new_clients[@]}; учётки: deploy/$creds ($(wc -l <"$creds" | tr -d ' ') строк)"
+echo "DynSec: роли device, backend-service, operator-dev готовы; backend: deploy/$backend_pw_file; новых клиентов: ${#new_clients[@]}; учётки: deploy/$creds ($(wc -l <"$creds" | tr -d ' ') строк)"

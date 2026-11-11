@@ -116,6 +116,9 @@ before_sum="$(shasum -a 256 "$creds" | awk '{print $1}')"
 log="$(mktemp)"; trap 'rm -f "$log"' EXIT
 mosquitto/dynsec-dev.sh >"$log" 2>&1; rc=$?
 [ "$rc" = 0 ] && pass "повторный запуск dynsec-dev.sh: rc=0" || fail "повторный запуск: rc=$rc"
+# bash 3.2 (macOS) при `set -u` и пустом массиве обрывал генерацию скрипта с rc=0: проверяем, что дошли до итога
+grep -q '^DynSec: роли' "$log" && pass "повторный запуск дошёл до конца (ACL применены заново)" \
+  || fail "повторный запуск оборвался до применения ACL: $(grep -v '^Warning' "$log" | head -3)"
 [ "$before_lines" = "$(wc -l <"$creds" | tr -d ' ')" ] && [ "$before_sum" = "$(shasum -a 256 "$creds" | awk '{print $1}')" ] \
   && pass "файл учёток не изменился ($before_lines строк)" || fail "файл учёток изменился при повторном запуске"
 [ "$(awk '{print $2}' "$creds" | grep -cFf - "$log")" = 0 ] && pass "в выводе повторного запуска нет паролей" \
@@ -128,5 +131,25 @@ mosquitto_pub $O -u "$T" -P "$DEV" -i "$T" -q 1 -t "rf/v1/dev/$T/status" -m stil
 SH
 )"
 grep -q 'rc=0' <<<"$out" && pass "пароль $T после повторного запуска прежний" || fail "$T не подключился после повторного запуска"
+
+# 8. Учётка бэкенда (реш. 230): клиент backend с clientId backend и ролью backend-service, пароль — только в файле 600.
+# Живые проверки ACL роли backend-service (shared-подписка, cmd/req, $CONTROL) — в интеграционных тестах server:data
+# на тех же dynsec-roles.sh: подключение здесь с clientId backend вытеснило бы работающий бэкенд и сбросило бы его сессию.
+bpw=out/backend-mqtt-password
+[ -s "$bpw" ] && [ "$(stat -f '%Lp' "$bpw" 2>/dev/null || stat -c '%a' "$bpw")" = 600 ] \
+  && pass "пароль backend в $bpw, права 600" || fail "нет $bpw или права не 600"
+set -a; . ./.env; set +a
+out="$({
+  printf '%s\n' "ctrl() { mosquitto_ctrl -h localhost -p 8883 --cafile /mosquitto/certs/ca.crt -u admin -P '$DYNSEC_ADMIN_PASSWORD' \"\$@\"; }"
+  echo 'ctrl dynsec getClient backend; ctrl dynsec getRole backend-service'
+} | docker compose exec -T mosquitto sh -s 2>&1)"
+grep -qE 'Clientid: +backend' <<<"$out" && grep -qE 'Roles: +backend-service' <<<"$out" \
+  && pass "клиент backend: clientId backend, роль backend-service" || fail "клиент backend настроен не так: $(grep -E 'Clientid|Roles' <<<"$out")"
+grep -qF 'subscribePattern     : allow : $share/backend/rf/v1/dev/+/telemetry' <<<"$out" \
+  && grep -qF 'publishClientSend    : allow : rf/v1/dev/+/cmd/req' <<<"$out" \
+  && ! grep -qE 'allow : #( |$)' <<<"$out" \
+  && pass "роль backend-service: shared-подписка и cmd/req, без доступа ко всему дереву" \
+  || fail "ACL роли backend-service не те"
+[ "$(grep -cFf "$bpw" <<<"$out")" = 0 ] && pass "пароль backend не попал в вывод" || fail "пароль backend в выводе"
 
 if [ "$failures" = 0 ]; then echo "dynsec-dev: all checks passed"; else echo "dynsec-dev: $failures check(s) FAILED"; exit 1; fi
