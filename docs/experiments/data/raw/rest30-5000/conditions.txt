@@ -1,0 +1,6 @@
+date: 2026-11-11T18:31:52Z
+git: ccebdbe+dirty
+host: Apple M1 Pro, cpus 10, mem 16 GiB
+docker: 29.2.0, VM cpus 10, mem 8217382912
+simulator: cpus 2, mem 3g, heap 2g
+scenario: rest30-5000 polling stale: 90000 ms netem: none (host mosquitto) toxics: none

@@ -105,6 +105,11 @@ def load_run(directory: Path) -> dict:
     detected = [num(d["offline_after_ms"]) for d in detection if d["offline_after_ms"]]
     poll = int(s["poll_interval_sec"]) if s["poll_interval_sec"] else None
     server = window_stats(stats, start, end)
+    per_sample = {}
+    for row in stats:
+        ts = int(row["ts_ms"])
+        if start <= ts <= end and container_role(row["name"]) in SERVER:
+            per_sample[ts] = per_sample.get(ts, 0.0) + num(row["cpu_pct"], 0.0)
     run = {
         "name": s["name"], "mode": s["mode"], "poll": poll, "network": s["network"], "devices": devices,
         "connected": connected, "connected_end": int(s["connected_at_window_end"]), "window_sec": window,
@@ -128,6 +133,7 @@ def load_run(directory: Path) -> dict:
         "server": server,
         "server_cpu_mean": sum(server[r]["cpu_mean"] for r in SERVER if r in server),
         "server_mem_mean_mib": sum(server[r]["mem_mean_mib"] for r in SERVER if r in server),
+        "server_cpu_median": statistics.median(per_sample.values()) if per_sample else None,
         "sim_cpu_mean": server.get("simulator", {}).get("cpu_mean"),
         "sim_net_per_device_day": (server.get("simulator", {}).get("net_bytes_per_sec") or 0) / connected * DAY_SEC
         if server.get("simulator", {}).get("net_bytes_per_sec") else None,
@@ -152,14 +158,15 @@ def fmt(value, digits=1, unit=""):
     return f"{text}{unit}"
 
 
-def fmt_kb(value):
-    return fmt(value / 1000 if value is not None else None, 1)
+def fmt_mb(value):
+    return fmt(value / 1e6 if value is not None else None, 2)
 
 
 def fmt_ms(value):
+    """Задержка с единицей: до секунды — «11,2 мс», дальше — «2,29 с»."""
     if value is None:
         return "—"
-    return fmt(value, 1) if value < 1000 else fmt(value / 1000, 2, " с")
+    return fmt(value, 1, " мс") if value < 1000 else fmt(value / 1000, 2, " с")
 
 
 def table(header: list, rows: list) -> str:
@@ -176,7 +183,8 @@ RUN_FIELDS = [
     "sim_net_per_device_day", "msgs_per_sec", "requests_per_sec", "request_errors", "publish_errors",
     "connect_failures", "connection_losses", "commands_sent", "send_failures", "commands_received",
     "commands_succeeded", "latency_p50", "latency_p95", "latency_max", "loss_devices", "loss_detected",
-    "detection_median", "detection_min", "detection_max", "server_cpu_mean", "server_mem_mean_mib", "sim_cpu_mean",
+    "detection_median", "detection_min", "detection_max", "server_cpu_mean", "server_cpu_median", "server_mem_mean_mib",
+    "sim_cpu_mean",
 ]
 
 
@@ -212,7 +220,9 @@ def charts(runs: dict, out: Path) -> list:
     try:
         import matplotlib
         matplotlib.use("Agg")
+        import matplotlib.patches  # noqa: F401 — Patch для легенды
         import matplotlib.pyplot as plt
+        import matplotlib.ticker  # noqa: F401
     except ImportError:
         return []
     img = out / "img"
@@ -244,43 +254,64 @@ def charts(runs: dict, out: Path) -> list:
                 ax.annotate(label_fn(y), (bar.get_x() + bar.get_width() / 2, y), xytext=(0, 2),
                             textcoords="offset points", ha="center", va="bottom", fontsize=6.5, color="#52514e")
         ax.set_xticks(range(len(SIZES)), [f"N = {n:,}".replace(",", " ") for n in SIZES])
+        ax.set_xlim(-0.5, len(SIZES) - 0.5)
         if log:
             ax.set_yscale("log")
+            ax.yaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+            ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: fmt(v, 0)))
+
+    def legend(fig):
+        handles = [matplotlib.patches.Patch(color=color, label=label) for _, _, label, color in MODES]
+        fig.legend(handles=handles, ncol=4, loc="lower center", fontsize=8)
+        fig.bottom_legend = True
 
     def save(fig, name):
-        fig.tight_layout()
+        fig.tight_layout(rect=(0, 0.07, 1, 1) if getattr(fig, "bottom_legend", False) else None)
         fig.savefig(img / name)
         plt.close(fig)
         made.append(name)
 
     fig, ax = plt.subplots(figsize=(7.5, 4))
-    grouped(ax, "bytes_per_device_day", lambda v: fmt(v / 1e6, 2), log=True)
-    ax.set_ylabel("МБ в сутки на устройство (лог. шкала)")
-    ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: fmt(v / 1e6, 2 if v < 1e6 else 0)))
+    grouped(ax, "bytes_per_device_day", lambda v: fmt(v / 1e6, 2))
+    ax.set_ylabel("МБ в сутки на устройство")
+    ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: fmt(v / 1e6, 0)))
     ax.set_title("Трафик устройства (IP-байты интерфейса, экстраполяция окна на сутки)", loc="left", fontsize=10)
-    ax.legend(ncol=4, loc="upper left", bbox_to_anchor=(0, -0.08), fontsize=8)
+    legend(fig)
     save(fig, "traffic.png")
 
+    # Задержки от 10 мс до 30 с — лог. шкала; на ней столбцы искажают пропорции, поэтому точки с подписями
     fig, axes = plt.subplots(1, 2, figsize=(7.5, 3.8), sharey=True)
     for ax, metric, title in [(axes[0], "latency_p50", "p50"), (axes[1], "latency_p95", "p95")]:
-        grouped(ax, metric, lambda v: fmt(v, 0) if v < 1000 else fmt(v / 1000, 1, " с"), log=True)
+        for i, (mode, poll, label, color) in enumerate(MODES):
+            for j, n in enumerate(SIZES):
+                run = find(runs, mode, poll, n)
+                if run and run.get(metric) is not None:
+                    x, y = j + (i - 1.5) * 0.2, run[metric]
+                    ax.plot([x], [y], "o", color=color, markersize=6, markeredgecolor="#fcfcfb", markeredgewidth=1)
+                    ax.annotate(fmt(y, 0) if y < 1000 else fmt(y / 1000, 1, " с"), (x, y), xytext=(0, 5),
+                                textcoords="offset points", ha="center", fontsize=6, color="#52514e")
+        ax.set_xticks(range(len(SIZES)), [f"N = {n:,}".replace(",", " ") for n in SIZES])
+        ax.set_xlim(-0.5, len(SIZES) - 0.5)
+        ax.set_yscale("log")
+        ax.yaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+        ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: fmt(v, 0)))
         ax.set_title(f"Задержка команды, {title}", loc="left", fontsize=10)
     axes[0].set_ylabel("мс (лог. шкала)")
-    axes[0].legend(ncol=4, loc="upper left", bbox_to_anchor=(0, -0.08), fontsize=8)
+    legend(fig)
     save(fig, "latency.png")
 
     fig, ax = plt.subplots(figsize=(7.5, 4))
     grouped(ax, "server_cpu_mean", lambda v: fmt(v, 0))
     ax.set_ylabel("% одного ядра (среднее за окно)")
     ax.set_title("CPU сервера: backend + mosquitto + postgres", loc="left", fontsize=10)
-    ax.legend(ncol=4, loc="upper left", bbox_to_anchor=(0, -0.08), fontsize=8)
+    legend(fig)
     save(fig, "server-cpu.png")
 
     fig, ax = plt.subplots(figsize=(7.5, 4))
     grouped(ax, "server_mem_mean_mib", lambda v: fmt(v, 0))
     ax.set_ylabel("МиБ (среднее за окно)")
     ax.set_title("ОЗУ сервера: backend + mosquitto + postgres", loc="left", fontsize=10)
-    ax.legend(ncol=4, loc="upper left", bbox_to_anchor=(0, -0.08), fontsize=8)
+    legend(fig)
     save(fig, "server-mem.png")
 
     fig, ax = plt.subplots(figsize=(7.5, 4))
@@ -294,7 +325,7 @@ def charts(runs: dict, out: Path) -> list:
     ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: fmt(v / 1000, 0)))
     ax.set_ylabel("секунды (медиана; черта — мин…макс)")
     ax.set_title("Время обнаружения пропажи устройства", loc="left", fontsize=10)
-    ax.legend(ncol=4, loc="upper left", bbox_to_anchor=(0, -0.08), fontsize=8)
+    legend(fig)
     save(fig, "detection.png")
 
     pairs = [("mqtt", None, "MQTT", MODES[0][3]), ("rest", 15, "REST, опрос 15 с", MODES[2][3])]
@@ -309,9 +340,8 @@ def charts(runs: dict, out: Path) -> list:
                     p50.append(run["latency_p50"])
                     p95.append(run["latency_p95"])
             xs = range(len(names))
-            ax.bar([x - 0.18 for x in xs], p50, 0.34, color=color, label="p50", edgecolor="#fcfcfb")
-            ax.bar([x + 0.18 for x in xs], p95, 0.34, color=color, alpha=0.45, label="p95", edgecolor="#fcfcfb",
-                   hatch="////")
+            ax.bar([x - 0.18 for x in xs], p50, 0.34, color=color, edgecolor="#fcfcfb")
+            ax.bar([x + 0.18 for x in xs], p95, 0.34, color=color, alpha=0.45, edgecolor="#fcfcfb", hatch="////")
             for x, a, b in zip(xs, p50, p95):
                 ax.annotate(fmt_ms(a), (x - 0.18, a), xytext=(0, 2), textcoords="offset points", ha="center",
                             fontsize=6.5, color="#52514e")
@@ -319,8 +349,15 @@ def charts(runs: dict, out: Path) -> list:
                             fontsize=6.5, color="#52514e")
             ax.set_xticks(list(xs), names, fontsize=7)
             ax.set_title(f"{label}, N = 1 000", loc="left", fontsize=10)
-            ax.legend(fontsize=8)
-        axes[0].set_ylabel("задержка команды, мс")
+            if mode == "rest":
+                ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: fmt(v / 1000, 0)))
+                ax.set_ylabel("задержка команды, с")
+            else:
+                ax.set_ylabel("задержка команды, мс")
+        fig.legend(handles=[matplotlib.patches.Patch(color="#8a8984", label="p50"),
+                            matplotlib.patches.Patch(facecolor="#8a8984", alpha=0.45, hatch="////", label="p95")],
+                   ncol=2, loc="lower center", fontsize=8)
+        fig.bottom_legend = True
         save(fig, "degradation.png")
 
     timeline_runs = [r for r in (find(runs, "mqtt", None, 5000), find(runs, "rest", 5, 5000)) if r]
@@ -362,7 +399,7 @@ def results_md(runs: dict, images: list) -> str:
            "",
            "> Сгенерировано `tools/experiments/analyze.py` из CSV прогонов (`docs/experiments/data/`). Числа в этом файле "
            "не правятся руками: изменились CSV — перезапустить скрипт. Методика и решения — `docs/reports/1-coursework/K4.md`, "
-           "`decisions.md` (реш. 279–295).",
+           "`decisions.md` (реш. 279–291).",
            "",
            "## Условия",
            "",
@@ -387,7 +424,7 @@ def results_md(runs: dict, images: list) -> str:
            ""]
 
     out += ["## 1. Трафик на устройство", "",
-            "КБ в сутки на устройство (приём + передача), экстраполяция окна; в скобках — доля передачи устройства.", ""]
+            "МБ в сутки на устройство (приём + передача), экстраполяция окна 240 с; в скобках — доля передачи устройства.", ""]
     rows = []
     for mode, poll, label, _ in MODES:
         row = [label]
@@ -395,7 +432,7 @@ def results_md(runs: dict, images: list) -> str:
             run = find(runs, mode, poll, n)
             if run and run["bytes_per_device_day"]:
                 share = run["tx_per_device_day"] / run["bytes_per_device_day"] * 100
-                row.append(f"{fmt_kb(run['bytes_per_device_day'])} ({fmt(share, 0)} %)")
+                row.append(f"{fmt_mb(run['bytes_per_device_day'])} ({fmt(share, 0)} %)")
             else:
                 row.append("—")
         rows.append(row)
@@ -404,10 +441,10 @@ def results_md(runs: dict, images: list) -> str:
     for mode, poll, label, _ in MODES:
         run = find(runs, mode, poll, 1000)
         if run:
-            rows.append([label, fmt_kb(run["payload_per_device_day"]), fmt_kb(run["bytes_per_device_day"]),
-                         fmt_kb(run["sim_net_per_device_day"])])
+            rows.append([label, fmt_mb(run["payload_per_device_day"]), fmt_mb(run["bytes_per_device_day"]),
+                         fmt_mb(run["sim_net_per_device_day"])])
     out += ["N = 1 000: полезная нагрузка приложения (JSON сообщений и тел HTTP) против IP-байтов интерфейса и NET I/O "
-            "контейнера по `docker stats` (сверка; включает и трафик измерителя), КБ/сутки на устройство:", "",
+            "контейнера по `docker stats` (сверка; включает и трафик измерителя), МБ/сутки на устройство:", "",
             table(["Режим", "полезная нагрузка", "IP-байты интерфейса", "docker stats NET I/O"], rows), ""]
     if "traffic.png" in images:
         out += ["![Трафик на устройство](img/traffic.png)", ""]
@@ -421,13 +458,14 @@ def results_md(runs: dict, images: list) -> str:
                 rows.append([label, fmt(n, 0), fmt_ms(run["latency_p50"]), fmt_ms(run["latency_p95"]),
                              fmt_ms(run["latency_max"]), f"{run['commands_received']}/{run['commands_sent']}",
                              f"{run['commands_succeeded']}/{run['commands_sent']}"])
-    out += [table(["Режим", "N", "p50, мс", "p95, мс", "макс., мс", "доставлено", "`succeeded`"], rows), ""]
+    out += [table(["Режим", "N", "p50", "p95", "макс.", "доставлено", "`succeeded`"], rows), ""]
     if "latency.png" in images:
         out += ["![Задержка команды](img/latency.png)", ""]
 
     out += ["## 3. Нагрузка на сервер", "",
             "Среднее за окно: CPU — % одного ядра, ОЗУ — МиБ; поток — сообщений/с (MQTT, в обе стороны) или успешных "
-            "запросов/с (REST).", ""]
+            "запросов/с (REST). Медиана суммы CPU по сэмплам не чувствительна к кратким всплескам (проверки bcrypt при "
+            "истечении кэша Basic у REST, см. график ниже и оговорки).", ""]
     rows = []
     for mode, poll, label, _ in MODES:
         for n in SIZES:
@@ -439,12 +477,13 @@ def results_md(runs: dict, images: list) -> str:
             for role in SERVER:
                 st = srv.get(role)
                 cells.append(f"{fmt(st['cpu_mean'], 1)} / {fmt(st['mem_mean_mib'], 0)}" if st else "—")
-            cells.append(fmt(run["server_cpu_mean"], 1))
+            cells.append(f'{fmt(run["server_cpu_mean"], 1)} / {fmt(run["server_cpu_median"], 1)}')
             flow = run["msgs_per_sec"] if mode == "mqtt" else run["requests_per_sec"]
             cells.append(fmt(flow, 1))
             cells.append(fmt(run["sim_cpu_mean"], 0))
             rows.append(cells)
-    out += [table(["Режим", "N", "backend CPU / ОЗУ", "mosquitto CPU / ОЗУ", "postgres CPU / ОЗУ", "CPU сумма",
+    out += [table(["Режим", "N", "backend CPU / ОЗУ", "mosquitto CPU / ОЗУ", "postgres CPU / ОЗУ",
+                   "CPU сумма: среднее / медиана",
                    "поток, 1/с", "CPU симулятора"], rows), ""]
     for name in ("server-cpu.png", "server-mem.png", "timeline-5000.png"):
         if name in images:
@@ -477,10 +516,10 @@ def results_md(runs: dict, images: list) -> str:
             run = find(runs, mode, poll, 1000, net)
             if run:
                 rows.append([label, title, fmt_ms(run["latency_p50"]), fmt_ms(run["latency_p95"]),
-                             f"{run['commands_received']}/{run['commands_sent']}", fmt_kb(run["bytes_per_device_day"]),
+                             f"{run['commands_received']}/{run['commands_sent']}", fmt_mb(run["bytes_per_device_day"]),
                              run["connection_losses"], run["publish_errors"] + run["request_errors"],
                              fmt(run["server_cpu_mean"], 1)])
-    out += [table(["Режим", "Сеть", "p50, мс", "p95, мс", "доставлено", "КБ/сутки", "обрывов", "ошибок отправки",
+    out += [table(["Режим", "Сеть", "p50", "p95", "доставлено", "МБ/сутки", "обрывов", "ошибок отправки",
                    "CPU сервера"], rows), ""]
     if "degradation.png" in images:
         out += ["![Деградация](img/degradation.png)", ""]
@@ -496,11 +535,24 @@ def results_md(runs: dict, images: list) -> str:
             "(реш. 282).",
             "- **Задержка MQTT** включает вызов REST API бэкенда (запись команды в БД + публикация), а не только доставку "
             "брокером; задержка REST — в основном ожидание следующего опроса (≈ половина интервала в среднем).",
-            "- **Пропажа MQTT** считается от момента замолкания: брокер ждёт 1,5 × keep-alive от **последнего пакета** "
-            "устройства, поэтому время короче 45 с на время, прошедшее с последней телеметрии/PINGREQ до пропажи.",
+            "- **Пропажа MQTT** считается от момента замолкания: брокер разрывает соединение через 1,5 × keep-alive "
+            "(45 с) от последнего пакета устройства (плюс шаг опроса статуса 1 с), поэтому от момента пропажи время "
+            "бывает и меньше 45 с. Mosquitto 2.1 проверяет "
+            "keep-alive пачками: в журнале брокера 9 из 10 пропавших устройств прогона N = 100 отключены «exceeded "
+            "timeout» в одну и ту же миллисекунду при разном времени их последней телеметрии — отсюда разный разброс "
+            "по прогонам: " + "; ".join(
+                f"N = {fmt(n, 0)} — {fmt(r['detection_min'] / 1000, 1)}…{fmt(r['detection_max'] / 1000, 1)} с"
+                for n in SIZES for r in [find(runs, "mqtt", None, n)] if r and r["detection_min"] is not None
+            ) + ".",
             "- **Потери 5 %** — только на исходящем трафике устройств (`netem` на egress); входящие пакеты не теряются, "
             "но потеря ACK устройства вызывает повторы и со стороны сервера.",
             "- **Деградация** проверена только на N = 1 000 и REST 15 с (реш. 284); +300 мс — на ответ сервера (RTT +300 мс).",
+            "- **Команды измерителя** (60 в минуту на весь парк, реш. 287) входят в трафик устройств: на устройство их тем "
+            "больше, чем меньше N, поэтому трафик на устройство сравним между режимами при одном N, а между N — с этой "
+            "поправкой (при N = 100 команд на устройство в 10 раз больше, чем при N = 1 000).",
+            "- **Бэкенд пересоздаётся** перед прогоном, если меняется порог presence REST (реш. 289): JIT и кэш Basic "
+            "прогреваются в фазе разгона и прогрева, до окна. Кэш Basic живёт 5 мин от первой проверки (реш. 213): при "
+            "N = 5 000 повторные bcrypt-проверки всех устройств приходятся на конец окна и видны на графике CPU.",
             ""]
     return "\n".join(out)
 
@@ -518,15 +570,15 @@ def conclusions(runs: dict) -> list:
             if r:
                 parts.append(f"REST {poll} с — в {fmt(r, 1)} раза больше")
         if parts:
-            lines.append(f"- **Трафик, N = {fmt(n, 0)}:** MQTT {fmt_kb(mqtt['bytes_per_device_day'])} КБ/сутки на "
+            lines.append(f"- **Трафик, N = {fmt(n, 0)}:** MQTT {fmt_mb(mqtt['bytes_per_device_day'])} МБ/сутки на "
                          f"устройство; {', '.join(parts)}.")
     for n in SIZES:
         mqtt = find(runs, "mqtt", None, n)
         rests = [find(runs, "rest", p, n) for p in (5, 15, 30)]
         if mqtt and all(rests) and mqtt["latency_p50"] is not None:
             lines.append(
-                f"- **Задержка команды, N = {fmt(n, 0)}:** MQTT p50 {fmt_ms(mqtt['latency_p50'])} мс, p95 "
-                f"{fmt_ms(mqtt['latency_p95'])} мс; REST p50 {fmt_ms(rests[0]['latency_p50'])} / "
+                f"- **Задержка команды, N = {fmt(n, 0)}:** MQTT p50 {fmt_ms(mqtt['latency_p50'])}, p95 "
+                f"{fmt_ms(mqtt['latency_p95'])}; REST p50 {fmt_ms(rests[0]['latency_p50'])} / "
                 f"{fmt_ms(rests[1]['latency_p50'])} / {fmt_ms(rests[2]['latency_p50'])} при опросе 5 / 15 / 30 с — "
                 "задержку REST задаёт интервал опроса, а не сервер.")
     for n in SIZES:
@@ -534,8 +586,11 @@ def conclusions(runs: dict) -> list:
         rest5 = find(runs, "rest", 5, n)
         if mqtt and rest5:
             r = ratio(rest5["server_cpu_mean"], mqtt["server_cpu_mean"])
-            lines.append(f"- **CPU сервера, N = {fmt(n, 0)}:** MQTT {fmt(mqtt['server_cpu_mean'], 1)} %, REST 5 с "
-                         f"{fmt(rest5['server_cpu_mean'], 1)} % одного ядра" + (f" (в {fmt(r, 1)} раза больше)." if r else "."))
+            rm = ratio(rest5["server_cpu_median"], mqtt["server_cpu_median"])
+            lines.append(f"- **CPU сервера, N = {fmt(n, 0)}:** среднее MQTT {fmt(mqtt['server_cpu_mean'], 1)} %, REST 5 с "
+                         f"{fmt(rest5['server_cpu_mean'], 1)} % одного ядра" + (f" (в {fmt(r, 1)} раза больше)" if r else "")
+                         + f"; медиана {fmt(mqtt['server_cpu_median'], 1)} % и {fmt(rest5['server_cpu_median'], 1)} %"
+                         + (f" (в {fmt(rm, 1)} раза)." if rm else "."))
     mqtt = find(runs, "mqtt", None, 1000)
     if mqtt and mqtt["detection_median"] is not None:
         rest = [find(runs, "rest", p, 1000) for p in (5, 15, 30)]
@@ -549,8 +604,8 @@ def conclusions(runs: dict) -> list:
         for net, title in CONDITIONS[1:]:
             run = find(runs, mode, poll, 1000, net)
             if base and run and run["latency_p50"] is not None and base["latency_p50"] is not None:
-                lines.append(f"- **{label}, {title}:** p50 {fmt_ms(base['latency_p50'])} → {fmt_ms(run['latency_p50'])} мс, "
-                             f"p95 {fmt_ms(base['latency_p95'])} → {fmt_ms(run['latency_p95'])} мс, доставлено "
+                lines.append(f"- **{label}, {title}:** p50 {fmt_ms(base['latency_p50'])} → {fmt_ms(run['latency_p50'])}, "
+                             f"p95 {fmt_ms(base['latency_p95'])} → {fmt_ms(run['latency_p95'])}, доставлено "
                              f"{run['commands_received']}/{run['commands_sent']}, обрывов соединений {run['connection_losses']}.")
     return lines
 

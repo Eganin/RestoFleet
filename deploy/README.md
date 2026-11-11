@@ -74,6 +74,25 @@ curl -s -X POST localhost:8474/reset                                            
 
 Конфигурация из `toxiproxy.json` применяется при старте контейнера; изменения через API живут до перезапуска.
 
+## Эксперимент (КМ4): симулятор и «MQTT vs REST-polling»
+
+Сервис `simulator` (profile `experiment`, образ `restofleet/simulator:dev`) — виртуальные устройства и измеритель. Запускается только оркестратором из корня репозитория (он не трогает `.env`: бэкенд пересоздаётся с нужными `RF_*` в окружении команды, симулятор — `run --rm --no-deps`):
+
+```bash
+tools/experiments/run-experiment.sh build              # installDist + образ симулятора
+tools/experiments/run-experiment.sh register 5000      # дорегистрировать устройства до N; кэш учёток out/sim/creds.jsonl (600)
+tools/experiments/run-experiment.sh run smoke-mqtt     # ≈ 2 мин: 20 устройств, проверка цепочки (также smoke-rest)
+tools/experiments/run-experiment.sh run mqtt-1000      # прогон: tools/experiments/scenarios/<имя>.yaml
+tools/experiments/run-experiment.sh restore            # бэкенд с умолчаниями, Toxiproxy — reset
+/tmp/rf-venv/bin/python -I tools/experiments/analyze.py # CSV → docs/experiments/ (matplotlib — в venv вне репозитория)
+```
+
+- **Сети:** устройства ходят по `default` (`mosquitto:8883`, `backend-devices:8080`, через Toxiproxy — `toxiproxy:18883`/`18080`), измеритель — по внутренней сети `control` (`backend-ctl:8080`): его запросы не попадают в счётчик трафика устройств (реш. 280).
+- **Деградация** задаётся именем сценария: `…-lat300` — токсин Toxiproxy +300 мс на прокси `mqtt` и `rest` (снимается после прогона), `…-loss5` — `tc netem loss 5%` в контейнере симулятора (`RF_SIM_NETEM`, нужен `NET_ADMIN`; точка входа затем переходит на uid 10001). `pollIntervalSec: P` → `RF_POLLING_STALEAFTERMS` = 3 × P с на время прогона (реш. 214).
+- **Ресурсы симулятора:** `RF_SIM_CPUS` (2), `RF_SIM_MEM` (3g), `RF_SIM_HEAP` (2g).
+- **Результаты:** `logs/experiments/<прогон>/` (вне git): `summary.csv`, `commands.csv`, `detection.csv`, `timeline.csv` (симулятор), `docker-stats.csv` (сэмплер, 5 с), `conditions.txt`, журнал. Паролей в них нет.
+- **Устройства симулятора остаются на стенде** (offline) и переиспользуются следующими прогонами. Удалить: `DELETE /api/v1/devices/{id}` по `deviceId` из кэша, затем удалить `out/sim/creds.jsonl`.
+
 ## Что где лежит
 
 | Путь | Что | В git |
@@ -97,6 +116,7 @@ curl -s -X POST localhost:8474/reset                                            
 | `toxiproxy.json` | прокси `api`, `mqtt`, `rest` | да |
 | `prepare-stand.sh`, `test-backend.sh` | подготовка стенда и smoke бэкенда | да |
 | `.env` | `DYNSEC_ADMIN_PASSWORD` и параметры бэкенда (`RF_*`, без секретов) | **нет** |
+| `out/sim/creds.jsonl` | учётки виртуальных устройств симулятора (`deviceId`, пароль, ресторан, роль), 600, каталог 700 | **нет** |
 
 SAN серверного сертификата: `localhost`, `mosquitto`, `apk-host`, `backend`, `toxiproxy`, `127.0.0.1`, `10.0.2.2` (хост из эмулятора), IP машины в LAN (реальные устройства, MVP-B). После смены сети машины — перезапустить `./certs/make-ca.sh <новый IP>` и `docker compose restart mosquitto`; CA при этом не меняется, агент перевыпуска не требует.
 
