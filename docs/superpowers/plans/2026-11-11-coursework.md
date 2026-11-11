@@ -101,16 +101,16 @@
 
 Отчёт: `docs/reports/1-coursework/K3.md`. Не переделывать сделанное в MVP-A (handoff, таблица «Что из К уже сделано»).
 
-- [ ] **3.1 `ApplyShadow` на `shared:shadow`** (валидация и решения по версии из общего модуля; поведение и тесты MVP сохраняются).
-- [ ] **3.2 `RunProbes` + `probe_state`** (FR-AG-34, 44): `ProbeLoop` через `ProbeStateMachine` из `shared:probes`; событие `probe_state` {target, state, error, failures} немедленно при смене состояния; пробы офлайн буферизуются (FR-AG-35, уже есть — проверить).
-- [ ] **3.3 `EvaluateThresholds`** (FR-AG-40, 41, реш. 202): пороги из тени; события `threshold` (вход/выход, гистерезис), `fg_changed`, `fg_absent` (отслеживаемое приложение не на переднем плане дольше `fgAbsentMin`); вызов из цикла телеметрии после `CollectTelemetry`; состояние порогов — в памяти (после перезапуска первое пересечение шлётся заново — оговорка). Исправить KDoc `DesiredShadow`.
-- [ ] **3.4 Досылка без 60-секундной задержки** (реш. 203) и **дедупликация `package_changed`** (реш. 204), **допуск часов 5 мин** для `expiresAt` (реш. 206).
-- [ ] **3.5 `Provision`** (FR-AG-10, 12): порт `ProvisioningApi` (domain) → `OkHttpProvisioningApi` (data; `POST {baseUrl}/api/v1/provision`, `shared:protocol` REST DTO, пиннинг CA стенда в debug как у MQTT, в release — системное доверие); сохранение учётки в `KeystoreCredentialStore` + host/port брокера + `role` + `restaurantId`; ошибки: неверный/использованный/просроченный код, нет сети, TLS. Debug-ресивер `DevConfigReceiver` остаётся; добавить debug-интент `DEV_PROVISION` (код + baseUrl через adb, защищён `DUMP`) для автоматизации S1.
-- [ ] **3.6 Presentation (MVI по канону, Compose):** **мастер настройки** (FR-AG-04 базово, FR-AG-10): шаги — разрешения (уведомления, usage access, исключение из оптимизации батареи; переиспользовать `AndroidWizardPermissions`), адрес стенда + код регистрации → `Provision` → результат (deviceId, роль, ресторан); **экран статуса** (FR-AG-05): подключение (состояние сессии, последний `connId`, причина ошибки), режим (normal/DO), выданные разрешения, размер outbox, последние результаты проб (up/down), версия агента. Навигация: без учётки — мастер, с учёткой — статус; Capability Lab доступен из статуса (debug). Тесты Reducer/Mapper/ViewModel ≥ 85 %.
-- [ ] **3.7 `status.role`** из сохранённой учётки (реш. 210).
-- [ ] **3.8** Гейт, K3.md, handoff. Ручных проверок на эмуляторе внутри вехи нет — всё в валидации этапа.
+- [x] **3.1 `ApplyShadow` на `shared:shadow`** (валидация и решения по версии из общего модуля; поведение и тесты MVP сохраняются).
+- [x] **3.2 `RunProbes` + `probe_state`** (FR-AG-34, 44): `ProbeLoop` через `ProbeStateMachine` из `shared:probes`; событие `probe_state` {target, state, error, failures} немедленно при смене состояния; пробы офлайн буферизуются (FR-AG-35, уже есть — проверить).
+- [x] **3.3 `EvaluateThresholds`** (FR-AG-40, 41, реш. 202): пороги из тени; события `threshold` (вход/выход, гистерезис), `fg_changed`, `fg_absent` (отслеживаемое приложение не на переднем плане дольше `fgAbsentMin`); вызов из цикла телеметрии после `CollectTelemetry`; состояние порогов — в памяти (после перезапуска первое пересечение шлётся заново — оговорка). Исправить KDoc `DesiredShadow`.
+- [x] **3.4 Досылка без 60-секундной задержки** (реш. 203) и **дедупликация `package_changed`** (реш. 204), **допуск часов 5 мин** для `expiresAt` (реш. 206).
+- [x] **3.5 `Provision`** (FR-AG-10, 12): порт `ProvisioningApi` (domain) → `OkHttpProvisioningApi` (data; `POST {baseUrl}/api/v1/provision`, `shared:protocol` REST DTO, пиннинг CA стенда в debug как у MQTT, в release — системное доверие); сохранение учётки в `KeystoreCredentialStore` + host/port брокера + `role` + `restaurantId`; ошибки: неверный/использованный/просроченный код, нет сети, TLS. Debug-ресивер `DevConfigReceiver` остаётся; добавить debug-интент `DEV_PROVISION` (код + baseUrl через adb, защищён `DUMP`) для автоматизации S1.
+- [x] **3.6 Presentation (MVI по канону, Compose):** **мастер настройки** (FR-AG-04 базово, FR-AG-10): шаги — разрешения (уведомления, usage access, исключение из оптимизации батареи; переиспользовать `AndroidWizardPermissions`), адрес стенда + код регистрации → `Provision` → результат (deviceId, роль, ресторан); **экран статуса** (FR-AG-05): подключение (состояние сессии, последний `connId`, причина ошибки), режим (normal/DO), выданные разрешения, размер outbox, последние результаты проб (up/down), версия агента. Навигация: без учётки — мастер, с учёткой — статус; Capability Lab доступен из статуса (debug). Тесты Reducer/Mapper/ViewModel ≥ 85 %.
+- [x] **3.7 `status.role`** из сохранённой учётки (реш. 210).
+- [x] **3.8** Гейт, K3.md, handoff. Ручных проверок на эмуляторе внутри вехи нет — всё в валидации этапа.
 
-**Приёмка КМ3:** гейт rc=0; domain агента ≥ 90 %; release без debug-поверхности (`verifyReleaseNoDebugSurface`).
+**Приёмка КМ3:** ✅ (11.11, `K3.md`) гейт rc=0; domain агента ≥ 90 % (98,7 %); release без debug-поверхности (`verifyReleaseNoDebugSurface`).
 
 ---
 

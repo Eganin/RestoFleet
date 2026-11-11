@@ -85,9 +85,9 @@ Swagger UI бэкенда (создать ресторан, выпустить �
 - [x] `shared:shadow`, `shared:probes` — TDD, ≥ 90 %.
 
 ### К2. Агент — обычный режим (5 дней)
-- [ ] Use cases из 4.3 с тестами (фейки портов).
-- [ ] Data: MQTT-сессия (LWT с `connId`, Clean Start=false, Session Expiry 24 ч), outbox на Room, провижининг + Keystore.
-- [ ] Presentation: мастер настройки, экран статуса.
+- [x] Use cases из 4.3 с тестами (фейки портов).
+- [x] Data: MQTT-сессия (LWT с `connId`, Clean Start=false, Session Expiry 24 ч), outbox на Room, провижининг + Keystore.
+- [x] Presentation: мастер настройки, экран статуса.
 - [ ] Ночной прогон на эмуляторе: телеметрия без пропусков, outbox после 1 ч офлайна.
 
 ### К3. Брокер и ядро бэкенда (5 дней)
