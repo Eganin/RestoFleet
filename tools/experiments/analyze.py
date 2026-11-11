@@ -195,12 +195,12 @@ def write_data(runs: dict, out: Path) -> None:
     (data / "raw").mkdir(parents=True)
     ordered = sorted(runs.values(), key=lambda r: (r["network"] != "baseline", r["devices"], r["mode"], r["poll"] or 0))
     with (data / "runs.csv").open("w", newline="") as handle:
-        writer = csv.writer(handle)
+        writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(RUN_FIELDS)
         for run in ordered:
             writer.writerow([round(run[f], 3) if isinstance(run[f], float) else run[f] for f in RUN_FIELDS])
     with (data / "server-load.csv").open("w", newline="") as handle:
-        writer = csv.writer(handle)
+        writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(["run", "container", "samples", "cpu_mean_pct", "cpu_max_pct", "mem_mean_mib", "mem_max_mib"])
         for run in ordered:
             for role, st in sorted(run["server"].items()):

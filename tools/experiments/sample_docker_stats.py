@@ -76,7 +76,7 @@ def main() -> int:
     signal.signal(signal.SIGINT, stop)
     fields = ["ts_ms", "name", "cpu_pct", "mem_used_bytes", "mem_limit_bytes", "net_rx_bytes", "net_tx_bytes", "pids"]
     with open(args.out, "w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         while running["on"]:
             started = time.time()
