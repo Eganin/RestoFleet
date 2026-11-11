@@ -122,4 +122,36 @@ class ShadowDeltaTest {
         assertThat(Num(7L)).isEqualTo(Num(7.0))
         assertThat(Num(7.5)).isNotEqualTo(Num(7))
     }
+
+    @Test
+    fun `probe fields left at their protocol default on one side make no delta`() {
+        // V-2: desired без необязательного reference, агент эхом пишет reference: false — тень применена
+        val bare = obj("id" to Str("api"), "url" to Str("https://a"), "intervalSec" to Num(5))
+        val echoed = obj(
+            "id" to Str("api"), "url" to Str("https://a"), "intervalSec" to Num(5), "reference" to Bool(false),
+        )
+
+        assertThat(delta(doc("probes" to list(bare)), doc("probes" to list(echoed)))).isEqualTo(ShadowDocument.EMPTY)
+        assertThat(delta(doc("probes" to list(echoed)), doc("probes" to list(bare)))).isEqualTo(ShadowDocument.EMPTY)
+    }
+
+    @Test
+    fun `a probe value other than the default still makes a delta with the desired list as sent`() {
+        val bare = obj("id" to Str("api"), "url" to Str("https://a"))
+        val reference = obj("id" to Str("api"), "url" to Str("https://a"), "reference" to Bool(true))
+
+        assertThat(delta(doc("probes" to list(reference)), doc("probes" to list(bare))))
+            .isEqualTo(doc("probes" to list(reference)))
+        assertThat(delta(doc("probes" to list(bare)), doc("probes" to list(reference))))
+            .isEqualTo(doc("probes" to list(bare)))
+    }
+
+    @Test
+    fun `defaults apply only to probe items at the root`() {
+        val nested = doc("x" to obj("probes" to list(obj("id" to Str("api")))))
+        val echoed = doc("x" to obj("probes" to list(obj("id" to Str("api"), "reference" to Bool(false)))))
+
+        assertThat(delta(nested, echoed)).isEqualTo(nested)
+        assertThat(ShadowDefaults.LIST_ITEMS.keys).containsExactly("probes")
+    }
 }

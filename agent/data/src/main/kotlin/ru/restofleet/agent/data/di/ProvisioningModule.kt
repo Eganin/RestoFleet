@@ -5,7 +5,9 @@ import okhttp3.OkHttpClient
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.Module
 import org.koin.dsl.module
+import ru.restofleet.agent.data.outbox.LocalDeviceDataReset
 import ru.restofleet.agent.data.provisioning.OkHttpProvisioningApi
+import ru.restofleet.agent.domain.port.DeviceDataReset
 import ru.restofleet.agent.domain.port.ProvisioningApi
 import ru.restofleet.agent.domain.usecase.GetAgentStatus
 import ru.restofleet.agent.domain.usecase.GetPermissions
@@ -23,7 +25,8 @@ private const val MAX_AGENT_VERSION = 64
 /**
  * Провижининг (план 3.5) и use cases мастера и экрана статуса (3.6); логики здесь нет. Нужны извне: `ProvisioningTrust`
  * (debug — CA стенда, release — системное доверие; `agent:app`), `CredentialStore`, `CapabilitiesSource`,
- * `DeviceInfoSource`, `Outbox`, `ShadowStore`, `ConnectionMonitor` и `ProbeStates` (из [mqttModule]),
+ * `DeviceInfoSource`, `Outbox`, `AgentDatabase`, `ShadowStore`/`FileShadowStore`, `ConnectionMonitor` и `ProbeStates`
+ * (из [mqttModule]),
  * `AGENT_DISPATCHER`. Сведения об устройстве обрезаются до пределов контракта K2 (модель ≤ 100, ОС ≤ 32, версия ≤ 64).
  */
 val provisioningModule: Module = module {
@@ -50,7 +53,9 @@ val provisioningModule: Module = module {
             dispatcher = get(AGENT_DISPATCHER),
         )
     }
-    single { Provision(get(), get()) }
+    // Регистрация под другим deviceId стирает данные прежнего (R-3): Room из storageModule, тень из mqttModule
+    single<DeviceDataReset> { LocalDeviceDataReset(get(), get()) }
+    single { Provision(get(), get(), get()) }
     single { GetRegistration(get()) }
     single { GetPermissions(get()) }
     single { GetAgentStatus(get(), get(), get(), get(), get(), get(), get()) }

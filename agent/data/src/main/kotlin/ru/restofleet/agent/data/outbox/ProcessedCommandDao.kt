@@ -14,6 +14,9 @@ internal interface ProcessedCommandDao {
     @Query("SELECT COUNT(*) FROM processed_commands WHERE cmdId = :cmdId")
     suspend fun countOf(cmdId: String): Int
 
+    @Query("DELETE FROM processed_commands")
+    suspend fun deleteAll()
+
     /** Оставляет [keep] последних по порядку вставки. */
     @Query(
         "DELETE FROM processed_commands WHERE seq NOT IN " +

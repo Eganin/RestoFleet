@@ -21,6 +21,10 @@ internal interface OutboxDao {
     @Query("DELETE FROM outbox WHERE id IN (:ids)")
     suspend fun delete(ids: List<Long>)
 
+    /** Всё прежнего устройства (R-3, регистрация под другим `deviceId`). */
+    @Query("DELETE FROM outbox")
+    suspend fun deleteAll()
+
     /** Удаляет [count] наименее важных записей: наибольший `priority`, внутри него наименьший `id`. */
     @Query(
         "DELETE FROM outbox WHERE id IN " +

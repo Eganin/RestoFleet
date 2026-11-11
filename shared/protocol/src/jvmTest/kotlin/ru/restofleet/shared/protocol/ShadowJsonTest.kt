@@ -1,10 +1,14 @@
 package ru.restofleet.shared.protocol
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.serialization.json.jsonObject
 import org.junit.Test
+import ru.restofleet.shared.protocol.dto.ProbeTargetDto
 import ru.restofleet.shared.protocol.dto.ShadowDesiredDto
+import ru.restofleet.shared.shadow.ShadowDefaults
 import ru.restofleet.shared.shadow.ShadowDocument
 import ru.restofleet.shared.shadow.ShadowValue
+import ru.restofleet.shared.shadow.delta
 import java.io.File
 import kotlin.test.assertFailsWith
 
@@ -92,5 +96,30 @@ class ShadowJsonTest {
         // 45.0 пишется как 45 — для DTO агента это то же значение
         assertThat(RfJson.decodeFromString(ShadowDesiredDto.serializer(), ShadowJson.encode(doc)))
             .isEqualTo(RfJson.decodeFromString(ShadowDesiredDto.serializer(), fixture))
+    }
+
+    @Test
+    fun `desired probe without optional fields matches the agent echo of the same DTO`() {
+        // V-2 (реш. 305): K3.md задаёт пробу без reference; агент декодирует её в ProbeTargetDto и эхом пишет
+        // reported через RfJson (encodeDefaults) — delta должна быть пустой
+        val desired = """{"version":3,"telemetry":{"intervalSec":15},""" +
+            """"thresholds":{"batteryLowPct":20,"tempHighC":45.0,"fgAbsentMin":10},""" +
+            """"probes":[{"id":"api","type":"http","url":"https://10.0.2.2:18443/health","intervalSec":5,""" +
+            """"timeoutMs":3000,"failThreshold":3}]}"""
+        val dto = RfJson.decodeFromString(ShadowDesiredDto.serializer(), desired)
+        val echoed = RfJson.encodeToString(ShadowDesiredDto.serializer(), dto)
+
+        assertThat(delta(ShadowJson.decode(desired), ShadowJson.decode(echoed))).isEqualTo(ShadowDocument.EMPTY)
+    }
+
+    @Test
+    fun `fields the protocol fills by default are exactly the shadow defaults`() {
+        // Поле с умолчанием в ProbeTargetDto без записи в ShadowDefaults снова дало бы вечную delta (V-2)
+        val minimal = """{"id":"api","type":"http","url":"u","intervalSec":5,"timeoutMs":3000,"failThreshold":3}"""
+        val dto = RfJson.decodeFromString(ProbeTargetDto.serializer(), minimal)
+        val encoded = RfJson.parseToJsonElement(RfJson.encodeToString(ProbeTargetDto.serializer(), dto)).jsonObject
+        val added = ShadowJson.fromJson(encoded).fields - ShadowJson.decode(minimal).fields.keys
+
+        assertThat(added).isEqualTo(ShadowDefaults.LIST_ITEMS.getValue("probes"))
     }
 }

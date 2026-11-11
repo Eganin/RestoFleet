@@ -39,6 +39,12 @@ class FileShadowStore(private val file: File) : ShadowStore {
 
     private val saves = MutableStateFlow(0)
 
+    /** Стирает сохранённую тень (R-3): следующий `desired` применяется как первый; наблюдатели получают `null`. */
+    suspend fun clear(): Unit = mutex.withLock {
+        if (file.exists() && !file.delete()) throw IOException("shadow was not cleared")
+        saves.update { it + 1 }
+    }
+
     override fun observe(): Flow<DesiredShadow?> = saves.map { load() }
 
     /** Сохранённая тень или `null`; нужна циклам, чтобы применить конфигурацию при старте (3.6b). */

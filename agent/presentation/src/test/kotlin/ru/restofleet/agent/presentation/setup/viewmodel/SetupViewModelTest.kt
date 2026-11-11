@@ -73,6 +73,7 @@ class SetupViewModelTest {
                     answer()
                 },
                 store,
+                reset = {},
             ),
             router = router,
             labAvailable = labAvailable,
