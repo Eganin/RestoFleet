@@ -6,9 +6,9 @@
 
 - **Этап:** **курсовая (К) в работе** с 11.11.2026, ночной прогон без пользователя. MVP-A закрыт 10.11.2026; MVP-B (реальные устройства) идёт параллельно, когда появятся планшет и телефон: `docs/stages/0-mvp.md`, задача M5.
 - **Ветка:** `stage/1-coursework` от `main` @ `c978ffe`. Первый коммит ветки `5ef2a37` — незакоммиченные файлы MVP-A (реш. 200). 11.11 пользователь переименовал `stage/0-mvp` в `main`; ветку MVP и тег `mvp-a` восстанавливает пользователь, если захочет: `git branch stage/0-mvp c978ffe && git tag -a mvp-a -m "MVP-A closed" c978ffe`.
-- **План К:** `docs/superpowers/plans/2026-11-11-coursework.md` — вехи КМ1 (протокол, shadow, probes) → КМ2 (бэкенд, брокер, стенд) → КМ3 (агент) → КМ4 (симулятор, эксперимент) → КМ5 (ревью, валидация S1/S2′/S4/S5/S7′) → КМ6 (записка `.docx`, закрытие). Rulings старта — `docs/reports/1-coursework/decisions.md` (200–217), отчёты вех — `docs/reports/1-coursework/K<n>.md`.
-- **Текущая веха:** КМ1 (см. журнал ниже).
-- **Последняя завершённая работа:** 11.11 — ветка, план К, Rulings 200–217.
+- **План К:** `docs/superpowers/plans/2026-11-11-coursework.md` — вехи КМ1 (протокол, shadow, probes) → КМ2 (бэкенд, брокер, стенд) → КМ3 (агент) → КМ4 (симулятор, эксперимент) → КМ5 (ревью, валидация S1/S2′/S4/S5/S7′) → КМ6 (записка `.docx`, закрытие). Rulings — `docs/reports/1-coursework/decisions.md` (старт 200–217, КМ1 218–228), отчёты вех — `docs/reports/1-coursework/K<n>.md`.
+- **Текущая веха:** КМ2 — бэкенд и брокер (план, раздел КМ2). КМ1 закрыт: `docs/reports/1-coursework/K1.md` (API общих модулей и заметки для КМ2/КМ3 — там же, разд. «API для следующих вех»).
+- **Последняя завершённая работа:** 11.11 — КМ1: протокол финализирован (события `threshold`/`fg_*`, `expectedStatus`, REST DTO провижининга и polling, 39 фикстур), модули `shared:shadow` и `shared:probes` (100 % строк), агент делегирует им валидацию тени и классы ошибок проб; коммиты `5802f1b`, `4c11216`, `a0a5dea` + docs. 1340 тестов, строки проекта 94,1 %.
 - **Блокеры:** нет. Пушит пользователь сам (HTTPS + токен). CI GitHub Actions заработает после пуша.
 - **Как поднять стенд:** `deploy/README.md` + `./test-stand.sh`. Для сборки нужен `local.properties` с `sdk.dir`.
 - **Исполнение MVP-A:** M0 — в основной сессии, M1–M4 — субагенты.
@@ -27,8 +27,8 @@
 ### Что из К уже сделано в MVP-A — не переделывать, а доводить
 | Пункт К | Состояние после MVP-A | Где |
 |---|---|---|
-| К1 `shared:protocol` | Черновик DTO для всех сообщений и 15 golden-фикстур, round-trip тесты. Нужно финализировать по ТЗ 7.2 + P1–P10 и добавить фикстуры на каждый статус команды | `shared/protocol`, `docs/protocol/fixtures` |
-| К1 `shared:shadow`, `shared:probes` | **Нет.** Автомат up↔down по `failThreshold` (FR-AG-44) не сделан: агент не публикует `probe_state` (решение 3.6b) | — |
+| К1 `shared:protocol` | **Готово в КМ1** (11.11): финальные DTO, REST DTO (`rest/`), 39 фикстур, аудит — `K1.md` | `shared/protocol`, `docs/protocol/fixtures` |
+| К1 `shared:shadow`, `shared:probes` | **Готово в КМ1** (11.11). Агент пока не публикует `probe_state` — подключение автомата в КМ3 (3.2) | `shared/shadow`, `shared/probes` |
 | К2 MQTT-сессия | **Есть:**<ul><li>LWT с `connId`, `cleanStart=false`, Session Expiry 24 ч, keepalive 30 с;</li><li>повтор 1…120 с, `auth_failed` 15→60 мин, `session_taken_over` 5 мин;</li><li>пиннинг CA стенда (только debug)</li></ul> | `agent/data/.../mqtt` (`MqttBrokerSession`, `HiveMqLink`, `MqttSessionConfigFactory` в `MqttSessionConfig.kt`, `ReconnectBackoff`, `SessionSupervisor`) |
 | К2 outbox на Room | **Есть.** 10 000 записей, приоритеты, пачки по 50, удаление окончательных отказов PUBACK | `agent/data/.../outbox` (Room), `agent/domain/.../usecase/PublishOrBuffer`, `FlushOutbox` |
 | К2 Keystore (FR-AG-12) | **Есть.** AES-GCM; временный сбой учётку не стирает | `KeystoreCredentialStore` |
@@ -136,3 +136,4 @@
 | 2026-11-11 | HTML-отчёты MVP-A (обзор, 22 сценария); `deploy/README.md`: `O()` вместо `$O` для zsh; `0-mvp.md`: RS → ⚠️ | не закоммичено | `swarm-report/mvp-a-*-2026-11-11.html` |
 | 2026-11-11 | Handoff к курсовой: раздел «Старт этапа К» | не закоммичено | следующий шаг — план `docs/superpowers/plans/<дата>-coursework.md` |
 | 2026-11-11 | Старт К: ветка `stage/1-coursework`, план `2026-11-11-coursework.md`, Rulings 200–217 | см. `git log` | базовый гейт на ветке rc=0 |
+| 2026-11-11 | КМ1: протокол (аудит 14 расхождений, `threshold`/`fg_*`, `expectedStatus`, REST DTO, фикстуры на всё), `shared:shadow`, `shared:probes`, перенос правил из агента, Rulings 218–228 | `5802f1b`, `4c11216`, `a0a5dea` + docs | 1340 тестов, строки проекта 94,1 %, `shared:shadow`/`probes` 100 %; гейт rc=0 перед каждым кодовым коммитом; отчёт `K1.md` |
