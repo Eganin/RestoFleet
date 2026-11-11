@@ -64,4 +64,8 @@ tasks.withType<Test>().configureEach {
     // Конфигурация DynSec стенда (роли device и backend-service) — часть контракта: тест применяет её к брокеру
     inputs.dir(rootProject.layout.projectDirectory.dir("deploy/mosquitto")).withPropertyName("dynsecScripts")
     systemProperty("rf.deployDir", rootProject.layout.projectDirectory.dir("deploy").asFile.absolutePath)
+    // Golden-фикстуры протокола: декодер ingest разбирает каждое сообщение устройства
+    val fixtures = rootProject.layout.projectDirectory.dir("docs/protocol/fixtures")
+    inputs.dir(fixtures).withPropertyName("protocolFixtures")
+    systemProperty("fixturesDir", fixtures.asFile.absolutePath)
 }
