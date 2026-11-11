@@ -28,6 +28,7 @@ dependencies {
     kover(projects.server.domain)
     kover(projects.server.data)
     kover(projects.server.api)
+    kover(projects.server.app)
 }
 
 kover {

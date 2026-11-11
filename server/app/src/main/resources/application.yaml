@@ -1,0 +1,40 @@
+# Конфигурация бэкенда по умолчанию — стенд в docker compose (deploy/docker-compose.yml).
+# Переопределение: переменные RF_<РАЗДЕЛ>_<КЛЮЧ> (RF_MQTT_HOST, RF_RATELIMIT_PROVISIONPERMINUTE…) или файл RF_CONFIG.
+# Секретов здесь нет: только пути к файлам (Docker secrets, deploy/out/… с правами 600).
+http:
+  host: 0.0.0.0
+  port: 8080
+  maxBodyBytes: 1048576
+database:
+  jdbcUrl: jdbc:postgresql://postgres:5432/restofleet
+  user: restofleet
+  passwordFile: /run/secrets/postgres-password
+  maxPoolSize: 10
+mqtt:
+  host: mosquitto
+  port: 8883
+  username: backend
+  clientId: backend
+  passwordFile: /run/secrets/backend-mqtt-password
+  caFile: /certs/ca.crt
+jwt:
+  secretFile: /run/secrets/jwt-secret
+  issuer: restofleet
+  audience: restofleet-api
+  accessTtlMinutes: 15
+provisioning:
+  brokerHost: 10.0.2.2
+  brokerPort: 8883
+  tokenTtlHours: 24
+polling:
+  staleAfterMs: 90000
+auth:
+  refreshTtlDays: 7
+rateLimit:
+  loginPerMinute: 10
+  provisionPerMinute: 60
+jobs:
+  expireCommandsMs: 5000
+  markStalePollersMs: 5000
+  metricsLogMs: 60000
+secretsDir: /run/secrets

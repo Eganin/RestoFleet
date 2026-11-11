@@ -1,0 +1,19 @@
+<configuration>
+    <!-- Тесты server:data: логи адаптеров — INFO, библиотеки — WARN (без шума Hikari/Testcontainers/HiveMQ) -->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    <logger name="ru.restofleet" level="INFO"/>
+    <logger name="org.testcontainers" level="WARN"/>
+    <logger name="tc" level="WARN"/>
+    <logger name="com.github.dockerjava" level="WARN"/>
+    <logger name="com.zaxxer.hikari" level="WARN"/>
+    <logger name="org.flywaydb" level="WARN"/>
+    <logger name="com.hivemq" level="WARN"/>
+    <logger name="Exposed" level="WARN"/>
+    <root level="WARN">
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>

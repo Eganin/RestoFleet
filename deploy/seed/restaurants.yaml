@@ -1,0 +1,204 @@
+# Dev-seed стенда (`1-coursework.md` 4.5): 40 вымышленных ресторанов. Названия и адреса придуманы,
+# совпадения случайны. Загружает `restofleet-backend seed` (сервис `seed`, profile `dev`) через те же use cases,
+# что и REST API: upsert по `code` — повторный запуск обновляет, а не дублирует.
+restaurants:
+  - code: MSK-01
+    name: "Северная кухня"
+    city: Москва
+    address: "ул. Учебная, 10"
+    timezone: Europe/Moscow
+  - code: MSK-02
+    name: "Пять специй"
+    city: Москва
+    address: "ул. Тестовая, 11"
+    timezone: Europe/Moscow
+  - code: MSK-03
+    name: "Тёплый двор"
+    city: Москва
+    address: "ул. Примерная, 12"
+    timezone: Europe/Moscow
+  - code: MSK-04
+    name: "Синяя чашка"
+    city: Москва
+    address: "ул. Опытная, 13"
+    timezone: Europe/Moscow
+  - code: MSK-05
+    name: "Медный котелок"
+    city: Москва
+    address: "ул. Пробная, 14"
+    timezone: Europe/Moscow
+  - code: MSK-06
+    name: "Ржаной дом"
+    city: Москва
+    address: "ул. Стендовая, 15"
+    timezone: Europe/Moscow
+  - code: MSK-07
+    name: "Сад и печь"
+    city: Москва
+    address: "ул. Макетная, 16"
+    timezone: Europe/Moscow
+  - code: MSK-08
+    name: "Белый перец"
+    city: Москва
+    address: "Учебный пр., 17"
+    timezone: Europe/Moscow
+  - code: SPB-01
+    name: "Горчица и мёд"
+    city: Санкт-Петербург
+    address: "Демо-бульвар, 18"
+    timezone: Europe/Moscow
+  - code: SPB-02
+    name: "Старый маяк"
+    city: Санкт-Петербург
+    address: "ул. Образцовая, 19"
+    timezone: Europe/Moscow
+  - code: SPB-03
+    name: "Зелёная веранда"
+    city: Санкт-Петербург
+    address: "ул. Учебная, 20"
+    timezone: Europe/Moscow
+  - code: SPB-04
+    name: "Ночной пекарь"
+    city: Санкт-Петербург
+    address: "ул. Тестовая, 21"
+    timezone: Europe/Moscow
+  - code: SPB-05
+    name: "Лавка вкуса"
+    city: Санкт-Петербург
+    address: "ул. Примерная, 22"
+    timezone: Europe/Moscow
+  - code: KZN-01
+    name: "Два повара"
+    city: Казань
+    address: "ул. Опытная, 23"
+    timezone: Europe/Moscow
+  - code: KZN-02
+    name: "Красная ложка"
+    city: Казань
+    address: "ул. Пробная, 24"
+    timezone: Europe/Moscow
+  - code: KZN-03
+    name: "Тихая гавань"
+    city: Казань
+    address: "ул. Стендовая, 25"
+    timezone: Europe/Moscow
+  - code: NNV-01
+    name: "Дымок"
+    city: Нижний Новгород
+    address: "ул. Макетная, 26"
+    timezone: Europe/Moscow
+  - code: NNV-02
+    name: "Сытый кот"
+    city: Нижний Новгород
+    address: "Учебный пр., 27"
+    timezone: Europe/Moscow
+  - code: KRD-01
+    name: "Утренний хлеб"
+    city: Краснодар
+    address: "Демо-бульвар, 28"
+    timezone: Europe/Moscow
+  - code: KRD-02
+    name: "Чайный сад"
+    city: Краснодар
+    address: "ул. Образцовая, 29"
+    timezone: Europe/Moscow
+  - code: KRD-03
+    name: "Каша-малаша"
+    city: Краснодар
+    address: "ул. Учебная, 30"
+    timezone: Europe/Moscow
+  - code: SMR-01
+    name: "Пряный лист"
+    city: Самара
+    address: "ул. Тестовая, 31"
+    timezone: Europe/Samara
+  - code: SMR-02
+    name: "Гриль-двор"
+    city: Самара
+    address: "ул. Примерная, 32"
+    timezone: Europe/Samara
+  - code: KGD-01
+    name: "Солнечный стол"
+    city: Калининград
+    address: "ул. Опытная, 33"
+    timezone: Europe/Kaliningrad
+  - code: KGD-02
+    name: "Лесная поляна"
+    city: Калининград
+    address: "ул. Пробная, 34"
+    timezone: Europe/Kaliningrad
+  - code: EKB-01
+    name: "Морской бриз"
+    city: Екатеринбург
+    address: "ул. Стендовая, 35"
+    timezone: Asia/Yekaterinburg
+  - code: EKB-02
+    name: "Полба"
+    city: Екатеринбург
+    address: "ул. Макетная, 36"
+    timezone: Asia/Yekaterinburg
+  - code: EKB-03
+    name: "Кедровый орех"
+    city: Екатеринбург
+    address: "Учебный пр., 37"
+    timezone: Asia/Yekaterinburg
+  - code: NSK-01
+    name: "Сибирский очаг"
+    city: Новосибирск
+    address: "Демо-бульвар, 38"
+    timezone: Asia/Novosibirsk
+  - code: NSK-02
+    name: "Байкальская рыба"
+    city: Новосибирск
+    address: "ул. Образцовая, 39"
+    timezone: Asia/Novosibirsk
+  - code: NSK-03
+    name: "Таёжный двор"
+    city: Новосибирск
+    address: "ул. Учебная, 40"
+    timezone: Asia/Novosibirsk
+  - code: OMS-01
+    name: "Уральская кухня"
+    city: Омск
+    address: "ул. Тестовая, 41"
+    timezone: Asia/Omsk
+  - code: OMS-02
+    name: "Волжский берег"
+    city: Омск
+    address: "ул. Примерная, 42"
+    timezone: Asia/Omsk
+  - code: KJA-01
+    name: "Кубанский хутор"
+    city: Красноярск
+    address: "ул. Опытная, 43"
+    timezone: Asia/Krasnoyarsk
+  - code: KJA-02
+    name: "Янтарный берег"
+    city: Красноярск
+    address: "ул. Пробная, 44"
+    timezone: Asia/Krasnoyarsk
+  - code: IKT-01
+    name: "Шаверма у моста"
+    city: Иркутск
+    address: "ул. Стендовая, 45"
+    timezone: Asia/Irkutsk
+  - code: IKT-02
+    name: "Тандыр"
+    city: Иркутск
+    address: "ул. Макетная, 46"
+    timezone: Asia/Irkutsk
+  - code: VVO-01
+    name: "Блинная номер один"
+    city: Владивосток
+    address: "Учебный пр., 47"
+    timezone: Asia/Vladivostok
+  - code: VVO-02
+    name: "Пельменная на углу"
+    city: Владивосток
+    address: "Демо-бульвар, 48"
+    timezone: Asia/Vladivostok
+  - code: VVO-03
+    name: "Бистро «Компас»"
+    city: Владивосток
+    address: "ул. Образцовая, 49"
+    timezone: Asia/Vladivostok
