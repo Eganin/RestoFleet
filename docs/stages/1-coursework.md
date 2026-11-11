@@ -88,7 +88,7 @@ Swagger UI бэкенда (создать ресторан, выпустить �
 - [x] Use cases из 4.3 с тестами (фейки портов).
 - [x] Data: MQTT-сессия (LWT с `connId`, Clean Start=false, Session Expiry 24 ч), outbox на Room, провижининг + Keystore.
 - [x] Presentation: мастер настройки, экран статуса.
-- [ ] Ночной прогон на эмуляторе: телеметрия без пропусков, outbox после 1 ч офлайна.
+- [x] Ночной прогон на эмуляторе: телеметрия без пропусков, outbox после 1 ч офлайна. — **сокращённый, реш. 295** (15 мин связи + 10 мин офлайна, `docs/reports/1-coursework/validation.md`); полный — MVP-B.
 
 ### К3. Брокер и ядро бэкенда (5 дней)
 - [x] Mosquitto: роль `device` с ACL по направлениям, `clientid = deviceId`, persistence.
