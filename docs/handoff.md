@@ -6,9 +6,9 @@
 
 - **Этап:** **курсовая (К) в работе** с 11.11.2026, ночной прогон без пользователя. MVP-A закрыт 10.11.2026; MVP-B (реальные устройства) идёт параллельно, когда появятся планшет и телефон: `docs/stages/0-mvp.md`, задача M5.
 - **Ветка:** `stage/1-coursework` от `main` @ `c978ffe`. Первый коммит ветки `5ef2a37` — незакоммиченные файлы MVP-A (реш. 200). 11.11 пользователь переименовал `stage/0-mvp` в `main`; ветку MVP и тег `mvp-a` восстанавливает пользователь, если захочет: `git branch stage/0-mvp c978ffe && git tag -a mvp-a -m "MVP-A closed" c978ffe`.
-- **План К:** `docs/superpowers/plans/2026-11-11-coursework.md` — вехи КМ1 (протокол, shadow, probes) → КМ2 (бэкенд, брокер, стенд) → КМ3 (агент) → КМ4 (симулятор, эксперимент) → КМ5 (ревью, валидация S1/S2′/S4/S5/S7′) → КМ6 (записка `.docx`, закрытие). Rulings — `docs/reports/1-coursework/decisions.md` (старт 200–217, КМ1 218–228), отчёты вех — `docs/reports/1-coursework/K<n>.md`.
-- **Текущая веха:** КМ2 — бэкенд и брокер (план, раздел КМ2). КМ1 закрыт: `docs/reports/1-coursework/K1.md` (API общих модулей и заметки для КМ2/КМ3 — там же, разд. «API для следующих вех»).
-- **Последняя завершённая работа:** 11.11 — КМ1: протокол финализирован (события `threshold`/`fg_*`, `expectedStatus`, REST DTO провижининга и polling, 39 фикстур), модули `shared:shadow` и `shared:probes` (100 % строк), агент делегирует им валидацию тени и классы ошибок проб; коммиты `5802f1b`, `4c11216`, `a0a5dea` + docs. 1340 тестов, строки проекта 94,1 %.
+- **План К:** `docs/superpowers/plans/2026-11-11-coursework.md` — вехи КМ1 (протокол, shadow, probes) → КМ2 (бэкенд, брокер, стенд) → КМ3 (агент) → КМ4 (симулятор, эксперимент) → КМ5 (ревью, валидация S1/S2′/S4/S5/S7′) → КМ6 (записка `.docx`, закрытие). Rulings — `docs/reports/1-coursework/decisions.md` (старт 200–217, КМ1 218–228, КМ2a 229–243), отчёты вех — `docs/reports/1-coursework/K<n>.md`.
+- **Текущая веха:** КМ2 — бэкенд и брокер (план, раздел КМ2), разбита на КМ2a и КМ2b (реш. 229). **КМ2a закрыт** (2.1 `server:domain`, 2.2 `server:data`, учётка DynSec `backend`); **следующий шаг — КМ2b**: 2.3 `server:api`, 2.4 `server:app`, compose, seed, `test-backend.sh`. Вход для КМ2b — `docs/reports/1-coursework/K2.md`, разд. «Контракт для КМ2b» (Koin-модули, `DataConfig`, use cases, запуск ingest и фоновых задач). КМ1: `K1.md`.
+- **Последняя завершённая работа:** 11.11 — КМ2a: `server:domain` (30 use cases, 88 тестов, 99,4 %) и `server:data` (PostgreSQL/Exposed/Flyway, ingest с ack после commit, публикации HiveMQ, DynSec через `$CONTROL`; 110 тестов с Testcontainers TimescaleDB pg17 и Mosquitto 2.1.2 + DynSec, 98,5 %); роли `device`/`backend-service` в `deploy/mosquitto/dynsec-roles.sh`, учётка `backend` на стенде (`test-dynsec-dev.sh` 21/21). Коммиты `c8c32fd`, `f23e836`, `6027554`, `bfeb62a` + docs. Строки проекта 95,6 % (серверные модули впервые в агрегате).
 - **Блокеры:** нет. Пушит пользователь сам (HTTPS + токен). CI GitHub Actions заработает после пуша.
 - **Как поднять стенд:** `deploy/README.md` + `./test-stand.sh`. Для сборки нужен `local.properties` с `sdk.dir`.
 - **Исполнение MVP-A:** M0 — в основной сессии, M1–M4 — субагенты.
@@ -35,8 +35,8 @@
 | К2 провижининг по коду (FR-AG-10) | **Нет.** Сейчас только debug `DevConfigReceiver` через adb | — |
 | К2 use cases агента | **Есть:** `CollectTelemetry`, `ApplyDesiredShadow`, `ExecuteCommand` + `Capabilities`, `HandleIncomingCommand`, `FlushOutbox`, переподключение.<br>**Частично:** `RunProbes` (`ProbeLoop` без up/down).<br>**Нет:** `EvaluateThresholds` (FR-AG-40/41), `Provision` | `agent/domain` |
 | К2 мастер и экран статуса | **Нет.** Есть только кнопки разрешений в Capability Lab (`AndroidWizardPermissions`) | `agent/presentation` |
-| К3 брокер | **Есть.** Роль `device` с ACL по `%u` и направлениям, `clientid = deviceId`, persistence; `test-dynsec-dev.sh` 16/16 | `deploy/mosquitto` |
-| К3 бэкенд `server:*` | **Нет:** каталога `server/` ещё нет. Образец работы с DynSec через `$CONTROL` — одноразовый `spikes/broker-load` (без тестов, переносить только идеи) | — |
+| К3 брокер | **Есть.** Роль `device` с ACL по `%u` и направлениям, `clientid = deviceId`, persistence; с КМ2a — роль `backend-service` и учётка `backend` (`dynsec-roles.sh`); `test-dynsec-dev.sh` 21/21 | `deploy/mosquitto` |
+| К3 бэкенд `server:*` | **КМ2a (11.11):** `server:domain` и `server:data` готовы и покрыты тестами (Testcontainers); `server:api`, `server:app`, compose, seed — КМ2b. Контракт — `K2.md` | `server/domain`, `server/data` |
 | К4 симулятор | **Нет.** Решено: Kotlin/JVM (S1 ⚠️: 1 000 клиентов без потерь, 10 000 — экстраполяция). Образец нагрузки — `spikes/broker-load` | — |
 
 ### Что решить в начале К (с пользователем или через Ruling в журнале плана)
@@ -50,7 +50,7 @@
 8. **Матрица R12:** стоит ⚠️ («событий не было»), но в DO-прогоне 11.11 события `package_changed` пришли. Обновить при следующей правке матрицы.
 
 ### Инструменты
-- **Гейт перед каждым коммитом:** `./gradlew build detekt koverVerifyCi :konsist-tests:test --continue` → rc=0. Холодная сборка ≈ 7 мин, тёплая — 2–3 мин. 1289 тестов, покрытие строк 93,3 %.
+- **Гейт перед каждым коммитом:** `./gradlew build detekt koverVerifyCi :konsist-tests:test --continue` → rc=0. **Нужен запущенный Docker** (Testcontainers `server:data`: образы `timescale/timescaledb:2.31.0-pg17`, `eclipse-mosquitto:2.1.2-alpine`). Холодная сборка ≈ 7 мин, тёплая — 2–3 мин. ≈ 1 540 тестов, покрытие строк 95,6 %.
 - **Стенд:** `deploy/README.md`. Проверки: `./test-stand.sh` и `mosquitto/test-dynsec-dev.sh` (16/16).
 - **Эмуляторы:** `tools/emulators/run-matrix.sh rf-api36 36 [--window]` и `run-matrix.sh rf-api36-do 36 --do [--window]`. Весь MQTT-обмен прогона пишется в `logs/run-matrix/` (вне git). Подробности — `tools/emulators/README.md`.
 - **Оператор вручную:** функция `O() { docker compose exec -T -e XDG_CONFIG_HOME=/tmp/rfopt mosquitto "$@"; }`. Форма `$O` в zsh (оболочка пользователя) не работает. Отправка команды одной строкой (`rfcmd`) — в `mvp-a-use-cases-2026-11-11.html`, раздел «Подготовка».
@@ -137,3 +137,4 @@
 | 2026-11-11 | Handoff к курсовой: раздел «Старт этапа К» | не закоммичено | следующий шаг — план `docs/superpowers/plans/<дата>-coursework.md` |
 | 2026-11-11 | Старт К: ветка `stage/1-coursework`, план `2026-11-11-coursework.md`, Rulings 200–217 | см. `git log` | базовый гейт на ветке rc=0 |
 | 2026-11-11 | КМ1: протокол (аудит 14 расхождений, `threshold`/`fg_*`, `expectedStatus`, REST DTO, фикстуры на всё), `shared:shadow`, `shared:probes`, перенос правил из агента, Rulings 218–228 | `5802f1b`, `4c11216`, `a0a5dea` + docs | 1340 тестов, строки проекта 94,1 %, `shared:shadow`/`probes` 100 %; гейт rc=0 перед каждым кодовым коммитом; отчёт `K1.md` |
+| 2026-11-11 | КМ2a: 2.2 `server:data` (репозитории, миграции, ingest, публикации, DynSec, безопасность) + тесты; учётка DynSec `backend`; Rulings 229–243 (229–240 восстановлены по коду) | `f23e836`, `6027554`, `bfeb62a` + docs | 110 тестов `server:data` (Testcontainers PostgreSQL и Mosquitto/DynSec, сценарии К3), строки 98,5 %; проект 95,6 %; исправлены: успешная публикация считалась таймаутом, потеря сообщения на границе окна пачки, серверные модули вне Kover-гейта; `test-dynsec-dev.sh` на стенде 21/21 |

@@ -91,10 +91,10 @@ Swagger UI бэкенда (создать ресторан, выпустить �
 - [ ] Ночной прогон на эмуляторе: телеметрия без пропусков, outbox после 1 ч офлайна.
 
 ### К3. Брокер и ядро бэкенда (5 дней)
-- [ ] Mosquitto: роль `device` с ACL по направлениям, `clientid = deviceId`, persistence.
+- [x] Mosquitto: роль `device` с ACL по направлениям, `clientid = deviceId`, persistence.
 - [ ] `server:domain` — use cases 4.2 (TDD); `server:data` — репозитории, миграции, ingest с ack после commit, DynSec-клиент; `server:api` — routes + OpenAPI/Swagger; `server:app` — Koin, конфиг, CLI `migrate`/`seed`.
 - [ ] Dev-seed ресторанов и пользователя admin.
-- [ ] Интеграционные тесты (Testcontainers): provision → telemetry → БД; команда офлайн-устройству → доставка / `expired`; отозванная учётка не подключается.
+- [x] Интеграционные тесты (Testcontainers): provision → telemetry → БД; команда офлайн-устройству → доставка / `expired`; отозванная учётка не подключается.
 
 ### К4. Симулятор и эксперимент (3 дня)
 - [ ] Симулятор по 4.6, тесты генераторов профилей.
