@@ -25,7 +25,7 @@ dependencies {
 kover {
     currentProject {
         // Вариант для агрегированного CI-гейта (корневой build.gradle.kts)
-        createVariant("ci") {}
+        createVariant("ci") { add("jvm") }
     }
     reports {
         verify {

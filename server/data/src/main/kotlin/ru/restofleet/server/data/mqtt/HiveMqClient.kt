@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit
 import javax.net.ssl.TrustManagerFactory
 
 /**
- * Одно MQTT 5-соединение бэкенда (HiveMQ 1.4.2) для ingest, публикаций и `$CONTROL` DynSec (реш. 230, 234):
+ * Одно MQTT 5-соединение бэкенда (HiveMQ 1.4.2) для ingest, публикаций и `$CONTROL` DynSec (реш. 230, 234, 242):
  * - стабильный `clientId`, `Clean Start = false`, Session Expiry 24 ч — брокер копит сообщения, пока бэкенд недоступен;
  * - все входящие — с ручным подтверждением; ответы `$CONTROL` подтверждаются сразу, сообщения устройств — вызывающим;
  * - автопереподключение 1…30 с; если сессии на брокере нет (истекла, брокер без persistence) — подписки заново;

@@ -47,7 +47,7 @@ dependencies {
 
 kover {
     currentProject {
-        createVariant("ci") {}
+        createVariant("ci") { add("jvm") }
     }
     reports {
         verify {

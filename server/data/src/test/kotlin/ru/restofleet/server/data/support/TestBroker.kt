@@ -82,7 +82,7 @@ object TestBroker {
     /** Роли продукта из `deploy/mosquitto/dynsec-roles.sh` + клиент `backend` (как в `dynsec-dev.sh`). */
     private fun applyRoles(broker: GenericContainer<*>) {
         val roles = File(System.getProperty("rf.deployDir"), "mosquitto/dynsec-roles.sh").readText()
-        // backend создаётся без clientid: тесты подключают несколько экземпляров (на стенде clientid = backend)
+        // backend без clientid: тесты подключают несколько экземпляров (на стенде clientid = backend; реш. 243)
         val script = """
             set -eu
             ctrl() { mosquitto_ctrl -h localhost -p $PORT -u admin -P '$ADMIN_PASSWORD' "${'$'}@"; }
