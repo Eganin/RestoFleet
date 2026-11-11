@@ -7,6 +7,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Периодическая задача бэкенда: [action] возвращает число затронутых записей (для лога). */
 class PeriodicJob(val name: String, val periodMillis: Long, val action: suspend () -> Int) {
@@ -58,6 +59,7 @@ class BackendRuntime(
 ) {
     private var ingestJob: Job? = null
     private val jobHandles = mutableListOf<Job>()
+    private val stopped = AtomicBoolean(false)
 
     fun start() {
         ingestJob = ingest.start(scope).also { job ->
@@ -68,7 +70,10 @@ class BackendRuntime(
         jobs.forEach { jobHandles += scope.launchPeriodic(it) }
     }
 
+    /** Идемпотентно: Ktor поднимает событие остановки и из shutdown hook, и из `main` после выхода сервера. */
     suspend fun stop() {
+        if (!stopped.compareAndSet(false, true)) return
+        log.info { "stopping: ingest, background jobs, then Koin" }
         ingest.stop()
         jobHandles.forEach { it.cancel() }
         jobHandles.forEach { it.join() }

@@ -66,7 +66,10 @@ class BackgroundJobsTest {
         advanceTimeBy(3_500)
         runCurrent()
         val ticksBeforeStop = ticks
-        val stopper = launch { runtime.stop() }
+        val stopper = launch {
+            runtime.stop()
+            runtime.stop()
+        }
         runCurrent()
         stopper.cancel()
         advanceTimeBy(5_000)
@@ -74,7 +77,7 @@ class BackgroundJobsTest {
 
         assertThat(ticksBeforeStop).isEqualTo(3)
         assertThat(ticks).isEqualTo(3)
-        assertThat(events).containsAtLeast("ingest started", "ingest stopped").inOrder()
+        assertThat(events).containsExactly("ingest started", "ingest stopped").inOrder()
         assertThat(events).doesNotContain("fatal")
     }
 

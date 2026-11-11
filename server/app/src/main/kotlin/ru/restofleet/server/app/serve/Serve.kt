@@ -72,7 +72,6 @@ internal fun Application.backendModule(runtime: RuntimeConfig) {
         log.info { "backend started: ingest and background jobs are running" }
     }
     monitor.subscribe(ApplicationStopPreparing) {
-        log.info { "stopping: ingest, background jobs, then Koin" }
         runBlocking { background.stop() }
         scope.cancel()
     }

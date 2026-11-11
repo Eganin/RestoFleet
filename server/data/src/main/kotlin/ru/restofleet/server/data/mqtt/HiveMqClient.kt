@@ -6,6 +6,8 @@ import com.hivemq.client.mqtt.datatypes.MqttQos
 import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient
 import com.hivemq.client.mqtt.mqtt5.Mqtt5Client
 import com.hivemq.client.mqtt.mqtt5.lifecycle.Mqtt5ClientConnectedContext
+import com.hivemq.client.mqtt.mqtt5.lifecycle.Mqtt5ClientDisconnectedContext
+import com.hivemq.client.mqtt.mqtt5.message.connect.Mqtt5Connect
 import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5Publish
 import com.hivemq.client.mqtt.mqtt5.message.subscribe.Mqtt5Subscribe
 import com.hivemq.client.mqtt.mqtt5.message.subscribe.Mqtt5Subscription
@@ -21,7 +23,8 @@ import javax.net.ssl.TrustManagerFactory
  * Одно MQTT 5-соединение бэкенда (HiveMQ 1.4.2) для ingest, публикаций и `$CONTROL` DynSec (реш. 230, 234, 242):
  * - стабильный `clientId`, `Clean Start = false`, Session Expiry 24 ч — брокер копит сообщения, пока бэкенд недоступен;
  * - все входящие — с ручным подтверждением; ответы `$CONTROL` подтверждаются сразу, сообщения устройств — вызывающим;
- * - автопереподключение 1…30 с; если сессии на брокере нет (истекла, брокер без persistence) — подписки заново;
+ * - автопереподключение 1…30 с тем же CONNECT (учётка, `Clean Start = false`); если сессии на брокере нет (истекла,
+ *   брокер без persistence) — подписки заново;
  * - TLS с доверием только к CA стенда ([trust]); `null` — без TLS, только тесты (реш. 232).
  *
  * Обработчики ставятся **до** [connect]: после CONNACK брокер сразу шлёт накопленное.
@@ -35,6 +38,20 @@ class HiveMqClient(private val config: MqttConfig, trust: TrustManagerFactory?) 
 
     @Volatile private var subscriptions: List<String> = emptyList()
 
+    /** Один CONNECT на первое подключение и все переподключения: учётка, постоянная сессия, Receive Maximum (P10). */
+    private val connectMessage: Mqtt5Connect = Mqtt5Connect.builder()
+        .cleanStart(false)
+        .sessionExpiryInterval(config.sessionExpirySec)
+        .keepAlive(config.keepAliveSec)
+        .simpleAuth()
+        .username(config.username)
+        .password(config.password.toByteArray(Charsets.UTF_8))
+        .applySimpleAuth()
+        .restrictions()
+        .receiveMaximum(config.receiveMaximum)
+        .applyRestrictions()
+        .build()
+
     private val client: Mqtt5AsyncClient = Mqtt5Client.builder()
         .identifier(config.clientId)
         .serverHost(config.host)
@@ -47,6 +64,9 @@ class HiveMqClient(private val config: MqttConfig, trust: TrustManagerFactory?) 
         .addConnectedListener(::onConnected)
         .addDisconnectedListener { ctx ->
             log.warn { "MQTT disconnected (${ctx.source}): ${ctx.cause.javaClass.simpleName}" }
+            // Автопереподключение HiveMQ по умолчанию шлёт CONNECT без учётки и с Clean Start = true: брокер отвечал
+            // «not authorised» бесконечно (найдено на стенде, КМ2b). Повтор — тем же CONNECT, что и первое подключение
+            (ctx as? Mqtt5ClientDisconnectedContext)?.reconnector?.connect(connectMessage)
         }
         .buildAsync()
 
@@ -66,19 +86,7 @@ class HiveMqClient(private val config: MqttConfig, trust: TrustManagerFactory?) 
 
     /** Первое подключение; при ошибке бросает (повтор решает вызывающий), дальше переподключается сам. */
     suspend fun connect() {
-        client.connectWith()
-            .cleanStart(false)
-            .sessionExpiryInterval(config.sessionExpirySec)
-            .keepAlive(config.keepAliveSec)
-            .simpleAuth()
-            .username(config.username)
-            .password(config.password.toByteArray(Charsets.UTF_8))
-            .applySimpleAuth()
-            .restrictions()
-            .receiveMaximum(config.receiveMaximum)
-            .applyRestrictions()
-            .send()
-            .await()
+        client.connect(connectMessage).await()
     }
 
     /** QoS 1; отказ брокера в SUBACK (например, нет прав) — [IllegalStateException]. Подписки запоминаются. */

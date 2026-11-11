@@ -36,12 +36,14 @@ class MqttBackend(
 
     fun start(scope: CoroutineScope): Job = scope.launch {
         var pause = INITIAL_RETRY_MS
-        while (true) {
+        // После неудачного первого CONNECT HiveMQ переподключается и сам: тогда наш повторный connect() отвечает
+        // «already connecting/connected», и ждать надо уже его, а не повторять connect() бесконечно
+        while (!client.isConnected) {
             try {
                 client.connect()
-                break
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 if (e is kotlin.coroutines.cancellation.CancellationException) throw e
+                if (client.isConnected) break
                 log.warn { "MQTT connect failed (${e.javaClass.simpleName}), retry in $pause ms" }
                 delay(pause)
                 pause = (pause * 2).coerceAtMost(MAX_RETRY_MS)
