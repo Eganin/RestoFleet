@@ -19,3 +19,5 @@ spikes/**/results/creds*.csv
 .superpowers/
 # Run logs (tools/emulators/run-matrix.sh)
 logs/
+# Coursework docx: built by tools/coursework/build_docx.py, committed only at stage close
+docs/coursework/RestoFleet-coursework.docx
