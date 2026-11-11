@@ -13,7 +13,7 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.updateReturning
-import ru.restofleet.server.data.mapper.ShadowJson
+import ru.restofleet.shared.protocol.ShadowJson
 import ru.restofleet.server.domain.command.Command
 import ru.restofleet.server.domain.command.CommandReasons
 import ru.restofleet.server.domain.command.CommandRepository

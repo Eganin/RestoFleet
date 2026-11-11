@@ -1,11 +1,7 @@
-package ru.restofleet.server.data.mapper
+package ru.restofleet.shared.protocol
 
 import com.google.common.truth.Truth.assertThat
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Test
-import ru.restofleet.server.domain.shadow.DefaultDesired
-import ru.restofleet.shared.protocol.RfJson
 import ru.restofleet.shared.protocol.dto.ShadowDesiredDto
 import ru.restofleet.shared.shadow.ShadowDocument
 import ru.restofleet.shared.shadow.ShadowValue
@@ -83,16 +79,6 @@ class ShadowJsonTest {
     fun `decode rejects anything but an object`() {
         assertFailsWith<IllegalArgumentException> { ShadowJson.decode("[1,2]") }
         assertFailsWith<IllegalArgumentException> { ShadowJson.decode("\"x\"") }
-    }
-
-    @Test
-    fun `default desired encodes into a document the agent dto accepts`() {
-        val body = JsonObject(mapOf("version" to JsonPrimitive(1)) + ShadowJson.toJson(DefaultDesired.document))
-
-        val dto = RfJson.decodeFromJsonElement(ShadowDesiredDto.serializer(), body)
-
-        assertThat(dto.version).isEqualTo(1)
-        assertThat(dto.telemetry.intervalSec).isGreaterThan(0)
     }
 
     @Test

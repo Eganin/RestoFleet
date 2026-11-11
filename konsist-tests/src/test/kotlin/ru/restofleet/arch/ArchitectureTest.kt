@@ -14,7 +14,8 @@ import org.junit.Test
  * - domain: `<part>/domain/`, `<feature>-domain/`, `shared/{kernel,shadow,probes}/`;
  * - presentation: `<part>/presentation/`, `<feature>-ui/`, `console/core/mvi/`;
  * - composition root: `<part>/app/`, `console/app-<platform>/`, `console/root/`, `<feature>-component/`, пакеты `di`.
- * `shared:protocol` — DTO транспорта, то есть слой data.
+ * `shared:protocol` — DTO транспорта, то есть слой data. Исключение — `server:api` (presentation бэкенда): REST-DTO
+ * устройства из `shared:protocol.rest` — это его request/response DTO (реш. 222, 245), правило — отдельный тест.
  */
 class ArchitectureTest {
 
@@ -77,6 +78,19 @@ class ArchitectureTest {
     }
 
     @Test
+    fun serverApiIsFoundAndDoesNotImportDataOrInfrastructure() {
+        // server:api — presentation бэкенда (КМ2b, реш. 245): только domain и REST-контракт устройства из
+        // shared:protocol (реш. 222); реализации портов, Exposed, HiveMQ, JDBC-пул и composition root — нельзя
+        val api = production.filter { "/server/api/src/" in it.normalizedPath }
+        assertWithMessage("server:api files").that(api).isNotEmpty()
+        api.assertFalse(testName = "server api imports data layer, app or infrastructure") { file ->
+            file.imports.any { import ->
+                import.name.contains(".data.") || SERVER_API_FORBIDDEN.any { import.name.startsWith(it) }
+            }
+        }
+    }
+
+    @Test
     fun presentationDoesNotImportDataOrTransport() {
         presentationFiles.assertFalse(testName = "presentation imports data layer or transport DTO") { file ->
             file.imports.any { import -> isDataLayer(import.name) }
@@ -130,6 +144,11 @@ class ArchitectureTest {
         )
 
         val SERVER_OUTER = listOf("ru.restofleet.server.api", "ru.restofleet.server.app")
+
+        val SERVER_API_FORBIDDEN = listOf(
+            "ru.restofleet.server.app", "org.jetbrains.exposed.", "com.hivemq.", "org.flywaydb.", "com.zaxxer.",
+            "org.postgresql.", "at.favre.", "javax.sql.",
+        )
 
         /** Сейчас их 30 (КМ2a); порог ловит потерю правила при переносе пакетов. */
         const val MIN_SERVER_USE_CASES = 30

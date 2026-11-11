@@ -27,6 +27,7 @@ import ru.restofleet.server.data.ingest.InboundProcessor
 import ru.restofleet.server.data.ingest.IngestMetrics
 import ru.restofleet.server.data.ingest.IngestPipeline
 import ru.restofleet.server.data.ingest.IngestProcessor
+import ru.restofleet.server.data.ingest.RestPayloadDecoder
 import ru.restofleet.server.data.mqtt.DynSecBrokerAccounts
 import ru.restofleet.server.data.mqtt.HiveMqClient
 import ru.restofleet.server.data.mqtt.HiveMqPublisher
@@ -163,6 +164,7 @@ val dataModule = module {
     single<BrokerAccounts> { DynSecBrokerAccounts(get(), get<DataConfig>().mqtt.requestTimeoutMs) }
     singleOf(::IngestMetrics)
     single { DeviceMessageDecoder(get<DataConfig>().ingest.maxPayloadBytes) }
+    singleOf(::RestPayloadDecoder)
     single<InboundProcessor> { IngestProcessor(get(), get(), get(), get(), get(), get()) }
     single { IngestPipeline(get(), get<DataConfig>().ingest, get()) }
     single { MqttBackend(get(), get()) }

@@ -1,4 +1,4 @@
-package ru.restofleet.server.data.mapper
+package ru.restofleet.shared.protocol
 
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -7,7 +7,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
-import ru.restofleet.shared.protocol.RfJson
 import ru.restofleet.shared.shadow.ShadowDocument
 import ru.restofleet.shared.shadow.ShadowValue
 import kotlin.math.abs

@@ -6,7 +6,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
-import ru.restofleet.server.data.mapper.ShadowJson
+import ru.restofleet.shared.protocol.ShadowJson
 import ru.restofleet.server.domain.command.CommandReport
 import ru.restofleet.server.domain.command.ReportedCommandStatus
 import ru.restofleet.server.domain.device.DeviceAnnouncement

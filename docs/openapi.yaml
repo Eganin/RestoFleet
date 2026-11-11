@@ -1,0 +1,828 @@
+openapi: 3.0.3
+info:
+  title: RestoFleet backend API
+  version: "1.0.0-coursework"
+  description: |
+    REST API бэкенда RestoFleet (этап «курсовая», ТЗ 8.2). Рукописная спецификация (реш. 212): тест
+    `OpenApiSpecTest` сверяет, что каждый маршрут Ktor описан здесь, а `docs/openapi.yaml` — копия этого файла.
+
+    * Консоль и Swagger: `POST /api/v1/auth/login` → `accessToken` (JWT, 15 мин) в кнопке **Authorize** (`bearerAuth`).
+    * Агент и симулятор: `POST /api/v1/provision` (без JWT) по одноразовому коду; REST-polling — HTTP Basic
+      `deviceId:password` (`deviceBasic`).
+    * Время — epoch ms (UTC). Ошибки — `{code, message, field?, reason?}`.
+    * Стенд: `https://localhost:8443` (nginx стенда, CA `deploy/certs/out/public/ca.crt`), из эмулятора —
+      `https://10.0.2.2:8443`.
+servers:
+  - url: /
+tags:
+  - name: auth
+  - name: restaurants
+  - name: devices
+  - name: shadow
+  - name: commands
+  - name: provisioning
+  - name: polling
+  - name: health
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Состояние бэкенда (БД и брокер)
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/Healthy" }
+        "503": { $ref: "#/components/responses/Degraded" }
+  /api/v1/health:
+    get:
+      tags: [health]
+      summary: То же, что /health, под префиксом API
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/Healthy" }
+        "503": { $ref: "#/components/responses/Degraded" }
+
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      summary: Вход (rate limit по IP)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Пара токенов
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/auth/refresh:
+    post:
+      tags: [auth]
+      summary: Ротация refresh-токена (одноразовый; повтор погашенного отзывает все сессии пользователя)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
+      responses:
+        "200":
+          description: Новая пара токенов
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/restaurants:
+    get:
+      tags: [restaurants]
+      summary: Все рестораны (по коду)
+      responses:
+        "200":
+          description: Рестораны
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Restaurant" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [restaurants]
+      summary: Новый ресторан
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateRestaurantRequest" }
+      responses:
+        "201":
+          description: Создан
+          headers:
+            Location: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Restaurant" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/restaurants/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [restaurants]
+      summary: Карточка ресторана
+      responses:
+        "200":
+          description: Ресторан
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Restaurant" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [restaurants]
+      summary: Частичное изменение (отсутствующее поле не меняется)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateRestaurantRequest" }
+      responses:
+        "200":
+          description: Изменён
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Restaurant" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/devices:
+    get:
+      tags: [devices]
+      summary: Список устройств
+      parameters:
+        - { name: restaurant, in: query, schema: { type: string, format: uuid } }
+        - { name: role, in: query, schema: { $ref: "#/components/schemas/DeviceRole" } }
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/DeviceStatus" } }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Устройства (по времени регистрации)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Device" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/devices/{id}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [devices]
+      summary: Карточка устройства (реестр, последняя телеметрия, последняя MQTT-сессия)
+      responses:
+        "200":
+          description: Устройство
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeviceDetails" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [devices]
+      summary: Вывод из эксплуатации (учётка DynSec отключается, сессия рвётся, retained очищаются; запись остаётся)
+      responses:
+        "200":
+          description: Выведено (повторный вызов идемпотентен и дочищает retained)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Decommission" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  /api/v1/devices/{id}/telemetry:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [devices]
+      summary: История телеметрии, новые сначала
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: metric
+          in: query
+          description: Поля через запятую (batteryLevel, charging, tempC, thermal, rssi, freeMb, availMb, foregroundApp)
+          schema: { type: string, example: "batteryLevel,tempC" }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Точки
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/TelemetryPoint" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/devices/{id}/probes:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [devices]
+      summary: История проверок доступности, новые сначала
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - { name: target, in: query, schema: { type: string } }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Результаты
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ProbeRecord" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/devices/{id}/events:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [devices]
+      summary: События устройства, новые сначала
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - { name: type, in: query, schema: { type: string, example: probe_state } }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: События
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/EventRecord" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/devices/{id}/shadow:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    get:
+      tags: [shadow]
+      summary: Тень (desired, reported, delta)
+      responses:
+        "200":
+          description: Тень
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Shadow" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [shadow]
+      summary: Изменение desired — merge-patch (объекты сливаются, списки и значения заменяются)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              example: { telemetry: { intervalSec: 60 } }
+      responses:
+        "200":
+          description: Тень после изменения; published = false — брокер не принял retained, повтор при подключении
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Shadow" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/Gone" }
+
+  /api/v1/devices/{id}/commands:
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdPath"
+    post:
+      tags: [commands]
+      summary: Команда устройству (queued → cmd/req; офлайн-устройству — при подключении)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SendCommandRequest" }
+      responses:
+        "201":
+          description: Принята
+          headers:
+            Location: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Command" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/Gone" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  /api/v1/commands/{cmdId}:
+    get:
+      tags: [commands]
+      summary: Команда и её статус
+      parameters:
+        - { name: cmdId, in: path, required: true, schema: { type: string, example: c-0b1f… } }
+      responses:
+        "200":
+          description: Команда
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Command" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/provisioning/tokens:
+    post:
+      tags: [provisioning]
+      summary: Одноразовый код регистрации (TTL 24 ч; код показывается один раз)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IssueTokenRequest" }
+      responses:
+        "201":
+          description: Код
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IssuedToken" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  "/api/v1/provisioning/tokens:batch":
+    post:
+      tags: [provisioning]
+      summary: Пакет кодов 1…1000 (симулятор)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IssueTokensBatchRequest" }
+      responses:
+        "201":
+          description: Коды
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/IssuedToken" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/provision:
+    post:
+      tags: [provisioning]
+      summary: Обмен кода на учётку устройства (агент, без JWT, rate limit по IP)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProvisionRequest" }
+      responses:
+        "201":
+          description: Учётка (пароль — один раз); адрес брокера для устройства
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProvisionResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { description: "token_invalid — код неизвестен", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "token_used — код уже погашен", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "410": { description: "token_expired — срок кода истёк", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/poll/telemetry:
+    post:
+      tags: [polling]
+      summary: REST-режим эксперимента — телеметрия, пробы и события одним запросом (отмечает присутствие)
+      security:
+        - deviceBasic: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PollTelemetryRequest" }
+      responses:
+        "204": { description: Записано }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+  /api/v1/poll/commands:
+    get:
+      tags: [polling]
+      summary: Команды устройства в статусе queued (выдаются один раз и помечаются delivered)
+      security:
+        - deviceBasic: []
+      responses:
+        "200":
+          description: Команды в формате cmd/req
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PollCommandsResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/poll/commands/result:
+    post:
+      tags: [polling]
+      summary: Результат команды (тело = MQTT cmd/res; идемпотентно по cmdId и status)
+      security:
+        - deviceBasic: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommandResult" }
+      responses:
+        "204": { description: Принято (или повтор) }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    deviceBasic:
+      type: http
+      scheme: basic
+      description: deviceId и пароль из ответа /provision
+  parameters:
+    DeviceIdPath:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, example: d-0b1f… }
+    From:
+      name: from
+      in: query
+      description: Начало интервала включительно — epoch ms или ISO-8601
+      schema: { type: string, example: "2026-11-11T00:00:00Z" }
+    To:
+      name: to
+      in: query
+      description: Конец интервала, не включается — epoch ms или ISO-8601
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 1000, default: 100 }
+    Offset:
+      name: offset
+      in: query
+      schema: { type: integer, minimum: 0, default: 0 }
+  responses:
+    Healthy:
+      description: Все компоненты доступны
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Health" }
+    Degraded:
+      description: БД или брокер недоступны
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Health" }
+    BadRequest:
+      description: "bad_request, validation (field, reason), invalid_payload (reason)"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Нет или неверные учётные данные
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Не найдено
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: Конфликт с текущим состоянием
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Gone:
+      description: Устройство выведено из эксплуатации
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    PayloadTooLarge:
+      description: Тело больше 1 МБ
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    TooManyRequests:
+      description: Превышен rate limit (заголовок Retry-After)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unavailable:
+      description: Брокер или БД недоступны
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, example: validation }
+        message: { type: string }
+        field: { type: string, example: telemetry.intervalSec }
+        reason: { type: string, example: out_of_range }
+    Health:
+      type: object
+      required: [status, components]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        components:
+          type: object
+          additionalProperties: { type: boolean }
+          example: { database: true, broker: true }
+    LoginRequest:
+      type: object
+      required: [login, password]
+      properties:
+        login: { type: string, example: admin }
+        password: { type: string, format: password }
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string }
+    TokenResponse:
+      type: object
+      required: [accessToken, accessExpiresAt, refreshToken, refreshExpiresAt, tokenType]
+      properties:
+        accessToken: { type: string }
+        accessExpiresAt: { type: integer, format: int64 }
+        refreshToken: { type: string }
+        refreshExpiresAt: { type: integer, format: int64 }
+        tokenType: { type: string, example: Bearer }
+    Restaurant:
+      type: object
+      required: [id, code, name, city, address, timezone, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, example: MSK-01 }
+        name: { type: string }
+        city: { type: string }
+        address: { type: string }
+        timezone: { type: string, example: Europe/Moscow }
+        createdAt: { type: integer, format: int64 }
+        updatedAt: { type: integer, format: int64 }
+    CreateRestaurantRequest:
+      type: object
+      required: [code, name, city, timezone]
+      properties:
+        code: { type: string, pattern: "^[A-Za-z0-9_-]{1,32}$" }
+        name: { type: string, maxLength: 200 }
+        city: { type: string, maxLength: 200 }
+        address: { type: string, maxLength: 200, default: "" }
+        timezone: { type: string, description: IANA-зона }
+    UpdateRestaurantRequest:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        city: { type: string }
+        address: { type: string }
+        timezone: { type: string }
+    DeviceRole:
+      type: string
+      enum: [kitchen, hall, assembly]
+    DeviceStatus:
+      type: string
+      enum: [provisioned, online, offline, decommissioned]
+    DeviceInfo:
+      type: object
+      required: [model, manufacturer, osVersion, apiLevel]
+      properties:
+        model: { type: string, maxLength: 100 }
+        manufacturer: { type: string, maxLength: 100 }
+        osVersion: { type: string, maxLength: 32 }
+        apiLevel: { type: integer }
+    Device:
+      type: object
+      required: [id, restaurantId, role, status, createdAt]
+      properties:
+        id: { type: string }
+        restaurantId: { type: string, format: uuid }
+        role: { $ref: "#/components/schemas/DeviceRole" }
+        name: { type: string }
+        status: { $ref: "#/components/schemas/DeviceStatus" }
+        transport: { type: string, enum: [mqtt, poll] }
+        lastSeenAt: { type: integer, format: int64 }
+        decommissionedAt: { type: integer, format: int64 }
+        createdAt: { type: integer, format: int64 }
+        agentVersion: { type: string }
+        mode: { type: string, enum: [normal, device_owner] }
+        deviceInfo: { $ref: "#/components/schemas/DeviceInfo" }
+    TelemetryPoint:
+      type: object
+      required: [ts, seq]
+      properties:
+        ts: { type: integer, format: int64 }
+        seq: { type: integer, format: int64 }
+        batteryLevel: { type: integer }
+        charging: { type: boolean }
+        tempC: { type: number }
+        thermal: { type: string }
+        rssi: { type: integer }
+        freeMb: { type: integer, format: int64 }
+        availMb: { type: integer, format: int64 }
+        foregroundApp: { type: string }
+    Session:
+      type: object
+      required: [connId, connectedAt]
+      properties:
+        connId: { type: string }
+        connectedAt: { type: integer, format: int64 }
+        disconnectedAt: { type: integer, format: int64 }
+        reason: { type: string, example: lwt }
+    DeviceDetails:
+      type: object
+      required: [device]
+      properties:
+        device: { $ref: "#/components/schemas/Device" }
+        lastTelemetry: { $ref: "#/components/schemas/TelemetryPoint" }
+        lastSession: { $ref: "#/components/schemas/Session" }
+    Decommission:
+      type: object
+      required: [device, retainedCleared]
+      properties:
+        device: { $ref: "#/components/schemas/Device" }
+        retainedCleared: { type: boolean }
+    ProbeRecord:
+      type: object
+      required: [ts, target, ok, totalMs]
+      properties:
+        ts: { type: integer, format: int64 }
+        target: { type: string }
+        ok: { type: boolean }
+        status: { type: integer }
+        error: { type: string, example: timeout }
+        totalMs: { type: integer, format: int64 }
+        dnsMs: { type: integer, format: int64 }
+        connectMs: { type: integer, format: int64 }
+        tlsMs: { type: integer, format: int64 }
+        ttfbMs: { type: integer, format: int64 }
+    EventRecord:
+      type: object
+      required: [ts, type, payload]
+      properties:
+        ts: { type: integer, format: int64 }
+        type: { type: string }
+        payload: { type: object, additionalProperties: true }
+    Shadow:
+      type: object
+      required: [deviceId, desired, desiredVersion, desiredUpdatedAt, errors, delta, pending]
+      properties:
+        deviceId: { type: string }
+        desired: { type: object, additionalProperties: true }
+        desiredVersion: { type: integer, format: int64 }
+        desiredUpdatedAt: { type: integer, format: int64 }
+        reported: { type: object, additionalProperties: true }
+        reportedVersion: { type: integer, format: int64 }
+        appliedAt: { type: integer, format: int64 }
+        reportedAt: { type: integer, format: int64 }
+        errors: { type: array, items: { type: string } }
+        delta: { type: object, additionalProperties: true, description: "Пустой объект — тень применена" }
+        pending: { type: boolean }
+        published: { type: boolean, description: Только в ответе на PUT }
+    SendCommandRequest:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          example: ping
+          description: ping, reboot, beep, show_message, launch_app, lock_task, run_probe, collect_diagnostics
+        params: { type: object, additionalProperties: true, default: {} }
+        ttlSec: { type: integer, minimum: 1, maximum: 86400, default: 300 }
+    Command:
+      type: object
+      required: [cmdId, deviceId, type, params, status, createdAt, expiresAt]
+      properties:
+        cmdId: { type: string }
+        deviceId: { type: string }
+        type: { type: string }
+        params: { type: object, additionalProperties: true }
+        status: { type: string, enum: [queued, delivered, succeeded, failed, unsupported, expired] }
+        createdAt: { type: integer, format: int64 }
+        expiresAt: { type: integer, format: int64 }
+        deliveredAt: { type: integer, format: int64 }
+        finishedAt: { type: integer, format: int64 }
+        result: { type: object, additionalProperties: { type: string } }
+        reason: { type: string }
+    IssueTokenRequest:
+      type: object
+      required: [restaurantId, role]
+      properties:
+        restaurantId: { type: string, format: uuid }
+        role: { $ref: "#/components/schemas/DeviceRole" }
+        name: { type: string, maxLength: 100 }
+    IssueTokensBatchRequest:
+      type: object
+      required: [restaurantId, role, count]
+      properties:
+        restaurantId: { type: string, format: uuid }
+        role: { $ref: "#/components/schemas/DeviceRole" }
+        name: { type: string, maxLength: 100 }
+        count: { type: integer, minimum: 1, maximum: 1000 }
+    IssuedToken:
+      type: object
+      required: [id, code, restaurantId, role, expiresAt]
+      properties:
+        id: { type: string }
+        code: { type: string, description: "26 символов base32 Крокфорда; регистр, пробелы и дефисы не важны" }
+        restaurantId: { type: string }
+        role: { $ref: "#/components/schemas/DeviceRole" }
+        name: { type: string }
+        expiresAt: { type: integer, format: int64 }
+    ProvisionRequest:
+      type: object
+      required: [code, deviceInfo, agentVersion]
+      properties:
+        code: { type: string }
+        deviceInfo: { $ref: "#/components/schemas/DeviceInfo" }
+        agentVersion: { type: string, maxLength: 64 }
+    ProvisionResponse:
+      type: object
+      required: [deviceId, password, restaurantId, role, mqtt]
+      properties:
+        deviceId: { type: string, description: "MQTT clientId и username" }
+        password: { type: string, format: password }
+        restaurantId: { type: string }
+        role: { $ref: "#/components/schemas/DeviceRole" }
+        mqtt:
+          type: object
+          required: [host, port]
+          properties:
+            host: { type: string, example: 10.0.2.2 }
+            port: { type: integer, example: 8883 }
+    PollTelemetryRequest:
+      type: object
+      required: [telemetry]
+      description: Части — сообщения MQTT telemetry, probe и events (ТЗ 7.2) того же формата
+      properties:
+        telemetry: { type: object, additionalProperties: true }
+        probe: { type: object, additionalProperties: true }
+        events: { type: array, items: { type: object, additionalProperties: true } }
+    PollCommandsResponse:
+      type: object
+      required: [commands]
+      properties:
+        commands:
+          type: array
+          items:
+            type: object
+            required: [cmdId, type, params]
+            properties:
+              cmdId: { type: string }
+              type: { type: string }
+              params: { type: object, additionalProperties: true }
+              expiresAt: { type: integer, format: int64 }
+    CommandResult:
+      type: object
+      required: [cmdId, status, ts]
+      properties:
+        cmdId: { type: string }
+        status: { type: string, enum: [received, succeeded, failed, unsupported] }
+        ts: { type: integer, format: int64 }
+        result: { type: object, additionalProperties: { type: string } }
+        reason: { type: string }

@@ -5,7 +5,7 @@ import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5Publish
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import ru.restofleet.server.data.mapper.ShadowJson
+import ru.restofleet.shared.protocol.ShadowJson
 import ru.restofleet.server.domain.command.Command
 import ru.restofleet.server.domain.common.ServerError
 import ru.restofleet.server.domain.common.ServerError.BrokerUnavailable

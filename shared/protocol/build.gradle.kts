@@ -24,6 +24,8 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(projects.shared.kernel)
+            // ShadowJson: JSON ↔ ShadowDocument — общий маппер тени для бэкенда (data, api) и агента (реш. 244)
+            api(projects.shared.shadow)
             implementation(libs.kotlinx.serialization.json)
         }
         jvmTest.dependencies {

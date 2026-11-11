@@ -8,7 +8,7 @@ import org.jetbrains.exposed.v1.core.vendors.ForUpdateOption
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
-import ru.restofleet.server.data.mapper.ShadowJson
+import ru.restofleet.shared.protocol.ShadowJson
 import ru.restofleet.server.domain.shadow.ReportedShadow
 import ru.restofleet.server.domain.shadow.Shadow
 import ru.restofleet.server.domain.shadow.ShadowRepository
