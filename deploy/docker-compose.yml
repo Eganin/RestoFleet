@@ -1,6 +1,26 @@
-# Стенд RestoFleet (MVP): Mosquitto 2.1 — TLS 8883 + Dynamic Security + persistence; apk-host — nginx, HTTPS 8443.
-# Порядок запуска — deploy/README.md.
+# Стенд RestoFleet: Mosquitto 2.1 (TLS 8883 + Dynamic Security + persistence), apk-host — nginx (HTTPS 8443: APK и
+# прокси на бэкенд), PostgreSQL 17 (TimescaleDB), бэкенд Ktor (`migrate` → `serve`), Toxiproxy (деградация сети),
+# dev-seed (profile `dev`). Подготовка секретов и порядок запуска — deploy/README.md (`./prepare-stand.sh`, затем
+# `docker compose --profile dev up -d --wait`).
 name: restofleet
+
+# Один образ бэкенда на serve, migrate и seed: ./gradlew :server:app:installDist && docker compose build backend
+x-backend: &backend
+  image: restofleet/backend:dev
+  build:
+    context: ../server/app
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  environment:
+    # Секретов в окружении нет — только пути к файлам /run/secrets/* (реш. 252); здесь — то, что зависит от стенда
+    RF_PROVISIONING_BROKERHOST: ${RF_PROVISIONING_BROKERHOST:-10.0.2.2}
+    RF_PROVISIONING_BROKERPORT: ${RF_PROVISIONING_BROKERPORT:-8883}
+    RF_RATELIMIT_LOGINPERMINUTE: ${RF_RATELIMIT_LOGINPERMINUTE:-10}
+    RF_RATELIMIT_PROVISIONPERMINUTE: ${RF_RATELIMIT_PROVISIONPERMINUTE:-60}
+    RF_POLLING_STALEAFTERMS: ${RF_POLLING_STALEAFTERMS:-90000}
 
 services:
   mosquitto:
@@ -34,10 +54,11 @@ services:
       retries: 6
       start_period: 5s
 
-  # Раздача APK (D3/R7/R12): https://localhost:8443/waiter-4.N.apk, с эмулятора https://10.0.2.2:8443/...
+  # HTTPS-шлюз стенда (реш. 211): раздача APK (D3/R7/R12) и прокси /api/, /health, /swagger на backend:8080.
   # Монтируются только серверный сертификат с ключом (certs/out/broker, без ключа CA) и APK (read-only).
   # Ключ 600 читает master-процесс nginx (root) благодаря DAC_READ_SEARCH (на Linux владелец ключа — uid хоста,
   # без этой capability root в контейнере его не прочитает; решение 96). Worker-процессы ключа не видят.
+  # Бэкенд резолвится при запросе (resolver Docker): APK раздаются и без него.
   apk-host:
     image: nginx:1.30.6-alpine
     restart: unless-stopped
@@ -62,6 +83,92 @@ services:
       retries: 6
       start_period: 3s
 
+  # PostgreSQL 17 + TimescaleDB (гипертаблицы — Д). Наружу не публикуется: psql — `docker compose exec postgres psql`.
+  postgres:
+    image: timescale/timescaledb:2.31.0-pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: restofleet
+      POSTGRES_USER: restofleet
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres-password
+    secrets: [postgres-password]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U restofleet -d restofleet"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  # Одноразово перед бэкендом: миграции Flyway (реш. 253). Повторный запуск идемпотентен.
+  migrate:
+    <<: *backend
+    command: ["migrate"]
+    restart: "no"
+    secrets: [postgres-password]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # REST API + ingest MQTT (TLS к mosquitto:8883, CA стенда) + фоновые задачи. На хост — только loopback:
+  # снаружи бэкенд доступен через nginx https://<host>:8443/api/ (реш. 211).
+  backend:
+    <<: *backend
+    command: ["serve"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    secrets: [postgres-password, backend-mqtt-password, jwt-secret]
+    volumes:
+      - ./certs/out/public/ca.crt:/certs/ca.crt:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      mosquitto:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 30s
+
+  # Dev-seed стенда (profile dev): 40 вымышленных ресторанов и admin; пароль admin — секрет, не файл seed.
+  seed:
+    <<: *backend
+    profiles: ["dev"]
+    command: ["seed", "--restaurants", "/seed/restaurants.yaml", "--users", "/seed/users.yaml"]
+    restart: "no"
+    secrets: [postgres-password, admin-password]
+    volumes:
+      - ./seed:/seed:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # Деградация сети (S7′, эксперимент КМ4): прокси api → apk-host:443 (цель проб агента), mqtt → mosquitto:8883,
+  # rest → backend:8080. Управление — REST API toxiproxy на 127.0.0.1:8474 (README, «Toxiproxy»).
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    restart: unless-stopped
+    command: ["-host=0.0.0.0", "-config=/config/toxiproxy.json"]
+    ports:
+      - "127.0.0.1:8474:8474"
+      - "127.0.0.1:18443:18443"
+      - "127.0.0.1:18883:18883"
+      - "127.0.0.1:18080:18080"
+    volumes:
+      - ./toxiproxy.json:/config/toxiproxy.json:ro
+    healthcheck:
+      test: ["CMD", "/toxiproxy-cli", "list"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 3s
+
   # Однократно: docker compose --profile init run --rm dynsec-init
   dynsec-init:
     image: eclipse-mosquitto:2.1.2-alpine
@@ -73,5 +180,17 @@ services:
       - mosquitto-data:/mosquitto/data
     entrypoint: ["/bin/sh", "/init-dynsec.sh"]
 
+# Секреты — файлы deploy/out/* (600, вне git; создаёт prepare-stand.sh, пароль backend MQTT — dynsec-dev.sh)
+secrets:
+  postgres-password:
+    file: ./out/postgres-password
+  backend-mqtt-password:
+    file: ./out/backend-mqtt-password
+  jwt-secret:
+    file: ./out/jwt-secret
+  admin-password:
+    file: ./out/admin-password
+
 volumes:
   mosquitto-data:
+  postgres-data:

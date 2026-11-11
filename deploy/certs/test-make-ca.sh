@@ -12,7 +12,7 @@ OUT_DIR="$tmp" "$here/make-ca.sh" 192.168.50.7 >/dev/null
 openssl verify -CAfile "$tmp/ca.crt" "$tmp/server.crt" | grep -q ': OK$' || fail "server.crt is not signed by ca.crt"
 
 san="$(openssl x509 -in "$tmp/server.crt" -noout -ext subjectAltName)"
-for want in "DNS:localhost" "DNS:mosquitto" "DNS:apk-host" "IP Address:127.0.0.1" "IP Address:10.0.2.2" "IP Address:192.168.50.7"; do
+for want in "DNS:localhost" "DNS:mosquitto" "DNS:apk-host" "DNS:backend" "DNS:toxiproxy" "IP Address:127.0.0.1" "IP Address:10.0.2.2" "IP Address:192.168.50.7"; do
   grep -q "$want" <<<"$san" || fail "SAN missing $want"
 done
 

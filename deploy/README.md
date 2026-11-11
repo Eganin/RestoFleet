@@ -1,19 +1,78 @@
-# Стенд RestoFleet (MVP)
+# Стенд RestoFleet
 
-Mosquitto 2.1.2: только TLS на `8883`, анонимы запрещены, учётки — Dynamic Security, persistence на томе `restofleet_mosquitto-data`. APK-хост (nginx 1.30.6): HTTPS на `8443`.
+| Сервис | Что | Порт на хосте |
+|---|---|---|
+| `mosquitto` | Mosquitto 2.1.2: только TLS, анонимы запрещены, учётки — Dynamic Security, persistence (том `restofleet_mosquitto-data`) | `8883` (все интерфейсы: реальные устройства в LAN) |
+| `apk-host` | nginx 1.30.6 — HTTPS-шлюз стенда: раздача APK и прокси `/api/`, `/health`, `/swagger` на бэкенд (реш. 211) | `8443` |
+| `postgres` | PostgreSQL 17 + TimescaleDB 2.31 (том `restofleet_postgres-data`) | не публикуется |
+| `migrate` | одноразово: миграции Flyway (образ бэкенда, команда `migrate`) | — |
+| `backend` | бэкенд Ktor (`serve`): REST API, ingest MQTT по TLS, фоновые задачи | `127.0.0.1:8080` |
+| `seed` | profile `dev`, одноразово: 40 вымышленных ресторанов и `admin` (`deploy/seed/*.yaml`) | — |
+| `toxiproxy` | Toxiproxy 2.12.0: прокси `api`, `mqtt`, `rest` для деградации сети | `127.0.0.1:8474` (управление), `18443`, `18883`, `18080` |
 
-## Запуск (из каталога `deploy/`)
+## Запуск с нуля (из каталога `deploy/`)
 
 ```bash
-cp .env.example .env && sed -i '' "s|change-me|$(openssl rand -base64 32 | tr -d '/+=')|" .env   # один раз
-./certs/make-ca.sh                                        # CA (один раз) + серверный сертификат; LAN-IP — аргументом
-docker compose --profile init run --rm dynsec-init        # один раз: создаёт admin в dynamic-security.json
-docker compose up -d --wait                               # брокер и apk-host, ждёт healthy
-../tools/dev/build-dummy-apk.sh 13                        # один раз: APK для проверок APK-хоста (см. ниже)
-./test-stand.sh                                           # smoke: TLS, отказ анонимам и чужому паролю, нет 1883, нет ca.key и пароля в контейнере, APK-хост, persistence
+./prepare-stand.sh                              # идемпотентно: .env, CA и сертификат, секреты deploy/out/*, DynSec
+                                                # (admin, роли, учётка backend), образ бэкенда (installDist + build)
+docker compose --profile dev up -d --wait       # весь стенд одной командой: брокер, nginx, postgres, migrate,
+                                                # backend, seed, toxiproxy
+./test-backend.sh                               # smoke бэкенда (16 проверок, RED → GREEN в КМ2b)
 ```
 
-Проверка скрипта сертификатов: `./certs/test-make-ca.sh`.
+Без `--profile dev` стенд поднимается без `seed` (рестораны и `admin` не обновляются). После правки кода бэкенда: `(cd .. && ./gradlew :server:app:installDist) && docker compose build backend && docker compose up -d --wait backend`.
+
+Только брокер и APK-хост (как в MVP): `docker compose up -d --wait mosquitto apk-host`. Скрипты MVP: `./test-stand.sh` (TLS, анонимы, APK-хост, persistence; нужен `../tools/dev/build-dummy-apk.sh 13`), `./certs/test-make-ca.sh`, `mosquitto/test-dynsec-dev.sh`.
+
+## Бэкенд
+
+- **Swagger UI:** `https://localhost:8443/swagger` (CA стенда в доверенных браузера или исключение; ассеты Swagger UI грузятся с unpkg.com — нужен интернет). Кнопка **Authorize** → `accessToken` из `POST /api/v1/auth/login`. Спецификация — `docs/openapi.yaml`.
+- **Вход:** пользователь `admin`, пароль — файл `out/admin-password` (600). В оболочке, не светя пароль в argv:
+
+```bash
+printf '{"login":"admin","password":"%s"}' "$(cat out/admin-password)" > /tmp/rf-login.json   # printf — встроенная
+curl -s --cacert certs/out/public/ca.crt -H 'Content-Type: application/json' --data-binary @/tmp/rf-login.json \
+  https://localhost:8443/api/v1/auth/login | python3 -I -c 'import json,sys; print("Authorization: Bearer "+json.load(sys.stdin)["accessToken"])' > /tmp/rf-auth
+rm /tmp/rf-login.json
+curl -s --cacert certs/out/public/ca.crt -H @/tmp/rf-auth https://localhost:8443/api/v1/restaurants
+```
+
+- **Код регистрации и провижининг** (как агент; из эмулятора — `https://10.0.2.2:8443`):
+
+```bash
+curl -s --cacert certs/out/public/ca.crt -H @/tmp/rf-auth -H 'Content-Type: application/json' \
+  -d '{"restaurantId":"<id ресторана>","role":"kitchen","name":"Кухня-1"}' https://localhost:8443/api/v1/provisioning/tokens
+curl -s --cacert certs/out/public/ca.crt -H 'Content-Type: application/json' \
+  -d '{"code":"<код>","deviceInfo":{"model":"m","manufacturer":"g","osVersion":"16","apiLevel":36},"agentVersion":"1.0.0"}' \
+  https://localhost:8443/api/v1/provision        # → deviceId, password (один раз), mqtt {host: 10.0.2.2, port: 8883}
+```
+
+- **CLI образа** (`restofleet-backend`): `serve` (по умолчанию), `migrate`, `seed --restaurants <yaml> --users <yaml> [--secrets-dir <dir>]`. Повторить seed: `docker compose --profile dev run --rm seed`.
+- **Конфигурация:** `server/app/src/main/resources/application.yaml` (значения стенда) + переменные `RF_<РАЗДЕЛ>_<КЛЮЧ>` (`RF_PROVISIONING_BROKERHOST`, `RF_RATELIMIT_PROVISIONPERMINUTE`, …; часть вынесена в `.env`, см. `.env.example`). Секретов в конфигурации и окружении нет — только пути к файлам (`/run/secrets/*`, реш. 252).
+- **Журналы:** `docker compose logs -f backend` — одна строка на вызов API (статус, метод, путь без query, время), без заголовков и тел; счётчики ingest — раз в минуту при изменении.
+
+## Toxiproxy
+
+Прокси (`toxiproxy.json`), слушают на хосте только `127.0.0.1`:
+
+| Прокси | Слушает | Upstream | Для чего |
+|---|---|---|---|
+| `api` | `18443` | `apk-host:443` (nginx → `/health`, `/api/`) | цель проб агента и симулятора: из эмулятора `https://10.0.2.2:18443/health` (S7′) |
+| `mqtt` | `18883` | `mosquitto:8883` | брокер с задержкой/потерями (SAN сертификата: `toxiproxy`, `localhost`, `127.0.0.1`, `10.0.2.2`) |
+| `rest` | `18080` | `backend:8080` (HTTP) | REST-polling симулятора с деградацией |
+
+Управление — REST API на `127.0.0.1:8474`:
+
+```bash
+curl -s localhost:8474/proxies                                                    # состояние
+curl -s -X POST localhost:8474/proxies/api -d '{"enabled":false}'                 # «отказ цели» (S7′); true — вернуть
+curl -s -X POST localhost:8474/proxies/mqtt/toxics \
+  -d '{"name":"lat300","type":"latency","stream":"downstream","attributes":{"latency":300}}'   # +300 мс
+curl -s -X DELETE localhost:8474/proxies/mqtt/toxics/lat300                       # убрать
+curl -s -X POST localhost:8474/reset                                              # всё включить, токсины снять
+```
+
+Конфигурация из `toxiproxy.json` применяется при старте контейнера; изменения через API живут до перезапуска.
 
 ## Что где лежит
 
@@ -32,10 +91,14 @@ docker compose up -d --wait                               # брокер и apk-
 | `mosquitto/dynsec-dev.sh` | роли `device`, `backend-service`, `operator-dev`, dev-клиенты и учётка `backend` (идемпотентно) | да |
 | `mosquitto/test-dynsec-dev.sh` | проверка ACL и идемпотентности на живом стенде | да |
 | `out/dev-credentials.txt` | пароли dev-клиентов, `<username> <password>`, права 600 | **нет** |
-| `out/backend-mqtt-password` | пароль учётки `backend` (одна строка, права 600); его монтирует контейнер бэкенда (КМ2b) | **нет** |
-| `.env` | `DYNSEC_ADMIN_PASSWORD` | **нет** |
+| `out/backend-mqtt-password` | пароль учётки `backend` (одна строка, права 600; создаёт `dynsec-dev.sh`); монтируется бэкенду как секрет | **нет** |
+| `out/postgres-password`, `out/jwt-secret`, `out/admin-password` | пароль БД, секрет подписи JWT, пароль `admin` бэкенда (600; создаёт `prepare-stand.sh`, если файла нет). Монтируются compose `secrets` в `/run/secrets/*` только нужным сервисам | **нет** |
+| `seed/restaurants.yaml`, `seed/users.yaml` | dev-seed: 40 вымышленных ресторанов; `admin` с **именем** секрета, без пароля | да |
+| `toxiproxy.json` | прокси `api`, `mqtt`, `rest` | да |
+| `prepare-stand.sh`, `test-backend.sh` | подготовка стенда и smoke бэкенда | да |
+| `.env` | `DYNSEC_ADMIN_PASSWORD` и параметры бэкенда (`RF_*`, без секретов) | **нет** |
 
-SAN серверного сертификата: `localhost`, `mosquitto`, `apk-host`, `127.0.0.1`, `10.0.2.2` (хост из эмулятора), IP машины в LAN (реальные устройства, MVP-B). После смены сети машины — перезапустить `./certs/make-ca.sh <новый IP>` и `docker compose restart mosquitto`; CA при этом не меняется, агент перевыпуска не требует.
+SAN серверного сертификата: `localhost`, `mosquitto`, `apk-host`, `backend`, `toxiproxy`, `127.0.0.1`, `10.0.2.2` (хост из эмулятора), IP машины в LAN (реальные устройства, MVP-B). После смены сети машины — перезапустить `./certs/make-ca.sh <новый IP>` и `docker compose restart mosquitto`; CA при этом не меняется, агент перевыпуска не требует.
 
 ## APK-хост
 
@@ -93,8 +156,11 @@ docker compose exec -T mosquitto rm -rf /tmp/rfopt          # опции уда�
 ## Сброс стенда
 
 ```bash
-docker compose down -v      # удаляет том: DynSec-учётки и persistence пропадут
+docker compose --profile dev --profile init down -v   # удаляет тома: DynSec-учётки, persistence брокера и БД пропадут
+rm out/postgres-password    # только вместе с томом БД: пароль задаётся при первой инициализации тома
 ```
+
+Сбросить только БД: `docker compose stop backend postgres && docker compose rm -f postgres && docker volume rm restofleet_postgres-data`, затем `docker compose --profile dev up -d --wait` (миграции и seed пройдут заново).
 
 ## Проверки MVP
 
