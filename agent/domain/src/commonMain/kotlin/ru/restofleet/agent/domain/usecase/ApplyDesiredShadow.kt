@@ -4,18 +4,20 @@ import ru.restofleet.agent.domain.model.DesiredShadow
 import ru.restofleet.agent.domain.model.MessageKind
 import ru.restofleet.agent.domain.model.OutgoingMessage
 import ru.restofleet.agent.domain.model.ProbeTarget
-import ru.restofleet.agent.domain.model.isValidPackageName
 import ru.restofleet.agent.domain.port.PayloadEncoder
 import ru.restofleet.agent.domain.port.ShadowStore
 import ru.restofleet.shared.kernel.Clock
+import ru.restofleet.shared.shadow.DesiredLimits
+import ru.restofleet.shared.shadow.VersionDecision
+import ru.restofleet.shared.shadow.validateDesired
 
 /**
- * Применяет `shadow/desired`: версия старее сохранённой игнорируется, новее — сохраняется, и в обоих «неигнорируемых»
+ * Применяет `shadow/desired`: решение по версии и валидация — общие из `shared:shadow` ([VersionDecision],
+ * [validateDesired], реш. 225). Версия старее сохранённой игнорируется, новее — сохраняется, и в обоих «неигнорируемых»
  * случаях публикуется `reported` (повтор той же версии только повторяет `reported`). Невалидные поля не применяются:
- * интервал вне диапазона оставляет прежний применённый (без прежней тени — 30 с), причины идут в `errors` (коды
- * `telemetryIntervalSec:out_of_range`, `probes:empty_id`, `probes:empty_url:<id>`, `probes:duplicate_id:<id>`,
- * `watchedApps:empty`, `watchedApps:invalid_name:<имя>`). Сохранённую тень циклы читают сами (интервал телеметрии, цели
- * проб, отслеживаемые пакеты, 3.6b). Сбой хранилища пробрасывается: `reported` о неприменённой версии не публикуется.
+ * интервал вне диапазона оставляет прежний применённый (без прежней тени — 30 с), причины идут в `errors`. Сохранённую
+ * тень циклы читают сами (интервал телеметрии, цели проб, отслеживаемые пакеты, 3.6b). Сбой хранилища пробрасывается:
+ * `reported` о неприменённой версии не публикуется.
  */
 class ApplyDesiredShadow(
     private val store: ShadowStore,
@@ -24,66 +26,27 @@ class ApplyDesiredShadow(
     private val clock: Clock,
 ) {
     suspend operator fun invoke(d: DesiredShadow) {
-        val applied = store.appliedVersion()
-        if (applied != null && d.version < applied) return
-        val errors = mutableListOf<String>()
-        val valid = sanitize(d, errors) { store.load()?.telemetryIntervalSec ?: DEFAULT_INTERVAL_SEC }
-        if (applied == null || d.version > applied) store.save(valid)
+        val decision = VersionDecision.of(store.appliedVersion(), d.version)
+        if (decision == VersionDecision.IGNORE_OLDER) return
+        val check = validateDesired(d.telemetryIntervalSec, d.watchedApps, d.probes, ProbeTarget::id, ProbeTarget::url)
+        // Неверный интервал поле не меняет: берётся интервал прежней тени (Ruling 279, решение 177)
+        val interval = check.telemetryIntervalSec
+            ?: store.load()?.telemetryIntervalSec
+            ?: DesiredLimits.DEFAULT_TELEMETRY_INTERVAL_SEC
+        val valid = d.copy(telemetryIntervalSec = interval, watchedApps = check.watchedApps, probes = check.probes)
+        if (decision == VersionDecision.APPLY_NEWER) store.save(valid)
         val now = clock.nowMillis()
         publish(
             OutgoingMessage(
                 kind = MessageKind.SHADOW_REPORTED,
-                payload = encoder.reported(valid, now, errors),
+                payload = encoder.reported(valid, now, check.errors),
                 qos = REPORTED_QOS,
                 createdAt = now,
             ),
         )
     }
 
-    /** [appliedInterval] — интервал прежней тени: неверное значение поле не меняет (Ruling 279, решение 177). */
-    private suspend fun sanitize(
-        d: DesiredShadow,
-        errors: MutableList<String>,
-        appliedInterval: suspend () -> Int,
-    ): DesiredShadow {
-        val interval = if (d.telemetryIntervalSec in INTERVAL_RANGE_SEC) {
-            d.telemetryIntervalSec
-        } else {
-            errors += "telemetryIntervalSec:out_of_range"
-            appliedInterval()
-        }
-        return d.copy(
-            telemetryIntervalSec = interval,
-            watchedApps = validPackages(d.watchedApps, errors),
-            probes = validProbes(d.probes, errors),
-        )
-    }
-
-    private fun validPackages(apps: List<String>, errors: MutableList<String>): List<String> =
-        apps.filter { name ->
-            when {
-                name.isBlank() -> false.also { errors += "watchedApps:empty" }
-                !isValidPackageName(name) -> false.also { errors += "watchedApps:invalid_name:$name" }
-                else -> true
-            }
-        }.distinct()
-
-    private fun validProbes(probes: List<ProbeTarget>, errors: MutableList<String>): List<ProbeTarget> {
-        val seen = mutableSetOf<String>()
-        return probes.filter { probe ->
-            when {
-                probe.id.isBlank() -> false.also { errors += "probes:empty_id" }
-                probe.url.isBlank() -> false.also { errors += "probes:empty_url:${probe.id}" }
-                !seen.add(probe.id) -> false.also { errors += "probes:duplicate_id:${probe.id}" }
-                else -> true
-            }
-        }
-    }
-
     private companion object {
-        /** ТЗ диапазон не задаёт; решение контроллера 3.4. */
-        val INTERVAL_RANGE_SEC = 10..3_600
-        const val DEFAULT_INTERVAL_SEC = 30
         const val REPORTED_QOS = 1
     }
 }

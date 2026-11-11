@@ -1,4 +1,4 @@
-package ru.restofleet.agent.domain.model
+package ru.restofleet.shared.shadow
 
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test

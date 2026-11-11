@@ -2,9 +2,9 @@ package ru.restofleet.agent.data.shadow
 
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import ru.restofleet.agent.domain.model.isValidPackageName
 import ru.restofleet.agent.domain.port.ShadowStore
 import ru.restofleet.agent.domain.port.WatchedApps
+import ru.restofleet.shared.shadow.isValidPackageName
 import kotlin.coroutines.cancellation.CancellationException
 
 /**

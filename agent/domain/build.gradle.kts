@@ -23,6 +23,7 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(projects.shared.kernel)
+            api(projects.shared.shadow)
             api(libs.kotlinx.coroutines.core)
         }
         jvmTest.dependencies {
