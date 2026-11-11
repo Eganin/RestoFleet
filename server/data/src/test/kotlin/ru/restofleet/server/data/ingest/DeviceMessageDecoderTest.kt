@@ -114,6 +114,35 @@ class DeviceMessageDecoderTest {
     }
 
     @Test
+    fun `unpaired surrogate escapes are undecodable because jsonb rejects them`() {
+        // R-6: kotlinx принимает "\ud800" без пары, PostgreSQL в jsonb — нет (SQLState 22P05), пачка падала бы целиком
+        val telemetry = """{"ts":1,"seq":1,"x":"\ud800"}"""
+        val lowAlone = """{"type":"fg_changed","ts":1,"from":"a\udc00b","to":"com.android.settings"}"""
+        val inKey = """{"ts":1,"seq":1,"\udbff":1}"""
+        val reversed = """{"ts":1,"seq":1,"x":"\udc00\ud800"}"""
+
+        listOf(
+            DeviceChannel.TELEMETRY to telemetry,
+            DeviceChannel.EVENTS to lowAlone,
+            DeviceChannel.TELEMETRY to inKey,
+            DeviceChannel.TELEMETRY to reversed,
+        ).forEach { (channel, text) ->
+            val decoded = decode(channel, text) as Decoded.Undecodable
+            assertThat(decoded.reason).isEqualTo("bad_unicode")
+        }
+    }
+
+    @Test
+    fun `paired surrogates and an escaped backslash before u are valid text`() {
+        val emoji = """{"ts":1,"seq":1,"foregroundApp":"😀 ok 😀"}"""
+        val backslash = """{"ts":1,"seq":1,"foregroundApp":"a\\ud800"}"""
+
+        listOf(emoji, backslash).forEach {
+            assertThat(decode(DeviceChannel.TELEMETRY, it)).isInstanceOf(Decoded.Telemetry::class.java)
+        }
+    }
+
+    @Test
     fun `long strings are cut to the column sizes`() {
         val text = """{"state":"online","ts":1,"connId":"${"c".repeat(100)}","reason":"${"r".repeat(50)}"}"""
 

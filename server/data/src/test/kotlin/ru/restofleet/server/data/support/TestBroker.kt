@@ -17,33 +17,32 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 /**
- * Mosquitto 2.1.2 (образ стенда) с Dynamic Security для интеграционных тестов. Отличие от стенда — **только** листенер:
- * TCP 1883 без TLS (реш. 232); роли `device` и `backend-service` применяются тем же `deploy/mosquitto/dynsec-roles.sh`,
- * что и на стенде (реш. 231), клиент `backend` создаётся так же, как в `dynsec-dev.sh`. Пароли — только тестовые.
- * Один контейнер на JVM; состояние DynSec общее, поэтому тесты берут уникальные `deviceId`.
+ * Mosquitto 2.1.2 (образ стенда) с Dynamic Security для интеграционных тестов. Конфиг —
+ * `deploy/mosquitto/mosquitto.conf` стенда с **одним** отличием: листенер TCP 1883 без TLS (реш. 232), поэтому
+ * пределы брокера (размер пакета, очереди сессий, память) в тестах те же, что на стенде. Роли `device` и
+ * `backend-service` применяются тем же `deploy/mosquitto/dynsec-roles.sh`, что и на стенде (реш. 231), клиент
+ * `backend` создаётся так же, как в `dynsec-dev.sh`. Пароли — только тестовые. Один контейнер на JVM; состояние
+ * DynSec общее, поэтому тесты берут уникальные `deviceId`. [restart] перезапускает процесс брокера внутри контейнера
+ * (порт не меняется).
  */
 object TestBroker {
     const val IMAGE = "eclipse-mosquitto:2.1.2-alpine"
     private const val PORT = 1883
     private const val ADMIN_PASSWORD = "admin-test-only"
     const val BACKEND_PASSWORD = "backend-test-only"
+    private const val RESTART_TIMEOUT_MS = 30_000L
+    private const val RESTART_POLL_MS = 100L
 
-    private val CONF = """
-        per_listener_settings false
-        allow_anonymous false
-        listener $PORT
-        protocol mqtt
-        plugin /usr/lib/mosquitto_dynamic_security.so
-        plugin_opt_config_file /mosquitto/data/dynamic-security.json
-        persistence true
-        persistence_location /mosquitto/data/
-        log_dest stdout
-        log_type error
-        log_type warning
-        log_type notice
-        log_type information
-        connection_messages true
-    """.trimIndent()
+    /** Строки TLS-листенера стенда, которых в тестовом конфиге нет. */
+    private val TLS_KEYS = setOf("cafile", "certfile", "keyfile", "tls_version")
+
+    /** Конфиг стенда: листенер 8883 (TLS) заменён на TCP [PORT], строки сертификатов убраны. */
+    private val CONF: String by lazy {
+        File(System.getProperty("rf.deployDir"), "mosquitto/mosquitto.conf").readLines()
+            .filterNot { it.substringBefore(' ') in TLS_KEYS }
+            .map { if (it.startsWith("listener ")) "listener $PORT" else it }
+            .joinToString("\n")
+    }
 
     private val container: GenericContainer<*> by lazy {
         GenericContainer(DockerImageName.parse(IMAGE))
@@ -53,7 +52,9 @@ object TestBroker {
                 "sh", "-c",
                 "mosquitto_ctrl dynsec init /mosquitto/data/dynamic-security.json admin '$ADMIN_PASSWORD' && " +
                     "chown -R 1883:1883 /mosquitto/data && " +
-                    "exec /usr/sbin/mosquitto -c /mosquitto/config/mosquitto.conf",
+                    // Цикл вместо exec: [restart] завершает процесс брокера по SIGTERM (как `docker compose restart`:
+                    // persistence сохраняется), и цикл поднимает его снова на том же порту контейнера
+                    "while :; do /usr/sbin/mosquitto -c /mosquitto/config/mosquitto.conf; sleep 0.2; done",
             )
             .waitingFor(Wait.forLogMessage(".*running.*", 1).withStartupTimeout(Duration.ofSeconds(60)))
             .also {
@@ -109,6 +110,32 @@ object TestBroker {
             "mosquitto_ctrl", "-h", "localhost", "-p", "$PORT", "-u", "admin", "-P", ADMIN_PASSWORD,
             "dynsec", "getRole", role,
         ).stdout
+
+    /**
+     * Перезапуск брокера, как `docker compose restart mosquitto`: SIGTERM (сессии и подписки пишутся в persistence),
+     * новый процесс читает их при старте. Возвращается, когда новый процесс принимает подключения.
+     */
+    fun restart() {
+        val before = brokerPid()
+        check(before.isNotEmpty()) { "mosquitto is not running" }
+        container.execInContainer("kill", "-TERM", before)
+        val deadline = System.currentTimeMillis() + RESTART_TIMEOUT_MS
+        while (System.currentTimeMillis() < deadline) {
+            val now = brokerPid()
+            if (now.isNotEmpty() && now != before && acceptsConnections()) return
+            Thread.sleep(RESTART_POLL_MS)
+        }
+        error("mosquitto did not come back after restart")
+    }
+
+    private fun brokerPid(): String = container.execInContainer("pidof", "mosquitto").stdout.trim()
+
+    private fun acceptsConnections(): Boolean = try {
+        purgeSession("probe-${UUID.randomUUID()}")
+        true
+    } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
+        false
+    }
 
     /**
      * Удаляет постоянную сессию бэкенда после теста: в shared-группе `backend` Mosquitto раздаёт сообщения и

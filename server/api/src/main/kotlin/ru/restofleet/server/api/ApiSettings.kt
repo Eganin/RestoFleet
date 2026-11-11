@@ -45,13 +45,18 @@ data class JwtSettings(
 /**
  * Rate limit (арх. разд. 12, реш. 249): корзина токенов на клиента (IP из `X-Forwarded-For` nginx или адрес
  * соединения), пополнение раз в [periodMillis]. Симулятор (КМ4) поднимает [provisionPerPeriod] конфигом стенда.
+ * [pollAuthFailuresPerPeriod] — неудачные Basic-проверки устройств на `/poll/…` с одного клиента (R-7, реш. 306):
+ * считаются только ответы 401, сверх предела — 429 до проверки пароля.
  */
 data class RateLimitSettings(
     val loginPerPeriod: Int = 10,
     val provisionPerPeriod: Int = 60,
+    val pollAuthFailuresPerPeriod: Int = 60,
     val periodMillis: Long = 60_000,
 ) {
     init {
-        require(loginPerPeriod > 0 && provisionPerPeriod > 0 && periodMillis > 0) { "rate limits must be positive" }
+        require(loginPerPeriod > 0 && provisionPerPeriod > 0 && pollAuthFailuresPerPeriod > 0 && periodMillis > 0) {
+            "rate limits must be positive"
+        }
     }
 }

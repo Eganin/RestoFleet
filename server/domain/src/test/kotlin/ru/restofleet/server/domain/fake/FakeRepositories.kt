@@ -300,6 +300,16 @@ class FakeCommandRepository(private val db: InMemoryDb) : CommandRepository {
         return due.size
     }
 
+    override suspend fun failUnfinished(deviceId: DeviceId, reason: String, now: Long): Int {
+        val open = db.read { s ->
+            s.commands.values.filter {
+                it.deviceId == deviceId && (it.status == CommandStatus.QUEUED || it.status == CommandStatus.DELIVERED)
+            }
+        }
+        open.forEach { insert(it.copy(status = CommandStatus.FAILED, finishedAt = now, reason = reason)) }
+        return open.size
+    }
+
     override suspend fun deliverQueued(deviceId: DeviceId, now: Long): List<Command> {
         val queued = db.read { s ->
             s.commands.values.filter { it.deviceId == deviceId && it.status == CommandStatus.QUEUED &&

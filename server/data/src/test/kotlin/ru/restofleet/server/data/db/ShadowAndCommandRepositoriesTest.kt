@@ -136,6 +136,29 @@ internal class ShadowAndCommandRepositoriesTest : PostgresTest() {
     }
 
     @Test
+    fun `failUnfinished fails queued and delivered commands of one device only`() {
+        val d = givenDevice()
+        val other = givenDevice()
+        val queued = Samples.command(d.id, cmdId = "c-q")
+        val delivered = Samples.command(d.id, cmdId = "c-d", status = CommandStatus.DELIVERED)
+        val finished = Samples.command(d.id, cmdId = "c-s", status = CommandStatus.SUCCEEDED)
+        val foreign = Samples.command(other.id, cmdId = "c-f")
+        tx { listOf(queued, delivered, finished, foreign).forEach { commands.insert(it) } }
+
+        val failed = tx { commands.failUnfinished(d.id, CommandReasons.DECOMMISSIONED, now = T0 + 7) }
+
+        assertThat(failed).isEqualTo(2)
+        listOf(queued, delivered).forEach {
+            val c = tx { commands.find(it.cmdId) }!!
+            assertThat(c.status).isEqualTo(CommandStatus.FAILED)
+            assertThat(c.reason).isEqualTo(CommandReasons.DECOMMISSIONED)
+            assertThat(c.finishedAt).isEqualTo(T0 + 7)
+        }
+        assertThat(tx { commands.find(finished.cmdId) }!!.status).isEqualTo(CommandStatus.SUCCEEDED)
+        assertThat(tx { commands.find(foreign.cmdId) }!!.status).isEqualTo(CommandStatus.QUEUED)
+    }
+
+    @Test
     fun `deliverQueued hands out each live queued command once, oldest first, only to its device`() {
         val d = givenDevice()
         val other = givenDevice()

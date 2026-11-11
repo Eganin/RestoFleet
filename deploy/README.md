@@ -139,9 +139,16 @@ curl --cacert certs/out/ca.crt https://localhost:8443/waiter-4.13.apk -o /tmp/x
 ## Подключение вручную
 
 ```bash
-docker compose exec mosquitto mosquitto_sub -h localhost -p 8883 --cafile /mosquitto/certs/ca.crt \
-  -u admin -P "$DYNSEC_ADMIN_PASSWORD" -t '$SYS/broker/version' -C 1
+# Пароль admin — только в файле опций 600 внутри контейнера, не в argv (mosquitto/broker-opts.sh, реш. 308)
+( set -a; . ./.env; set +a; . mosquitto/broker-opts.sh
+  { broker_opts_begin; broker_opts_client as_admin admin "$DYNSEC_ADMIN_PASSWORD"
+    echo 'as_admin mosquitto_sub -i rf-admin-sys -t "\$SYS/broker/version" -t "\$SYS/broker/shared_subscriptions/count" -C 2 -W 15 -v'
+  } | docker compose exec -T mosquitto sh -s )
 ```
+
+`$SYS/broker/shared_subscriptions/count` = 6 — бэкенд подписан на все каналы устройств. С V-1 (реш. 301) бэкенд подписывается заново на каждом переподключении, а `/health` показывает `broker: true` только после SUBACK на текущем соединении; `test-backend.sh` после перезапуска брокера проверяет, что новая телеметрия доходит до БД.
+
+Пределы брокера (`mosquitto.conf`, реш. 302, 303): пакет до 260 КиБ (`max_packet_size`, тот же предел объявляет бэкенд), очередь сессии до 200 000 QoS 1 сообщений и 128 МиБ (`max_queued_messages`/`max_queued_bytes`, ≈ 40 мин недоступности бэкенда или БД при 5 000 устройств), куча до 1 ГиБ (`memory_limit`). QoS 0 (живая телеметрия и пробы) для отключённого бэкенда не копится.
 
 **`admin` после `dynsec init` имеет полный доступ**: управляет DynSec (`$CONTROL/dynamic-security/#`) и может читать все топики (`subscribePattern #`). Поэтому его пароль хранится только в `deploy/.env` и передаётся лишь одноразовому `dynsec-init` — у брокера его нет ни в окружении, ни в healthcheck (healthcheck проверяет, что анонимный клиент получает CONNACK «not authorised»). Роли `device`, `backend-service`, `operator-dev`, учётку `backend` и учётки устройств создаёт `mosquitto/dynsec-dev.sh` (см. ниже): офлайн `mosquitto_ctrl` умеет только `dynsec init`, поэтому роли — на работающем брокере (реш. 231).
 

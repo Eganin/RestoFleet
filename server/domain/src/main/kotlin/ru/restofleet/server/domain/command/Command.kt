@@ -78,6 +78,9 @@ data class CommandReport(
 object CommandReasons {
     const val EXPIRED = "expired"
     const val BROKER_UNAVAILABLE = "broker_unavailable"
+
+    /** Устройство выведено из эксплуатации, пока команда ждала доставки или итога (R-8, реш. 307). */
+    const val DECOMMISSIONED = "decommissioned"
 }
 
 /**
@@ -140,4 +143,7 @@ interface CommandRepository {
 
     /** REST-polling: `queued` команды устройства, ещё не истёкшие, атомарно → `delivered`; по времени создания. */
     suspend fun deliverQueued(deviceId: DeviceId, now: Long): List<Command>
+
+    /** Незавершённые (`queued`/`delivered`) команды устройства → `failed` с [reason]; число изменённых. */
+    suspend fun failUnfinished(deviceId: DeviceId, reason: String, now: Long): Int
 }

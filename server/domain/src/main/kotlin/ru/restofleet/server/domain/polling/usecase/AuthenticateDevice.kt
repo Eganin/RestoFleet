@@ -16,6 +16,7 @@ import ru.restofleet.shared.kernel.Outcome
  * HTTP Basic устройства для REST-polling (P9, реш. 213): bcrypt-проверка по `device_credentials`, успешная проверка
  * кэшируется как SHA-256 пароля (TTL — у кэша). Попадание в кэш не ходит в БД и bcrypt; промах или другой пароль —
  * полная проверка. Отозванная учётка и выведенное устройство — [ServerError.Unauthorized] (без уточнения причины).
+ * После записи в кэш статус перечитывается (гонка с выводом из эксплуатации, R-8).
  */
 class AuthenticateDevice(
     private val devices: DeviceRepository,
@@ -38,12 +39,18 @@ class AuthenticateDevice(
     }
 
     private suspend fun verify(id: DeviceId, password: String, passwordDigest: String): Boolean {
-        val hash = tx.inTransaction {
-            devices.findById(id)?.takeUnless { it.isDecommissioned }?.let { credentials.findActiveHash(id) }
-        }
-        val ok = hash != null && hasher.verify(password, hash)
-        if (ok) cache.put(id, passwordDigest)
-        return ok
+        val hash = activeHash(id)
+        if (hash == null || !hasher.verify(password, hash)) return false
+        cache.put(id, passwordDigest)
+        // R-8 (реш. 307): вывод из эксплуатации мог зафиксироваться и сбросить кэш, пока шёл bcrypt, — раньше нашей
+        // записи. Перепроверка после put: либо видим вывод и убираем запись, либо его сброс кэша придёт после put
+        val stillActive = activeHash(id) == hash
+        if (!stillActive) cache.invalidate(id)
+        return stillActive
+    }
+
+    private suspend fun activeHash(id: DeviceId): String? = tx.inTransaction {
+        devices.findById(id)?.takeUnless { it.isDecommissioned }?.let { credentials.findActiveHash(id) }
     }
 
     private companion object {

@@ -3,6 +3,8 @@ package ru.restofleet.server.domain.device
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
+import ru.restofleet.server.domain.command.CommandReasons
+import ru.restofleet.server.domain.command.CommandStatus
 import ru.restofleet.server.domain.common.PageRequest
 import ru.restofleet.server.domain.common.ServerError
 import ru.restofleet.server.domain.device.usecase.DecommissionDevice
@@ -21,7 +23,7 @@ class DeviceUseCasesTest {
     private val list = ListDevices(w.devices, w.tx)
     private val get = GetDevice(w.devices, w.telemetry, w.sessions, w.tx)
     private val decommission = DecommissionDevice(
-        w.devices, w.credentials, w.sessions, w.broker, w.publisher, w.cache, w.tx, w.clock,
+        w.devices, w.credentials, w.sessions, w.commands, w.broker, w.publisher, w.cache, w.tx, w.clock,
     )
 
     @Test
@@ -72,6 +74,32 @@ class DeviceUseCasesTest {
         assertThat(w.db.state.sessions.single().reason).isEqualTo(SessionCloseReason.DECOMMISSIONED)
         assertThat(w.publisher.cleared).containsExactly(d.id)
         assertThat(w.cache.entries).isEmpty()
+    }
+
+    @Test
+    fun decommissionFailsUnfinishedCommandsOfThatDeviceOnly() = runTest {
+        val d = w.device(status = DeviceStatus.ONLINE)
+        w.device("d-2", status = DeviceStatus.ONLINE)
+        w.credential("d-1", "pw")
+        w.command("c-queued", status = CommandStatus.QUEUED)
+        w.command("c-delivered", status = CommandStatus.DELIVERED)
+        w.command("c-done", status = CommandStatus.SUCCEEDED)
+        w.command("c-expired", status = CommandStatus.EXPIRED, reason = CommandReasons.EXPIRED)
+        w.command("c-other", deviceId = "d-2", status = CommandStatus.QUEUED)
+
+        decommission(d.id)
+
+        // R-8: выведенному устройству команды больше не выдаются (REST) и не ждут итога
+        val commands = w.db.state.commands
+        listOf("c-queued", "c-delivered").forEach {
+            val c = commands.getValue(it)
+            assertThat(c.status).isEqualTo(CommandStatus.FAILED)
+            assertThat(c.reason).isEqualTo(CommandReasons.DECOMMISSIONED)
+            assertThat(c.finishedAt).isEqualTo(w.clock.now)
+        }
+        assertThat(commands.getValue("c-done").status).isEqualTo(CommandStatus.SUCCEEDED)
+        assertThat(commands.getValue("c-expired").status).isEqualTo(CommandStatus.EXPIRED)
+        assertThat(commands.getValue("c-other").status).isEqualTo(CommandStatus.QUEUED)
     }
 
     @Test

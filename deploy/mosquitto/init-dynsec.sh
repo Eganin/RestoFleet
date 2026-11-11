@@ -8,7 +8,11 @@ file=/mosquitto/data/dynamic-security.json
 if [ -s "$file" ]; then
   echo "DynSec уже инициализирован: $file"
 else
-  mosquitto_ctrl dynsec init "$file" admin "$DYNSEC_ADMIN_PASSWORD"
+  # Пароль — через stdin (без аргумента mosquitto_ctrl спрашивает его дважды), не в argv процесса (R-10, реш. 308)
+  mosquitto_ctrl dynsec init "$file" admin <<EOF >/dev/null
+$DYNSEC_ADMIN_PASSWORD
+$DYNSEC_ADMIN_PASSWORD
+EOF
   echo "DynSec инициализирован, admin создан"
 fi
 chown -R mosquitto:mosquitto /mosquitto/data

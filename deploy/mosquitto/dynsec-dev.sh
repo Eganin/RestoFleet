@@ -5,9 +5,11 @@
 # Идемпотентен: роли и ACL применяются заново, существующие клиенты пропускаются (пароль не меняется).
 # Пароли новых клиентов печатаются ОДИН раз — в deploy/out/dev-credentials.txt (600): "<username> <password>" на строку;
 # пароль backend — отдельным файлом deploy/out/backend-mqtt-password (600, одна строка): его монтирует контейнер бэкенда.
-# Команды уходят в контейнер через stdin, поэтому пароли не попадают в argv процессов хоста (в контейнере — на миг).
+# Команды уходят в контейнер через stdin; пароли — только в stdin и в файлах опций 600 во временном каталоге контейнера
+# (mosquitto/broker-opts.sh, реш. 308), в argv процессов ни хоста, ни контейнера они не попадают.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+. mosquitto/broker-opts.sh
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
@@ -22,10 +24,11 @@ for api in 26 27 28 29 30 31 32 33 34 35 36 37; do clients+=("dev-emu-$api"); do
 # dev-acl-test — субъект test-dynsec-dev.sh: проверка не вытесняет работающих агентов (решение 178)
 clients+=(dev-do-26 dev-do-36 dev-acl-test)
 
-# Выполняет stdin как sh-скрипт в контейнере брокера; ctrl — обёртка mosquitto_ctrl под admin
+# Выполняет stdin как sh-скрипт в контейнере брокера; ctrl — mosquitto_ctrl под admin (учётка — в файле опций)
 in_broker() {
   {
-    printf '%s\n' "ctrl() { mosquitto_ctrl -h localhost -p 8883 --cafile /mosquitto/certs/ca.crt -u admin -P '$DYNSEC_ADMIN_PASSWORD' \"\$@\"; }"
+    broker_opts_begin
+    broker_opts_ctrl "$DYNSEC_ADMIN_PASSWORD"
     cat
   } | docker compose exec -T mosquitto sh -s
 }
@@ -83,16 +86,16 @@ SH
     printf '%s %s\n' "$name" "$pw" >>"$tmp_new"
     if [ "$name" = operator ]; then
       # clientId не фиксируется: одновременно нужны mosquitto_sub и mosquitto_pub
-      echo "run createClient operator -p '$pw'"
+      broker_create_client operator "$pw"
       echo "run addClientRole operator operator-dev"
     else
-      echo "run createClient $name -p '$pw'"
+      broker_create_client "$name" "$pw"
       echo "run setClientId $name $name"
       echo "run addClientRole $name device"
     fi
   done
   if [ -n "$new_backend_pw" ]; then
-    echo "run createClient backend -i backend -p '$new_backend_pw'"
+    broker_create_client backend "$new_backend_pw" -i backend
     echo "run addClientRole backend backend-service"
   fi
   # Файл учёток — источник истины: если прошлый запуск оборвался, старую строку нового клиента заменяем

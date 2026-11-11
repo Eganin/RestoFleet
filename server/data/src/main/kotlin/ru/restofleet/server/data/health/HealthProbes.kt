@@ -19,9 +19,12 @@ class DatabaseHealthProbe(private val dataSource: DataSource, private val timeou
     }
 }
 
-/** `GET /health`: MQTT-соединение бэкенда установлено. */
+/**
+ * `GET /health`: MQTT-соединение бэкенда установлено, и подписки ingest подтверждены на нём (V-1: соединение без
+ * подписок — «здоров», хотя приём стоит).
+ */
 class BrokerHealthProbe(private val client: HiveMqClient) : HealthProbe {
     override val name: String = "broker"
 
-    override suspend fun isHealthy(): Boolean = client.isConnected
+    override suspend fun isHealthy(): Boolean = client.isSubscribed
 }

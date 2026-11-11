@@ -42,16 +42,31 @@ data class MqttConfig(
     val sessionExpirySec: Long = DEFAULT_SESSION_EXPIRY_SEC,
     /** Сколько неподтверждённых QoS 1 брокер может держать в полёте к бэкенду (MQTT 5 Receive Maximum). */
     val receiveMaximum: Int = 1_000,
+    /** MQTT 5 Maximum Packet Size бэкенда: больший пакет брокер ему не перешлёт (R-1). */
+    val maxPacketSize: Int = DEFAULT_MAX_PACKET_SIZE,
     val requestTimeoutMs: Long = 5_000,
     val publishTimeoutMs: Long = 10_000,
 ) {
     override fun toString(): String =
         "MqttConfig(host=$host, port=$port, username=$username, password=***, clientId=$clientId, caFile=$caFile, " +
-            "keepAliveSec=$keepAliveSec, sessionExpirySec=$sessionExpirySec, receiveMaximum=$receiveMaximum)"
+            "keepAliveSec=$keepAliveSec, sessionExpirySec=$sessionExpirySec, receiveMaximum=$receiveMaximum, " +
+            "maxPacketSize=$maxPacketSize)"
 
     companion object {
-        /** Session Expiry бэкенда — 24 ч, как у устройств (FR-BR-07): брокер копит сообщения, пока бэкенда нет. */
+        /**
+         * Session Expiry бэкенда — 24 ч, как у устройств (FR-BR-07): брокер копит QoS 1 сообщения, пока бэкенда нет,
+         * в пределах `max_queued_messages`/`max_queued_bytes` брокера (реш. 303).
+         */
         const val DEFAULT_SESSION_EXPIRY_SEC: Long = 24L * 60 * 60
+
+        /** Заголовки PUBLISH (топик, свойства MQTT 5) поверх payload — с большим запасом. */
+        private const val PACKET_OVERHEAD_BYTES = 4 * 1024
+
+        /**
+         * Предел размера MQTT-пакета (R-1, реш. 302) — тот же `max_packet_size` в `deploy/mosquitto/mosquitto.conf`:
+         * payload до [IngestConfig.DEFAULT_MAX_PAYLOAD_BYTES] (предел декодера) плюс заголовки.
+         */
+        const val DEFAULT_MAX_PACKET_SIZE: Int = IngestConfig.DEFAULT_MAX_PAYLOAD_BYTES + PACKET_OVERHEAD_BYTES
     }
 }
 

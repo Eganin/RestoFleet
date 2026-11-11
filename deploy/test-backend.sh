@@ -4,8 +4,9 @@
 # Сценарий: health через nginx (HTTPS, CA стенда) → вход admin → ресторан → код → POST /provision →
 # status + телеметрия учёткой устройства по MQTT (TLS, внутри контейнера mosquitto) → устройство online и телеметрия
 # в API → PUT shadow → retained desired у брокера → команда → cmd/req у устройства → cmd/res → succeeded →
-# вывод из эксплуатации → учётка не подключается → перезапуск брокера: бэкенд переподключается → в логах бэкенда и
-# в выводе нет ни одного секрета (числом). Перезапуск брокера рвёт и другие MQTT-сессии стенда (агенты переподключатся).
+# перезапуск брокера: бэкенд переподключается, и телеметрия, опубликованная после перезапуска, доходит до БД (V-1) →
+# вывод из эксплуатации → учётка не подключается → в логах бэкенда и в выводе нет ни одного секрета (числом).
+# Перезапуск брокера рвёт и другие MQTT-сессии стенда (агенты переподключатся).
 # Пароли и токены — только в файлах 600 во временном каталоге и в контейнере брокера на время проверки; в argv
 # процессов хоста они не попадают (printf и подстановки — встроенные в bash, curl читает заголовки и тела из файлов).
 set -euo pipefail
@@ -137,6 +138,32 @@ as_device mosquitto_sub -t "rf/v1/dev/$device_id/shadow/desired" -C 1 -W 5 >"$tm
   || fail "retained desired: $(cat "$tmp/desired.json")"
 pass "retained desired v2 (intervalSec 60) у брокера"
 
+# --- 6b. V-2: цель пробы без необязательного reference (пример K3.md) → reported, как его пишет агент
+# (JsonPayloadEncoder: все поля ProbeTargetDto, reference: false по умолчанию) → delta пуста ---
+printf '{"probes":[{"id":"api","type":"http","url":"https://10.0.2.2:18443/health","intervalSec":30,"timeoutMs":3000,"failThreshold":3}]}' \
+  >"$tmp/probes.json"
+[ "$(api PUT "/api/v1/devices/$device_id/shadow" "$tmp/probes.json" auth)" = 200 ] || fail "PUT shadow probes: $(cat "$tmp/resp")"
+[ "$(jget "$tmp/resp" desiredVersion)" = 3 ] || fail "PUT shadow probes: версия $(jget "$tmp/resp" desiredVersion)"
+python3 -I - "$tmp/resp" "$now_ms" >"$tmp/reported.json" <<'PY'
+import json, sys
+shadow = json.load(open(sys.argv[1]))
+doc, version = dict(shadow["desired"]), shadow["desiredVersion"]
+doc["probes"] = [dict(p, reference=p.get("reference", False)) for p in doc.get("probes", [])]
+doc.update(version=version, appliedVersion=version, appliedAt=int(sys.argv[2]), errors=[])
+print(json.dumps(doc))
+PY
+as_device mosquitto_pub -t "rf/v1/dev/$device_id/shadow/reported" -q 1 -s <"$tmp/reported.json"
+reported=""
+for _ in $(seq 1 30); do
+  api GET "/api/v1/devices/$device_id/shadow" "" auth >/dev/null
+  reported="$(jget "$tmp/resp" reportedVersion)"
+  [ "$reported" = 3 ] && break
+  sleep 0.5
+done
+[ "$reported" = 3 ] && [ "$(jget "$tmp/resp" delta)" = '{}' ] && [ "$(jget "$tmp/resp" pending)" = false ] \
+  || fail "reported v3 с reference: false — delta не пуста: $(jget "$tmp/resp" delta)"
+pass "проба без reference: reported v3 эхом агента, delta пуста"
+
 # --- 7. команда → cmd/req у устройства → cmd/res → succeeded ---
 as_device mosquitto_sub -t "rf/v1/dev/$device_id/cmd/req" -q 1 -C 1 -W 20 >"$tmp/cmd-req.json" &
 sub_pid=$!
@@ -162,16 +189,9 @@ done
 [ "$cmd_status" = succeeded ] || fail "команда не succeeded: $cmd_status"
 pass "cmd/res received + succeeded → GET /commands/{cmdId}: succeeded"
 
-# --- 8. вывод из эксплуатации → учётка не подключается ---
-[ "$(api DELETE "/api/v1/devices/$device_id" "" auth)" = 200 ] || fail "DELETE device: $(cat "$tmp/resp")"
-[ "$(jget "$tmp/resp" device.status)" = decommissioned ] || fail "статус после вывода: $(cat "$tmp/resp")"
-pass "DELETE /devices/{id}: decommissioned"
-refused="$(as_device mosquitto_sub -t "rf/v1/dev/$device_id/cmd/req" -C 1 -W 5 2>&1 || true)"
-grep -qiE 'not authori[sz]ed|bad user name or password|connection refused' <<<"$refused" \
-  || fail "выведенная учётка подключилась: $(head -c 200 <<<"$refused")"
-pass "выведенная учётка: брокер отказывает в подключении"
-
-# --- 9. перезапуск брокера: бэкенд переподключается по TLS с той же учёткой и постоянной сессией ---
+# --- 8. перезапуск брокера: бэкенд переподключается по TLS с той же учёткой и постоянной сессией, подписывается
+# заново и снова принимает данные устройств (V-1: Mosquitto 2.1.2 не восстанавливает shared-подписки из persistence,
+# «health broker = true» без подписок приём не доказывает — проверяется запись новой телеметрии в БД) ---
 docker compose restart mosquitto >/dev/null 2>&1
 broker=""
 for _ in $(seq 1 60); do
@@ -181,7 +201,28 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 [ "$broker" = true ] || fail "после перезапуска брокера бэкенд не переподключился"
-pass "перезапуск mosquitto: бэкенд переподключился (health broker = true)"
+pass "перезапуск mosquitto: бэкенд переподключился и подписан (health broker = true)"
+after_ms="$(python3 -I -c 'import time; print(int(time.time()*1000))')"
+printf '{"ts":%s,"seq":2,"battery":{"level":54,"charging":true,"tempC":31.0}}' "$after_ms" \
+  | as_device mosquitto_pub -t "rf/v1/dev/$device_id/telemetry" -q 1 -s
+last=""
+for _ in $(seq 1 30); do
+  api GET "/api/v1/devices/$device_id" "" auth >/dev/null
+  last="$(jget "$tmp/resp" lastTelemetry.ts)"
+  [ "$last" = "$after_ms" ] && break
+  sleep 0.5
+done
+[ "$last" = "$after_ms" ] || fail "приём не восстановился: телеметрия после перезапуска брокера не записана (последняя: $last)"
+pass "после перезапуска брокера телеметрия устройства снова доходит до БД"
+
+# --- 9. вывод из эксплуатации → учётка не подключается ---
+[ "$(api DELETE "/api/v1/devices/$device_id" "" auth)" = 200 ] || fail "DELETE device: $(cat "$tmp/resp")"
+[ "$(jget "$tmp/resp" device.status)" = decommissioned ] || fail "статус после вывода: $(cat "$tmp/resp")"
+pass "DELETE /devices/{id}: decommissioned"
+refused="$(as_device mosquitto_sub -t "rf/v1/dev/$device_id/cmd/req" -C 1 -W 5 2>&1 || true)"
+grep -qiE 'not authori[sz]ed|bad user name or password|connection refused' <<<"$refused" \
+  || fail "выведенная учётка подключилась: $(head -c 200 <<<"$refused")"
+pass "выведенная учётка: брокер отказывает в подключении"
 
 # --- 10. утечки: ни одного секрета в логах бэкенда и в выводе теста (только число) ---
 patterns="$tmp/patterns"

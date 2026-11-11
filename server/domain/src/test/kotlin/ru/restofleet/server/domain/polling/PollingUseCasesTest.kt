@@ -70,6 +70,29 @@ class PollingUseCasesTest {
     }
 
     @Test
+    fun decommissionCommittedDuringBcryptIsNeitherAuthenticatedNorCached() = runTest {
+        w.device()
+        w.credential("d-1", "secret")
+        // R-8: хэш прочитан до commit вывода из эксплуатации; commit и сброс кэша — пока идёт bcrypt
+        w.hasher.duringVerify = {
+            w.seed { s ->
+                val decommissioned = s.devices.getValue(id)
+                    .copy(status = DeviceStatus.DECOMMISSIONED, decommissionedAt = 7)
+                s.copy(
+                    devices = s.devices + (id to decommissioned),
+                    credentials = s.credentials + (id to s.credentials.getValue(id).copy(revokedAt = 7)),
+                )
+            }
+            w.cache.invalidate(id)
+        }
+
+        assertThat(auth("d-1", "secret")).isEqualTo(Outcome.Failure(ServerError.Unauthorized))
+        assertThat(w.cache.entries).isEmpty()
+        w.hasher.duringVerify = {}
+        assertThat(auth("d-1", "secret")).isEqualTo(Outcome.Failure(ServerError.Unauthorized))
+    }
+
+    @Test
     fun pollTelemetryMarksPresenceAndIngestsOwnData() = runTest {
         w.device()
         val foreign = DeviceEvent(deviceId("d-2"), 1, "x", "{}")

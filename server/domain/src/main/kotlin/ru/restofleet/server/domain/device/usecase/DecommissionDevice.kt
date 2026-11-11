@@ -1,5 +1,7 @@
 package ru.restofleet.server.domain.device.usecase
 
+import ru.restofleet.server.domain.command.CommandReasons
+import ru.restofleet.server.domain.command.CommandRepository
 import ru.restofleet.server.domain.common.ServerError
 import ru.restofleet.server.domain.common.TransactionRunner
 import ru.restofleet.server.domain.device.BrokerAccounts
@@ -18,7 +20,8 @@ import ru.restofleet.shared.kernel.Outcome
 
 /**
  * Вывод устройства из эксплуатации (FR-BE-04, FR-BR-08). В транзакции: учётка DynSec отключается (сессия рвётся),
- * затем `devices.status = decommissioned`, `device_credentials.revoked_at`, открытая сессия закрывается. Отказ брокера
+ * затем `devices.status = decommissioned`, `device_credentials.revoked_at`, открытая сессия закрывается, незавершённые
+ * команды (`queued`/`delivered`) → `failed` с причиной `decommissioned` (R-8, реш. 307). Отказ брокера
  * откатывает транзакцию — в БД устройство остаётся активным, вызов можно повторить. После commit — очистка retained
  * `desired`/`status` и сброс кэша Basic (реш. 213). Повторный вызов для уже выведенного устройства идемпотентен и
  * дочищает то, что могло не выполниться в прошлый раз.
@@ -27,6 +30,7 @@ class DecommissionDevice(
     private val devices: DeviceRepository,
     private val credentials: CredentialRepository,
     private val sessions: SessionRepository,
+    private val commands: CommandRepository,
     private val broker: BrokerAccounts,
     private val publisher: MessagePublisher,
     private val cache: DeviceCredentialCache,
@@ -40,10 +44,12 @@ class DecommissionDevice(
             when (val disabled = broker.disableDevice(id)) {
                 is Outcome.Failure -> disabled
                 is Outcome.Success -> {
+                    val now = clock.nowMillis()
+                    // R-8: команды выведенному устройству не выдаются и итога не ждут (повтор вызова дочищает)
+                    commands.failUnfinished(id, CommandReasons.DECOMMISSIONED, now)
                     if (device.isDecommissioned) {
                         Outcome.Success(device)
                     } else {
-                        val now = clock.nowMillis()
                         devices.decommission(id, now)
                         credentials.revoke(id, now)
                         sessions.closeOpen(id, now, SessionCloseReason.DECOMMISSIONED)

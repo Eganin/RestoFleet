@@ -8,6 +8,7 @@
 # - подписчики берут -R (retained status/desired со стенда не считаются полученными) и узкий топик, а не rf/v1/#.
 set -uo pipefail
 cd "$(dirname "$0")/.."
+. mosquitto/broker-opts.sh
 
 failures=0
 pass() { echo "PASS: $*"; }
@@ -22,24 +23,23 @@ for u in operator "$T"; do [ -n "$(pw "$u")" ] || die "в $creds нет паро
 OP="$(pw operator)"
 DEV="$(pw "$T")"
 
-# Скрипт со stdin выполняется в контейнере брокера (пароли не попадают в argv хоста)
+# Скрипт со stdin выполняется в контейнере брокера. Учётки — в файлах опций 600 (mosquitto/broker-opts.sh, реш. 308):
+# as_op <инструмент> — operator, as_dev <инструмент> — $T; пароли не попадают в argv ни хоста, ни контейнера
 broker() {
   {
-    cat <<SH
-OP='$OP'
-DEV='$DEV'
-T='$T'
-O="-h localhost -p 8883 --cafile /mosquitto/certs/ca.crt -V mqttv5"
-SH
+    broker_opts_begin
+    broker_opts_client as_op operator "$OP"
+    broker_opts_client as_dev "$T" "$DEV"
+    printf "T='%s'\n" "$T"
     cat
   } | docker compose exec -T mosquitto sh -s 2>&1
 }
 
 # 1. Публикация в свой топик доходит до подписчика operator
 out="$(broker <<'SH'
-mosquitto_sub $O -u operator -P "$OP" -i acl-test-op-sub -R -t "rf/v1/dev/$T/telemetry" -C 1 -W 5 >/tmp/t1.out 2>&1 &
+as_op mosquitto_sub -i acl-test-op-sub -R -t "rf/v1/dev/$T/telemetry" -C 1 -W 5 >/tmp/t1.out 2>&1 &
 sleep 1
-mosquitto_pub $O -u "$T" -P "$DEV" -i "$T" -q 1 -t "rf/v1/dev/$T/telemetry" -m own-ok 2>&1
+as_dev mosquitto_pub -i "$T" -q 1 -t "rf/v1/dev/$T/telemetry" -m own-ok 2>&1
 wait
 cat /tmp/t1.out
 SH
@@ -52,9 +52,9 @@ grep -q '^own-ok$' <<<"$out" && ! grep -qiE 'not authori[sz]ed' <<<"$out" \
 # Подписчик слушает весь интервал -W (без -C 1): ранний чужой трафик не делает проверку «ничего не получил» пустой.
 for topic in rf/v1/dev/dev-emu-31/telemetry "rf/v1/dev/$T/cmd/req"; do
   out="$(broker <<SH
-mosquitto_sub \$O -u operator -P "\$OP" -i acl-test-op-sub -R -t '$topic' -W 4 >/tmp/t2.out 2>&1 &
+as_op mosquitto_sub -i acl-test-op-sub -R -t '$topic' -W 4 >/tmp/t2.out 2>&1 &
 sleep 1
-mosquitto_pub \$O -u "\$T" -P "\$DEV" -i "\$T" -q 1 -t '$topic' -m forbidden 2>&1
+as_dev mosquitto_pub -i "\$T" -q 1 -t '$topic' -m forbidden 2>&1
 wait
 echo "--- operator received:"
 cat /tmp/t2.out
@@ -70,7 +70,7 @@ done
 
 # 4. clientId не равный username: отказ в CONNACK
 out="$(broker <<'SH'
-mosquitto_pub $O -u "$T" -P "$DEV" -i acl-test-other -q 1 -t "rf/v1/dev/$T/telemetry" -m x 2>&1
+as_dev mosquitto_pub -i acl-test-other -q 1 -t "rf/v1/dev/$T/telemetry" -m x 2>&1
 echo "rc=$?"
 SH
 )"
@@ -82,7 +82,7 @@ grep -qiE 'not authori[sz]ed' <<<"$out" && ! grep -q 'rc=0' <<<"$out" \
 # 5. Подписка: на чужой cmd/req — SUBACK 0x87 (135); на свои desired и cmd/req — разрешена
 sub_code() {
   broker <<SH | grep -oE 'Subscribed \(mid: 1\): [0-9]+' | head -1
-mosquitto_sub \$O -d -u "\$T" -P "\$DEV" -i "\$T" -q 1 -R -t '$1' -C 1 -W 2 2>&1
+as_dev mosquitto_sub -d -i "\$T" -q 1 -R -t '$1' -C 1 -W 2 2>&1
 SH
 }
 c="$(sub_code rf/v1/dev/dev-emu-31/cmd/req)"
@@ -101,9 +101,9 @@ done
 
 # 6. Доставка команды устройству: operator публикует в cmd/req, device получает
 out="$(broker <<'SH'
-mosquitto_sub $O -u "$T" -P "$DEV" -i "$T" -q 1 -R -t "rf/v1/dev/$T/cmd/req" -C 1 -W 5 >/tmp/t6.out 2>&1 &
+as_dev mosquitto_sub -i "$T" -q 1 -R -t "rf/v1/dev/$T/cmd/req" -C 1 -W 5 >/tmp/t6.out 2>&1 &
 sleep 1
-mosquitto_pub $O -u operator -P "$OP" -i acl-test-op-pub -q 1 -t "rf/v1/dev/$T/cmd/req" -m cmd-ok 2>&1
+as_op mosquitto_pub -i acl-test-op-pub -q 1 -t "rf/v1/dev/$T/cmd/req" -m cmd-ok 2>&1
 wait
 cat /tmp/t6.out
 SH
@@ -127,7 +127,7 @@ grep -q '^DynSec: роли' "$log" && pass "повторный запуск до
 [ "$(( $(wc -l <"$creds") ))" = 16 ] && pass "в файле учёток 16 клиентов (12 dev-emu, 2 dev-do, $T, operator)" || fail "число строк учёток: $before_lines"
 # Пароль после повторного запуска прежний: тестовый клиент всё ещё подключается
 out="$(broker <<'SH'
-mosquitto_pub $O -u "$T" -P "$DEV" -i "$T" -q 1 -t "rf/v1/dev/$T/status" -m still-ok 2>&1; echo "rc=$?"
+as_dev mosquitto_pub -i "$T" -q 1 -t "rf/v1/dev/$T/status" -m still-ok 2>&1; echo "rc=$?"
 SH
 )"
 grep -q 'rc=0' <<<"$out" && pass "пароль $T после повторного запуска прежний" || fail "$T не подключился после повторного запуска"
@@ -140,7 +140,8 @@ bpw=out/backend-mqtt-password
   && pass "пароль backend в $bpw, права 600" || fail "нет $bpw или права не 600"
 set -a; . ./.env; set +a
 out="$({
-  printf '%s\n' "ctrl() { mosquitto_ctrl -h localhost -p 8883 --cafile /mosquitto/certs/ca.crt -u admin -P '$DYNSEC_ADMIN_PASSWORD' \"\$@\"; }"
+  broker_opts_begin
+  broker_opts_ctrl "$DYNSEC_ADMIN_PASSWORD"
   echo 'ctrl dynsec getClient backend; ctrl dynsec getRole backend-service'
 } | docker compose exec -T mosquitto sh -s 2>&1)"
 grep -qE 'Clientid: +backend' <<<"$out" && grep -qE 'Roles: +backend-service' <<<"$out" \
@@ -151,5 +152,11 @@ grep -qF 'subscribePattern     : allow : $share/backend/rf/v1/dev/+/telemetry' <
   && pass "роль backend-service: shared-подписка и cmd/req, без доступа ко всему дереву" \
   || fail "ACL роли backend-service не те"
 [ "$(grep -cFf "$bpw" <<<"$out")" = 0 ] && pass "пароль backend не попал в вывод" || fail "пароль backend в выводе"
+
+# 9. R-10 (реш. 308): ни один скрипт стенда не передаёт пароль в argv mosquitto_ctrl/mosquitto_pub/mosquitto_sub —
+# только файлы опций (broker-opts.sh). Регрессия вернула бы пароль в командную строку процесса в контейнере.
+argv_pw="$(grep -nE -- "-P +['\"]?\\\$|createClient [^<]*-p +['\"]?\\\$" mosquitto/*.sh test-backend.sh | grep -v '^mosquitto/broker-opts.sh:' || true)"
+[ -z "$argv_pw" ] && pass "пароли в argv инструментов Mosquitto не передаются (скрипты стенда)" \
+  || fail "пароль в argv: $(cut -d: -f1,2 <<<"$argv_pw" | tr '\n' ' ')"
 
 if [ "$failures" = 0 ]; then echo "dynsec-dev: all checks passed"; else echo "dynsec-dev: $failures check(s) FAILED"; exit 1; fi

@@ -51,6 +51,17 @@ class MqttTlsAndConfigTest {
     }
 
     @Test
+    fun `backend CONNECT limits packets from the broker to the agreed size`() {
+        val connect = HiveMqClient.connectMessage(MqttConfig("mosquitto", 8883, password = "mqtt-secret-3"))
+
+        // R-1: брокер не перешлёт бэкенду пакет больше этого размера (MQTT 5 Maximum Packet Size)
+        assertThat(connect.restrictions.maximumPacketSize).isEqualTo(MqttConfig.DEFAULT_MAX_PACKET_SIZE)
+        assertThat(connect.restrictions.receiveMaximum).isEqualTo(1_000)
+        assertThat(connect.isCleanStart).isFalse()
+        assertThat(connect.sessionExpiryInterval).isEqualTo(86_400)
+    }
+
+    @Test
     fun `metrics snapshot names every counter`() {
         val metrics = IngestMetrics().apply {
             received.addAndGet(5)

@@ -43,6 +43,7 @@ class RuntimeConfig private constructor(
                 rateLimit = RateLimitSettings(
                     loginPerPeriod = config.rateLimit.loginPerMinute,
                     provisionPerPeriod = config.rateLimit.provisionPerMinute,
+                    pollAuthFailuresPerPeriod = config.rateLimit.pollAuthFailuresPerMinute,
                     periodMillis = MS_PER_MINUTE,
                 ),
                 maxBodyBytes = config.http.maxBodyBytes,

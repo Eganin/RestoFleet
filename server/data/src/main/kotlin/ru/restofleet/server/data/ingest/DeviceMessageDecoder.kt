@@ -56,8 +56,9 @@ sealed interface Decoded {
  * (`ProbeErrorClass.fromCode`: неизвестный — `other`).
  *
  * Всё, что PostgreSQL отверг бы детерминированно, отсекается здесь как [Decoded.Undecodable] (реш. 241), иначе одно
- * сообщение заставляло бы разбирать каждую пачку по одному: символ NUL (`text`/`jsonb` его не принимают), время вне
- * 1970–2100 (`timestamptz`), заряд вне 0…100 (`smallint`) — последний просто не пишется.
+ * сообщение заставляло бы разбирать каждую пачку по одному: символ NUL (`text`/`jsonb` его не принимают), суррогат
+ * без пары в `\uXXXX` (`jsonb`, R-6: `bad_unicode`), время вне 1970–2100 (`timestamptz`), заряд вне 0…100
+ * (`smallint`) — последний просто не пишется.
  */
 class DeviceMessageDecoder(private val maxPayloadBytes: Int) {
     fun decode(topic: String, payload: ByteArray): Decoded {
@@ -73,7 +74,11 @@ class DeviceMessageDecoder(private val maxPayloadBytes: Int) {
     private fun parse(route: DeviceTopic, text: String): Decoded = when {
         text.contains(NUL) || text.contains(NUL_ESCAPE) -> Decoded.Undecodable("nul_char")
         else -> try {
-            decode(route.deviceId, route.channel, text)
+            if (JsonText.hasUnpairedSurrogate(RfJson.parseToJsonElement(text))) {
+                Decoded.Undecodable("bad_unicode")
+            } else {
+                decode(route.deviceId, route.channel, text)
+            }
         } catch (e: IllegalArgumentException) {
             // SerializationException — наследник IllegalArgumentException; payload в причину не попадает
             Decoded.Undecodable("bad_json:${route.channel.suffix}:${e.javaClass.simpleName}")

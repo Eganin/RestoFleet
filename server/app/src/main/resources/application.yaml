@@ -33,6 +33,7 @@ auth:
 rateLimit:
   loginPerMinute: 10
   provisionPerMinute: 60
+  pollAuthFailuresPerMinute: 60
 jobs:
   expireCommandsMs: 5000
   markStalePollersMs: 5000

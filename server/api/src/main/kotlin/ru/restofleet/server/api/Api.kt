@@ -17,7 +17,9 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import io.ktor.serialization.kotlinx.json.json
 import org.slf4j.event.Level
+import ru.restofleet.server.api.auth.AuthFailureBudget
 import ru.restofleet.server.api.auth.AuthProviders
+import ru.restofleet.server.api.auth.authFailureCounter
 import ru.restofleet.server.api.auth.installSecurity
 import ru.restofleet.server.api.auth.loginRoute
 import ru.restofleet.server.api.auth.refreshRoute
@@ -45,11 +47,15 @@ object ApiPaths {
 internal object RateLimits {
     val LOGIN = RateLimitName("login")
     val PROVISION = RateLimitName("provision")
+
+    /** Неудачные Basic-проверки устройств на `/poll/…` (R-7): тратит только ответ 401. */
+    val POLL_AUTH = RateLimitName("poll-auth")
 }
 
 /**
  * REST API бэкенда (план 2.3): JSON по правилам протокола (`RfJson`), лимит тела, журнал вызовов без заголовков и тел,
- * единый формат ошибок, JWT (консоль/Swagger) и Basic (устройства), rate limit на вход и провижининг, Swagger UI.
+ * единый формат ошибок, JWT (консоль/Swagger) и Basic (устройства), rate limit на вход, провижининг и неудачный Basic
+ * устройств, Swagger UI.
  * Use cases — параметром [useCases] (Koin их собирает в `server:app`, здесь Koin нет).
  */
 fun Application.restofleetApi(useCases: ApiUseCases, settings: ApiSettings) {
@@ -58,7 +64,9 @@ fun Application.restofleetApi(useCases: ApiUseCases, settings: ApiSettings) {
     installCallLogging()
     installErrorHandling()
     installSecurity(settings.jwt, useCases.poll.authenticate)
-    installRateLimits(settings.rateLimit)
+    val limits = settings.rateLimit
+    val pollAuthFailures = AuthFailureBudget(limits.pollAuthFailuresPerPeriod, limits.periodMillis)
+    installRateLimits(settings.rateLimit, pollAuthFailures)
     routing {
         healthRoute(ApiPaths.HEALTH, useCases.health)
         swaggerUI(path = ApiPaths.SWAGGER, swaggerFile = ApiPaths.OPENAPI_RESOURCE)
@@ -67,7 +75,11 @@ fun Application.restofleetApi(useCases: ApiUseCases, settings: ApiSettings) {
             rateLimit(RateLimits.LOGIN) { loginRoute(useCases.auth) }
             refreshRoute(useCases.auth)
             rateLimit(RateLimits.PROVISION) { provisionRoute(useCases.provisioning) }
-            authenticate(AuthProviders.DEVICE) { pollRoutes(useCases.poll) }
+            // Лимит снаружи аутентификации: исчерпанный клиент получает 429 до проверки пароля (bcrypt)
+            rateLimit(RateLimits.POLL_AUTH) {
+                install(authFailureCounter(pollAuthFailures) { call -> call.clientKey() })
+                authenticate(AuthProviders.DEVICE) { pollRoutes(useCases.poll) }
+            }
             authenticate(AuthProviders.ADMIN) {
                 restaurantRoutes(useCases.restaurants)
                 deviceRoutes(useCases.devices)
@@ -95,7 +107,7 @@ private fun Application.installCallLogging() {
     }
 }
 
-private fun Application.installRateLimits(settings: RateLimitSettings) {
+private fun Application.installRateLimits(settings: RateLimitSettings, pollAuthFailures: AuthFailureBudget) {
     install(RateLimit) {
         register(RateLimits.LOGIN) {
             rateLimiter(limit = settings.loginPerPeriod, refillPeriod = settings.periodMillis.milliseconds)
@@ -103,6 +115,10 @@ private fun Application.installRateLimits(settings: RateLimitSettings) {
         }
         register(RateLimits.PROVISION) {
             rateLimiter(limit = settings.provisionPerPeriod, refillPeriod = settings.periodMillis.milliseconds)
+            requestKey { call -> call.clientKey() }
+        }
+        register(RateLimits.POLL_AUTH) {
+            rateLimiter { _, key -> pollAuthFailures.limiter(key) }
             requestKey { call -> call.clientKey() }
         }
     }

@@ -26,6 +26,7 @@ class MqttBackendTest {
         var connected = false
         var attempts = 0
         every { client.isConnected } answers { connected }
+        every { client.isSubscribed } answers { connected }
         coEvery { client.connect() } coAnswers {
             attempts++
             if (attempts < 3) error("broker down") else connected = true
@@ -47,6 +48,7 @@ class MqttBackendTest {
         var connected = false
         var attempts = 0
         every { client.isConnected } answers { connected }
+        every { client.isSubscribed } answers { connected }
         coEvery { client.connect() } coAnswers {
             attempts++
             // Первый CONNECT не удался, но HiveMQ уже переподключился сам: повторный connect() — «already connected»

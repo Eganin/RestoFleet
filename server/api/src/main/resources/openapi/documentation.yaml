@@ -190,7 +190,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
     delete:
       tags: [devices]
-      summary: Вывод из эксплуатации (учётка DynSec отключается, сессия рвётся, retained очищаются; запись остаётся)
+      summary: Вывод из эксплуатации (учётка DynSec отключается, сессия рвётся, незавершённые команды — failed/decommissioned, retained очищаются; запись остаётся)
       responses:
         "200":
           description: Выведено (повторный вызов идемпотентен и дочищает retained)

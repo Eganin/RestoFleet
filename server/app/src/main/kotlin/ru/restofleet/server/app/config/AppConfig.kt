@@ -63,7 +63,12 @@ data class PollingSection(val staleAfterMs: Long = 90_000)
 
 data class AuthSection(val refreshTtlDays: Long = 7)
 
-data class RateLimitSection(val loginPerMinute: Int = 10, val provisionPerMinute: Int = 60)
+/** Rate limit на клиента (IP); [pollAuthFailuresPerMinute] — неудачные Basic-проверки устройств на `/poll/…` (R-7). */
+data class RateLimitSection(
+    val loginPerMinute: Int = 10,
+    val provisionPerMinute: Int = 60,
+    val pollAuthFailuresPerMinute: Int = 60,
+)
 
 /** Фоновые задачи (реш. 214, контракт КМ2b): истечение команд и presence опроса — каждые 5 с. */
 data class JobsSection(

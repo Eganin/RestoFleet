@@ -59,6 +59,14 @@ internal class ExposedCommandRepository : CommandRepository {
         it[reason] = CommandReasons.EXPIRED
     }
 
+    override suspend fun failUnfinished(deviceId: DeviceId, reason: String, now: Long): Int = CommandsTable.update({
+        (CommandsTable.deviceId eq deviceId.value) and (CommandsTable.status inList pending)
+    }) {
+        it[status] = CommandStatus.FAILED.code
+        it[finishedAt] = now.toTimestamp()
+        it[CommandsTable.reason] = reason
+    }
+
     override suspend fun deliverQueued(deviceId: DeviceId, now: Long): List<Command> = CommandsTable
         .updateReturning(
             returning = CommandsTable.columns,

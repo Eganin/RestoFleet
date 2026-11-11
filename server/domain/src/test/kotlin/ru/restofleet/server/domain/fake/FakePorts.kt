@@ -32,9 +32,16 @@ class FakePasswordHasher : PasswordHasher {
     var hashes = 0
     var verifies = 0
 
+    /** Что происходит, пока идёт bcrypt (гонки с другими use case). */
+    var duringVerify: () -> Unit = {}
+
     override fun hash(password: String): String = "bcrypt($password)".also { hashes++ }
 
-    override fun verify(password: String, hash: String): Boolean = (hash == "bcrypt($password)").also { verifies++ }
+    override fun verify(password: String, hash: String): Boolean {
+        verifies++
+        duringVerify()
+        return hash == "bcrypt($password)"
+    }
 }
 
 class FakeSecrets : SecretGenerator {

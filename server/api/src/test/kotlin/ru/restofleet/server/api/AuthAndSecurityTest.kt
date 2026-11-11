@@ -5,6 +5,7 @@ import io.ktor.client.request.basicAuth
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.request
+import io.ktor.client.statement.HttpResponse
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
@@ -116,6 +117,41 @@ class AuthAndSecurityTest {
             assertThat(limitedResponse.headers[HttpHeaders.RetryAfter]).isNotNull()
             assertThat(otherClient.status).isEqualTo(HttpStatusCode.Unauthorized)
             coVerify(exactly = 3) { limited.auth.login(any(), any()) }
+        }
+    }
+
+    @Test
+    fun `failed device basic auth is limited per client with 429 and stops costing bcrypt`() = ApiTestKit(
+        RateLimitSettings(loginPerPeriod = 100, provisionPerPeriod = 100, pollAuthFailuresPerPeriod = 2),
+    ).let { limited ->
+        limited.run {
+            // R-7: считаются только ответы 401; успешные опросы того же клиента лимит не тратят
+            coEvery { limited.poll.authenticate("d-1", "guess") } returns Outcome.Failure(ServerError.Unauthorized)
+            coEvery { limited.poll.authenticate("d-1", "pw-1") } returns Outcome.Success(Samples.deviceId)
+            coEvery { limited.poll.commands(Samples.deviceId) } returns emptyList()
+            val poll: suspend (String, String) -> HttpResponse = { ip, password ->
+                client.get("/api/v1/poll/commands") {
+                    headers.append(HttpHeaders.XForwardedFor, ip)
+                    basicAuth("d-1", password)
+                }
+            }
+
+            val successes = List(3) { poll("203.0.113.7", "pw-1").status }
+            val failures = List(2) { poll("203.0.113.7", "guess").status }
+            val blocked = poll("203.0.113.7", "guess")
+            val blockedWithPassword = poll("203.0.113.7", "pw-1")
+            val otherClient = poll("203.0.113.8", "pw-1")
+
+            assertThat(successes).containsExactly(HttpStatusCode.OK, HttpStatusCode.OK, HttpStatusCode.OK)
+            assertThat(failures).containsExactly(HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized)
+            assertThat(blocked.status).isEqualTo(HttpStatusCode.TooManyRequests)
+            assertThat(blocked.errorCode()).isEqualTo("rate_limited")
+            assertThat(blocked.headers[HttpHeaders.RetryAfter]).isNotNull()
+            assertThat(blockedWithPassword.status).isEqualTo(HttpStatusCode.TooManyRequests)
+            assertThat(otherClient.status).isEqualTo(HttpStatusCode.OK)
+            // Заблокированный запрос до проверки пароля (bcrypt) не доходит
+            coVerify(exactly = 2) { limited.poll.authenticate("d-1", "guess") }
+            coVerify(exactly = 4) { limited.poll.authenticate("d-1", "pw-1") }
         }
     }
 

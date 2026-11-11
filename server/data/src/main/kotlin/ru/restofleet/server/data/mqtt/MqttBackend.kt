@@ -26,8 +26,8 @@ class MqttBackend(
     private var job: Job? = null
     private val ready = MutableStateFlow(false)
 
-    /** Подключён и подписан: ingest принимает сообщения. */
-    val isReady: Boolean get() = ready.value && client.isConnected
+    /** Подключён и подписан на текущем соединении (после переподключения — после нового SUBACK): ingest принимает. */
+    val isReady: Boolean get() = ready.value && client.isSubscribed
 
     init {
         // До подключения: брокер сразу после CONNACK досылает накопленное в сессии
