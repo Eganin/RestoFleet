@@ -57,7 +57,7 @@ REF_RE = re.compile(rf"(?<![А-Яа-яЁё])(рисун[а-яё]*|рис\.|та�
                     rf"({NUM}(?:\s*(?:,|и|–|—|-)\s*{NUM})*)", re.IGNORECASE)
 CHAPTER_RE = re.compile(r"^(\d+)\s+\S")
 APPENDIX_RE = re.compile(r"^Приложение\s+([А-ЯЁ])\b\.?\s*(?:[—–-]\s*)?(.*)$", re.IGNORECASE)
-SUB_RE = re.compile(r"^(\d+(?:\.\d+)+)\s+\S")
+SUB_RE = re.compile(r"^((?:\d+|[А-ЯЁ])(?:\.\d+)+)\s+\S")   # 2.3.1 в главе, Б.1 в приложении
 
 
 # ---------- модель документа ----------
@@ -440,7 +440,8 @@ def check_layout(docs, report):
     for name, blocks in docs:
         for b in blocks:
             if b.kind == "code":
-                if len(b.code) > CODE_MAX_LINES:
+                in_appendix = isinstance(b.chapter, str)        # приложения — место для длинных фрагментов
+                if len(b.code) > CODE_MAX_LINES and not in_appendix:
                     report.add("Оформление", f"{name}:{b.line}: листинг {len(b.code)} строк — "
                                              f"длинные фрагменты по README выносятся в приложения", "warn")
                 for k, line in enumerate(b.code):
@@ -688,7 +689,8 @@ def build_docx(docs, figures, tables, out_path, report):
             if code:
                 rpr = run._r.get_or_add_rPr()
                 set_fonts(rpr, "Courier New")
-                set_lang(rpr, "en-US")
+                put(rpr, "noProof", RPR_ORDER)          # код: без проверки правописания и без переносов
+                set_lang(rpr, "zxx")
             if todo:
                 run.font.highlight_color = WD_COLOR_INDEX.YELLOW
         return paragraph
@@ -781,7 +783,11 @@ def build_docx(docs, figures, tables, out_path, report):
         for row in [header] + rows:
             for c, cell in enumerate(row):
                 t = plain_text(cell)
-                longest_word[c] = max([longest_word[c]] + [len(w) for w in t.split()])
+                # слово в `коде` (Courier New 12: 0,6 кегля ≈ 145 twips на знак) шире слова в Times (≈ 115)
+                code_words = [w for span in CODE_SPAN_RE.findall(cell) for w in span.strip("`").split()]
+                text_words = CODE_SPAN_RE.sub(" ", cell).split()
+                longest_word[c] = max([longest_word[c]] + [len(plain_text(w)) for w in text_words]
+                                      + [round(len(w) * 145 / 115) for w in code_words])
                 weight[c] = max(weight[c], min(len(t), 80))
         weight = [w ** 0.8 + 4 for w in weight]
         total = TEXT_W_TWIPS

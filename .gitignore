@@ -19,5 +19,8 @@ spikes/**/results/creds*.csv
 .superpowers/
 # Run logs (tools/emulators/run-matrix.sh)
 logs/
-# Coursework docx: built by tools/coursework/build_docx.py, committed only at stage close
+# Coursework: docx is built by tools/coursework/build_docx.py, PDF is exported from Word by hand (decision 319)
 docs/coursework/RestoFleet-coursework.docx
+docs/coursework/*.pdf
+# Python bytecode of experiment tools
+tools/experiments/__pycache__/

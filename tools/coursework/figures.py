@@ -24,6 +24,7 @@ from matplotlib.path import Path as MPath  # noqa: E402
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "docs" / "coursework"
 OUT = SRC / "img"
+# Снимки экрана валидации (img/<id>.png кладутся вручную); в записку идут через agent_screens()
 SCREENSHOTS = {"agent-wizard", "agent-status"}
 # Графики главы 4 рисует tools/experiments/analyze.py в docs/experiments/img/<id>.png; build_docx.py берёт их оттуда
 EXPERIMENT_CHARTS = {"traffic", "latency", "server-cpu", "server-mem", "timeline-5000", "detection", "degradation"}
@@ -657,44 +658,43 @@ def er_model():
 # ---------- 2.6 Провижининг ----------
 
 def provisioning_sequence():
-    c = Canvas(19.6)
+    c = Canvas(17.6)
     s = Seq(c, [("adm", "Администратор\n(Swagger UI)", 1.25), ("ng", "nginx", 3.9), ("be", "Backend", 6.55),
                 ("pg", "PostgreSQL", 9.2), ("mq", "Mosquitto", 11.85), ("ag", "Агент\n(мастер)", 14.6)],
-            top=19.5, head_w=2.4, head_h=0.95, size=7.3)
+            top=17.5, head_w=2.4, head_h=0.95, size=7.3)
     s.gap(0.25)
-    s.msg("adm", "ng", "1) POST /api/v1/provisioning/\ntokens {restaurantId, role,\nname}, JWT", size=6.8)
-    s.msg("ng", "be", "HTTP 8080")
-    s.msg("be", "pg", "INSERT token_hash =\nSHA-256(код), TTL 24 ч")
-    s.msg("be", "adm", "201 {code}", dashed=True)
+    s.msg("adm", "ng", "1) POST /api/v1/provisioning/\ntokens {restaurantId, role, name}", size=6.8, step=0.42)
+    s.msg("ng", "be", "HTTP 8080", step=0.5)
+    s.msg("be", "pg", "INSERT token_hash =\nSHA-256(код), TTL 24 ч", step=0.42)
+    s.msg("be", "adm", "201 {code}", dashed=True, step=0.42)
     s.note("adm", "ag", "2) администратор передаёт код технику; техник вводит его в мастере агента", pad_x=1.1)
-    s.msg("ag", "ng", "3) POST /api/v1/provision {code, deviceInfo,\nagentVersion}, HTTPS 8443")
-    s.msg("ng", "be", "HTTP 8080")
+    s.msg("ag", "ng", "3) POST /api/v1/provision {code, deviceInfo,\nagentVersion}, HTTPS 8443", step=0.42)
+    s.msg("ng", "be", "HTTP 8080", step=0.42)
     tx_top = s.open_group()
-    s.msg("be", "pg", "4) UPDATE provisioning_tokens\n… RETURNING (не использован,\nне истёк)")
-    s.msg("be", "pg", "INSERT devices (provisioned;\nроль, ресторан из кода)")
-    s.msg("be", "pg", "INSERT device_credentials:\nbcrypt(пароль 32 байта)")
-    s.msg("be", "pg", "INSERT shadows: desired v1")
-    s.msg("be", "mq", "$CONTROL/dynamic-security/v1: createClient\n(username = clientid = deviceId, роль device)")
-    s.msg("mq", "be", "ответ (correlationData)", dashed=True)
+    s.msg("be", "pg", "4) UPDATE provisioning_tokens\n… RETURNING (не использован,\nне истёк)", step=0.5)
+    s.msg("be", "pg", "INSERT devices (роль, ресторан из кода),\ndevice_credentials (bcrypt), shadows (v1)", step=0.5)
+    s.msg("be", "mq", "$CONTROL/dynamic-security/v1: createClient\n(username = clientid = deviceId, роль device)",
+          step=0.42)
+    s.msg("mq", "be", "ответ (correlationData)", dashed=True, step=0.42)
     alt_top = s.open_group()
-    s.msg("be", "pg", "COMMIT")
+    s.msg("be", "pg", "COMMIT", step=0.42)
     split = s.y + 0.22
     s.gap(0.6)
-    s.msg("be", "pg", "ROLLBACK — код не погашен")
-    s.msg("be", "ag", "503 broker_unavailable", dashed=True)
+    s.msg("be", "pg", "ROLLBACK — код не погашен", step=0.42)
+    s.msg("be", "ag", "503 broker_unavailable", dashed=True, step=0.42)
     bottom = s.y + 0.22
     s.group(5.45, 15.8, alt_top, bottom, "alt", "[брокер создал учётную запись]")
     c.ax.plot([5.45, 15.8], [split, split], color=MUTED, lw=0.7, ls=(0, (4, 3)), zorder=3)
     c.text(5.6, split - 0.17, "[отказ брокера]", size=7, style="italic", ha="left", bg="white", z=8)
     s.group(5.25, 15.95, tx_top, bottom - 0.15, "транзакция")
-    s.gap(0.5)
-    s.msg("be", "mq", "5) PUBLISH retained shadow/desired v1")
-    s.msg("be", "ag", "6) 201 {deviceId, password, restaurantId, role, mqtt {host, port}}", dashed=True)
-    s.self_call("ag", "7) шифрование учётной\nзаписи (Android Keystore)", side="left")
-    s.msg("ag", "mq", "CONNECT (TLS 8883,\nWill: status offline)")
-    s.msg("ag", "mq", "PUBLISH status online")
-    s.msg("mq", "ag", "retained desired v1")
-    s.msg("ag", "mq", "PUBLISH shadow/reported")
+    s.gap(0.45)
+    s.msg("be", "mq", "5) PUBLISH retained shadow/desired v1", step=0.42)
+    s.msg("be", "ag", "6) 201 {deviceId, password, restaurantId, role, mqtt {host, port}}", dashed=True, step=0.5)
+    s.self_call("ag", "7) шифрование учётной\nзаписи (Android Keystore)", side="left", step=0.6)
+    s.msg("ag", "mq", "CONNECT (TLS 8883,\nWill: status offline)", step=0.42)
+    s.msg("ag", "mq", "PUBLISH status online", step=0.42)
+    s.msg("mq", "ag", "retained desired v1", step=0.42)
+    s.msg("ag", "mq", "PUBLISH shadow/reported", step=0.42)
     s.finish(s.y + 0.05)
     return c.save("provisioning-sequence")
 
@@ -906,6 +906,31 @@ def stand_compose():
     return c.save("stand-compose")
 
 
+# ---------- 3.3 Экраны агента (из снимков экрана валидации) ----------
+
+def agent_screens():
+    """Снимки agent-wizard и agent-status рядом, подписи «а)» и «б)»; высота снимка в записке — 12 см."""
+    from matplotlib import font_manager
+    from PIL import Image, ImageDraw, ImageFont
+
+    shots = [Image.open(OUT / f"{name}.png").convert("RGB") for name in ("agent-wizard", "agent-status")]
+    h = 1200                                   # px: 12 см при 254 dpi
+    shots = [im.resize((round(im.width * h / im.height), h), Image.LANCZOS) for im in shots]
+    gap, label_h, dpi = 80, 70, 254
+    canvas = Image.new("RGB", (sum(im.width for im in shots) + gap, h + label_h), "white")
+    font = ImageFont.truetype(font_manager.findfont("DejaVu Sans"), round(10 / 72 * dpi))
+    draw = ImageDraw.Draw(canvas)
+    x = 0
+    for im, label in zip(shots, ("а)", "б)")):
+        canvas.paste(im, (x, 0))
+        draw.rectangle((x, 0, x + im.width - 1, h - 1), outline=(150, 150, 150), width=2)
+        draw.text((x + im.width / 2, h + label_h / 2), label, fill=(34, 34, 34), font=font, anchor="mm")
+        x += im.width + gap
+    path = OUT / "agent-screens.png"
+    canvas.save(path, dpi=(dpi, dpi), optimize=True)
+    return path
+
+
 FIGURES = {
     "iot-layers": iot_layers,
     "mqtt-pubsub": mqtt_pubsub,
@@ -920,6 +945,7 @@ FIGURES = {
     "agent-components": agent_components,
     "ingest-pipeline": ingest_pipeline,
     "stand-compose": stand_compose,
+    "agent-screens": agent_screens,
 }
 
 
