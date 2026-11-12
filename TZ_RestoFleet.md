@@ -1,9 +1,12 @@
 # Техническое задание
 ## IoT-платформа мониторинга и удалённого управления устройствами ресторанной сети
 **Рабочее название:** RestoFleet
-**Версия документа:** 0.3 (черновик по итогам MVP-A) · **Дата:** 10.11.2026
+**Версия документа:** 0.4 (правки протокола по итогам этапа К) · **Дата:** 12.11.2026
 
 > Структура документа адаптирована по ГОСТ 34.602-2020. При оформлении в курсовой/дипломной работе привести к требованиям методических указаний кафедры. Места, помеченные `«…»`, заполняются фактическими данными (название компании использовать разрешено).
+
+### Изменения в версии 0.4
+Основание — этап К (курсовая), реш. 206, 207, 321 этапа К (`docs/reports/1-coursework/decisions.md`). Минимальные правки разд. 7 и FR-BE-41 по коду `shared:protocol` и серверной части, помечены «v0.4»: 7.2 — события `threshold`, `fg_changed`, `fg_absent`, поле цели `expectedStatus`, причина `reconfigure` в `offline`, роль в `status` из учётной записи, агент применяет `thresholds`, `Message Expiry` = остаток срока до `expiresAt`, пример `probe` без `null`; FR-AG-72 и 7.4 — допуск часов 5 мин; FR-BE-41 — причины `broker_unavailable`, `decommissioned`; 7.5 — OQ-1 и OQ-2 закрыты. Расхождение объёма К между разд. 16.3 и `docs/stages/1-coursework.md` — вопрос автору (реш. 321).
 
 ### Изменения в версии 0.3
 Основание — этап MVP-A (эмуляторы). Ссылки: «реш. N» — `docs/reports/0-mvp/decisions.md`; «арх. Dn / Pn» — `docs/architecture.md`; «OQ-n» — открытые вопросы (разд. 7.5). Версия закрывает MVP-A: результаты проверок — разд. 10.2.1, 13.4, 13.5; всё, что не проверено (API 29/31/33/35/37, реальные устройства, полноразмерные замеры), помечено «MVP-B» или оговоркой.
@@ -312,7 +315,7 @@ MDM-системы и режима киоска на устройствах не
 | FR-AG-69 | `lock_task` — режим киоска (для кухни — браузер с кухонной станцией); под киоском `show_message` и `launch_app` чужого пакета отвечают `failed` / `kiosk_active`; восстановление после перезагрузки и выход из киоска — кандидаты (разд. 17.2) (реш. 141) | DO | Д |
 | FR-AG-70 | Неподдерживаемая в текущем режиме команда возвращает статус `unsupported` с причиной | — | К |
 | FR-AG-71 | Идемпотентность: идентификаторы исполненных команд (последние 200) хранятся персистентно; повторная доставка не исполняется. Порядок: `received` → отметка `cmdId` → исполнение → итог (at-most-once); таймаут исполнения 60 с, для `install_update` — 10 мин, по истечении `failed` / `timeout` (реш. 10, 130, 131) | — | К |
-| FR-AG-72 | Истёкшая команда (`expiresAt` раньше текущего времени устройства) не исполняется: ответ `received`, затем `failed` с `reason: "expired"`; ответ на нечитаемую команду — `failed` / `invalid_params:…`, на неизвестный тип — `unsupported` / `unknown_type:…` (реш. 11, 135; OQ-1) | — | К |
+| FR-AG-72 | Истёкшая команда (`expiresAt` раньше текущего времени устройства более чем на 5 мин — допуск на расхождение часов, v0.4) не исполняется: ответ `received`, затем `failed` с `reason: "expired"`; ответ на нечитаемую команду — `failed` / `invalid_params:…`, на неизвестный тип — `unsupported` / `unknown_type:…` (реш. 11, 135; OQ-1) | — | К |
 
 **Работа без связи**
 | ID | Требование | Этап |
@@ -408,7 +411,7 @@ MDM-системы и режима киоска на устройствах не
 | ID | Требование | Этап |
 |---|---|---|
 | FR-BE-40 | Отправка команды: MQTT 5 `Response Topic` + `Correlation Data`, `Message Expiry Interval`; в тело команды добавляется `expiresAt` (арх. P2) | К |
-| FR-BE-41 | Статусы команды: `queued → delivered → succeeded / failed / unsupported / expired`; `delivered` — по ответу агента `received` (арх. P1); `expired` выставляет таймер бэкенда, поздний итоговый ответ имеет приоритет (P2) | К |
+| FR-BE-41 | Статусы команды: `queued → delivered → succeeded / failed / unsupported / expired`; `delivered` — по ответу агента `received` (арх. P1); `expired` выставляет таймер бэкенда, поздний итоговый ответ имеет приоритет (P2); `failed` с `reason` `broker_unavailable` — публикация в брокер не удалась, `decommissioned` — устройство выведено из эксплуатации (v0.4) | К |
 | FR-BE-42 | Групповые команды (все устройства ресторана/роли) через топик ресторана | Д |
 | FR-BE-43 | Ограничение опасных команд ролью «Администратор» + подтверждение | Д |
 
@@ -487,7 +490,7 @@ MDM-системы и режима киоска на устройствах не
 { "state": "online", "ts": 1793865600000, "connId": "k-7f3a9c", "agentVersion": "1.0.0", "mode": "normal", "role": "kitchen", "bootId": "b7f2…",
   "device": { "model": "…", "manufacturer": "…", "osVersion": "16", "apiLevel": 36 } }
 ```
-`role` агенту не известна — поле опускается. `mode` — режим работы (обычный / Device Owner). `bootId` — `/proc/sys/kernel/random/boot_id`, при недоступности — счётчик загрузок, иначе поле опускается. Штатная остановка агента: событие `agent_lifecycle`/`stop`, затем явный `offline` с `reason=stop` и тем же `connId` и штатный DISCONNECT (LWT не срабатывает); убийство процесса оставляет LWT с `reason=lwt` (реш. 150, 151).
+`role` — из учётной записи регистрации (ответ `/provision`); без неё поле опускается (v0.4). `mode` — режим работы (обычный / Device Owner). `bootId` — `/proc/sys/kernel/random/boot_id`, при недоступности — счётчик загрузок, иначе поле опускается. Штатная остановка агента: событие `agent_lifecycle`/`stop`, затем явный `offline` с `reason=stop` и тем же `connId` и штатный DISCONNECT (LWT не срабатывает); убийство процесса оставляет LWT с `reason=lwt` (реш. 150, 151); при смене учётной записи — `offline` с `reason=reconfigure` (v0.4).
 Каноническая форма JSON: поля со значением `null` не передаются (`explicitNulls = false`), значения по умолчанию пишутся явно (реш. 15).
 
 **telemetry** (пример для планшета кухни):
@@ -511,7 +514,7 @@ MDM-системы и режима киоска на устройствах не
 {
   "ts": 1793865630000,
   "results": [
-    { "id": "api",  "ok": false, "error": "timeout", "totalMs": 5000, "dnsMs": 14, "connectMs": 38, "tlsMs": null, "ttfbMs": null },
+    { "id": "api",  "ok": false, "error": "timeout", "totalMs": 5000, "dnsMs": 14, "connectMs": 38 },
     { "id": "kds",  "ok": true,  "status": 200, "totalMs": 212, "dnsMs": 9, "connectMs": 31, "tlsMs": 64, "ttfbMs": 108 },
     { "id": "ref",  "ok": true,  "status": 200, "totalMs": 95 }
   ]
@@ -523,7 +526,7 @@ MDM-системы и режима киоска на устройствах не
 ```json
 { "ts": 1793865700000, "type": "probe_state", "target": "api", "state": "down", "error": "timeout", "failures": 3 }
 ```
-Типы событий, описанные golden-фикстурами `docs/protocol/fixtures/`: `probe_state`, `net_changed`, `package_changed`, `agent_lifecycle` (`boot` / `start` / `stop`), `capability_check` (результат проверки из Capability Lab) и служебное `debug_seq` (только debug-сборка, сервер игнорирует). У событий идентификатора нет (см. 7.4).
+Типы событий, описанные golden-фикстурами `docs/protocol/fixtures/`: `probe_state`, `net_changed`, `package_changed`, `agent_lifecycle` (`boot` / `start` / `stop`), `capability_check` (результат проверки из Capability Lab) и служебное `debug_seq` (только debug-сборка, сервер игнорирует). У событий идентификатора нет (см. 7.4). **v0.4:** `probe_state` — `target`, `state` (`up` / `down`), `error`, `failures`; `threshold` — `metric` (`battery_low`, `temp_high`, `thermal`), `state` (`enter` / `exit`), `value`, `limit` — вход в зону и выход с гистерезисом 2 % / 2 °C, для `thermal` порог — `SEVERE`; `fg_changed` — `from`, `to`; `fg_absent` — `pkg`, `sinceTs`, `limitMin`, `foregroundApp` (отслеживаемое приложение не на экране дольше `fgAbsentMin`).
 
 **shadow/desired:**
 ```json
@@ -540,15 +543,15 @@ MDM-системы и режима киоска на устройствах не
 }
 ```
 
-Допустимый диапазон `telemetry.intervalSec` — 10…3600 с. Версия старее сохранённой игнорируется, равная — только повторяет `reported`, новее — применяется и сохраняется.
+Цель может содержать ожидаемый HTTP-код `expectedStatus`: без него проверка успешна при коде меньше 400, с ним — только при совпадении; `reference` по умолчанию `false` (v0.4). Допустимый диапазон `telemetry.intervalSec` — 10…3600 с. Версия старее сохранённой игнорируется, равная — только повторяет `reported`, новее — применяется и сохраняется.
 
-**shadow/reported:** та же структура + `"appliedVersion": 12, "appliedAt": …, "errors": []`; QoS 1, `retain = false`. Агент пороги не применяет, только возвращает `thresholds` как эхо. Коды в `errors`: `telemetryIntervalSec:out_of_range`, `probes:empty_id`, `probes:empty_url:<id>`, `probes:duplicate_id:<id>` (остаётся первая цель), `watchedApps:empty`, `watchedApps:invalid_name:<имя>` (реш. 134, 151, 161, 177).
+**shadow/reported:** та же структура + `"appliedVersion": 12, "appliedAt": …, "errors": []`; QoS 1, `retain = false`. Агент применяет `thresholds` (события `threshold`, `fg_absent`) и возвращает применённые значения (v0.4). Коды в `errors`: `telemetryIntervalSec:out_of_range`, `probes:empty_id`, `probes:empty_url:<id>`, `probes:duplicate_id:<id>` (остаётся первая цель), `watchedApps:empty`, `watchedApps:invalid_name:<имя>` (реш. 134, 151, 161, 177).
 
-**cmd/req** (MQTT 5 properties: `Response Topic = rf/v1/dev/{id}/cmd/res`, `Correlation Data = cmdId`, `Message Expiry Interval = 300`):
+**cmd/req** (MQTT 5 properties: `Response Topic = rf/v1/dev/{id}/cmd/res`, `Correlation Data = cmdId`, `Message Expiry Interval` = остаток срока жизни до `expiresAt`, по умолчанию 300 с — v0.4):
 ```json
 { "cmdId": "c-01J…", "type": "show_message", "params": { "text": "Перезагрузите роутер", "level": "warning" }, "expiresAt": 1793866100000 }
 ```
-`expiresAt` — момент истечения (epoch, мс), равен моменту отправки + Message Expiry Interval (арх. P2). Допустимые `level`: `info`, `warning`, `critical` (реш. 89). Проверки параметров на стороне агента (`Capabilities.check`, реш. 91, 93, 94): `url` — только `https://` в нижнем регистре, не длиннее 2048 символов; имя пакета — не длиннее 255; `text` — не пустой и не длиннее 1000; `sha256` — ровно 64 hex-символа; длительность сигнала — 1…30 000 мс. Команда `install_update` несёт `package`, `url`, `sha256` (фикстура `cmd-req-install-update.json`).
+`expiresAt` — момент истечения (epoch, мс), равен моменту создания команды + срок жизни (по умолчанию 300 с, 1…86 400 с); Message Expiry Interval при публикации — остаток до `expiresAt` (арх. P2; v0.4). Допустимые `level`: `info`, `warning`, `critical` (реш. 89). Проверки параметров на стороне агента (`Capabilities.check`, реш. 91, 93, 94): `url` — только `https://` в нижнем регистре, не длиннее 2048 символов; имя пакета — не длиннее 255; `text` — не пустой и не длиннее 1000; `sha256` — ровно 64 hex-символа; длительность сигнала — 1…30 000 мс. Команда `install_update` несёт `package`, `url`, `sha256` (фикстура `cmd-req-install-update.json`).
 
 **cmd/res:**
 ```json
@@ -569,7 +572,7 @@ MDM-системы и режима киоска на устройствах не
 | # | Проблема в v0.2 | Правка |
 |---|---|---|
 | P1 | Статус `delivered` средствами MQTT не узнать | Агент сразу публикует `cmd/res` со `status: "received"`, затем итоговый |
-| P2 | `expired` брокер молча не сообщает | Поле `expiresAt` в `cmd/req`; бэкенд переводит в `expired` по таймеру; поздний итоговый ответ побеждает. Агент не исполняет команду с истёкшим `expiresAt` и отвечает `failed` / `expired` (реш. 11) |
+| P2 | `expired` брокер молча не сообщает | Поле `expiresAt` в `cmd/req`; бэкенд переводит в `expired` по таймеру; поздний итоговый ответ побеждает. Агент не исполняет команду с истёкшим `expiresAt` (допуск часов 5 мин, v0.4) и отвечает `failed` / `expired` (реш. 11) |
 | P3 | LWT старой сессии может прийти после нового `online` | `connId` в `online` и в LWT; чужой `connId` игнорируется |
 | P4 | Shared subscription не получает retained | Источник истины статуса — БД |
 | P5 | ACL `%u/#` позволяет устройству писать себе `desired`/`cmd/req` | Роль DynSec `device`: publish — `status, telemetry, probe, events, shadow/reported, cmd/res`; subscribe — `shadow/desired, cmd/req` |
@@ -582,13 +585,15 @@ MDM-системы и режима киоска на устройствах не
 Дополнения по итогам MVP-A:
 - **Дедупликация (at-least-once).** Бэкенд обрабатывает `cmd/res` идемпотентно по паре `(cmdId, status)`. У событий идентификатора нет; при обрыве досылки буфера возможен одиночный дубль (запись удаляется после своего PUBACK). Телеметрия идёт QoS 0 (досылка буфера — QoS 1) и может теряться (реш. 133; M3-review).
 - **Порядок.** Внутри `cmd/res` порядок `received` → итог сохраняется; при непустом буфере новое сообщение уходит в буфер, а не напрямую, чтобы не обогнать более раннее (реш. 132).
-- **Расхождение часов.** `expiresAt` сверяется с часами устройства, Message Expiry брокера от часов не зависит (OQ-1).
+- **Расхождение часов.** `expiresAt` сверяется с часами устройства с допуском 5 мин (команда истекла, если `now > expiresAt + 5 мин`), Message Expiry брокера от часов не зависит (OQ-1, закрыт в v0.4).
 
-### 7.5 Открытые вопросы (требуют решения автора)
+### 7.5 Открытые вопросы (закрыты в v0.4)
 | № | Вопрос | Варианты | Почему важно |
 |---|---|---|---|
 | OQ-1 | `expiresAt` сверяется с часами устройства: если часы планшета уходят вперёд больше чем на 5 мин, все команды получают `expired` | (а) допуск на рассинхронизацию в агенте; (б) опора только на Message Expiry брокера, `expiresAt` — информационный | Message Expiry от часов устройства не зависит (M3-review) |
 | OQ-2 | У событий нет идентификатора, дубль после обрыва досылки неотличим от повторного события | (а) принять дубль как допустимый; (б) ввести `eventId` в события (правка протокола и фикстур) | Контракт дедупликации на бэкенде (M3-review) |
+
+**v0.4:** OQ-1 закрыт вариантом (а) — допуск 5 мин в агенте, основная защита — Message Expiry брокера (реш. 206 этапа К, `docs/reports/1-coursework/decisions.md`); OQ-2 закрыт вариантом (а) — одиночный дубль события после обрыва досылки допустим, `eventId` не вводится (реш. 207 этапа К).
 
 ---
 
