@@ -7,6 +7,7 @@ import ru.restofleet.server.domain.alert.AlertConditionRepository
 import ru.restofleet.server.domain.alert.AlertCounts
 import ru.restofleet.server.domain.alert.AlertFilter
 import ru.restofleet.server.domain.alert.AlertRepository
+import ru.restofleet.server.domain.alert.AlertState
 import ru.restofleet.server.domain.alert.AlertView
 import ru.restofleet.server.domain.alert.Condition
 import ru.restofleet.server.domain.alert.ConditionKey
@@ -32,6 +33,9 @@ data class StoredProbeState(val down: Boolean, val since: Long, val lastResultAt
 class FakeAlertRepository(private val db: InMemoryDb) : AlertRepository {
     var lockedFor = mutableListOf<String>()
 
+    /** Однократно — после чтения [active]: имитирует чужую транзакцию, закоммиченную до записи (RV-5). */
+    var afterActiveRead: (() -> Unit)? = null
+
     override suspend fun insert(alert: Alert) = db.update { s ->
         check(s.alerts.values.none { it.isActive && it.subject == alert.subject }) { "unique active subject" }
         s.copy(alerts = s.alerts + (alert.id to alert))
@@ -39,10 +43,17 @@ class FakeAlertRepository(private val db: InMemoryDb) : AlertRepository {
 
     override suspend fun update(alert: Alert) = db.update { it.copy(alerts = it.alerts + (alert.id to alert)) }
 
+    override suspend fun autoResolve(id: String, at: Long): Boolean {
+        val alert = db.read { it.alerts[id] }?.takeIf { it.state != AlertState.RESOLVED } ?: return false
+        update(alert.copy(state = AlertState.RESOLVED, resolvedAt = at, auto = true))
+        return true
+    }
+
     override suspend fun findForUpdate(id: String): Alert? = db.read { it.alerts[id] }.also { lockedFor += id }
 
     override suspend fun active(deviceIds: Collection<DeviceId>): List<Alert> =
         db.read { s -> s.alerts.values.filter { it.isActive && it.deviceId in deviceIds } }
+            .also { afterActiveRead?.invoke(); afterActiveRead = null }
 
     override suspend fun list(filter: AlertFilter, page: PageRequest): List<AlertView> = db.read { s ->
         s.alerts.values
@@ -130,16 +141,29 @@ class FakeEventBus : EventBus {
 }
 
 class FakeIncidentRepository(private val db: InMemoryDb) : IncidentRepository {
+    /** Однократно — после чтения [open]: имитирует чужую транзакцию, закоммиченную до записи тика (RV-5). */
+    var afterOpenRead: (() -> Unit)? = null
+
     override suspend fun insert(incident: Incident) =
         db.update { it.copy(incidents = it.incidents + (incident.id to incident)) }
 
     override suspend fun update(incident: Incident) = insert(incident)
+
+    override suspend fun updateEvaluation(incident: Incident) = db.update { s ->
+        val stored = s.incidents.getValue(incident.id)
+        val evaluated = stored.copy(
+            restaurants = incident.restaurants, evidence = incident.evidence, missedTicks = incident.missedTicks,
+            resolvedAt = incident.resolvedAt, resolveReason = incident.resolveReason,
+        )
+        s.copy(incidents = s.incidents + (incident.id to evaluated))
+    }
 
     override suspend fun findForUpdate(id: String): Incident? = find(id)
 
     override suspend fun find(id: String): Incident? = db.read { it.incidents[id] }
 
     override suspend fun open(): List<Incident> = db.read { s -> s.incidents.values.filter { it.isOpen } }
+        .also { afterOpenRead?.invoke(); afterOpenRead = null }
 
     override suspend fun list(filter: IncidentFilter, page: PageRequest): List<Incident> = db.read { s ->
         s.incidents.values

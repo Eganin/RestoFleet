@@ -17,7 +17,9 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
+import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
+import ru.restofleet.console.core.network.realtime.WsHandshakeException
 import ru.restofleet.shared.protocol.RfJson
 
 /** Фабрика клиентов Ktor. Движок (OkHttp) передаёт composition root: у приложений разное доверие к TLS. */
@@ -48,7 +50,28 @@ object HttpClientFactory {
             }
         }
 
-    /** Клиент с Bearer: токен подставляется на каждый запрос, на 401 — один `refresh` и один повтор. */
+    /**
+     * Клиент WebSocket (RV-2): как [bare], без перехватчика токенов — токен передаёт `KtorWsConnector`, а 401
+     * обрабатывает `RealtimeClient`. Ответ на upgrade, отличный от 101 и 2xx, сразу становится
+     * [WsHandshakeException] с кодом: плагин WebSockets иначе бросает исключение без кода, и 401 не отличить от обрыва.
+     */
+    fun realtime(engine: HttpClientEngine, endpoint: ServerEndpoint, debugLogger: Logger? = null): HttpClient =
+        bare(engine, endpoint, debugLogger).also { client ->
+            client.plugin(HttpSend).intercept { request ->
+                val call = execute(request)
+                val status = call.response.status
+                if (status != HttpStatusCode.SwitchingProtocols && !status.isSuccess()) {
+                    throw WsHandshakeException(status.value)
+                }
+                call
+            }
+        }
+
+    /**
+     * Клиент с Bearer: токен подставляется на каждый запрос, на 401 — один `refresh` и один повтор. Запрос, который
+     * уже несёт `Authorization`, уходит как есть: второго значения заголовка нет (иначе сервер видит
+     * `Bearer A,Bearer A` и отвечает 401, RV-2), а его 401 обрабатывает автор запроса.
+     */
     fun authorized(
         engine: HttpClientEngine,
         endpoint: ServerEndpoint,
@@ -56,6 +79,7 @@ object HttpClientFactory {
         debugLogger: Logger? = null,
     ): HttpClient = bare(engine, endpoint, debugLogger).also { client ->
         client.plugin(HttpSend).intercept { request ->
+            if (request.headers.contains(HttpHeaders.Authorization)) return@intercept execute(request)
             val sent = tokens.accessToken()
             sent?.let { request.header(HttpHeaders.Authorization, "Bearer $it") }
             val call = execute(request)

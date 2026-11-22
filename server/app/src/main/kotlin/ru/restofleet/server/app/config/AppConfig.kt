@@ -104,8 +104,11 @@ data class IncidentsSection(
     val tickMs: Long = 30_000,
 )
 
-/** Сессии (реш. 417): refresh живёт [refreshIdleHours] с ротации, не дольше [sessionMaxDays] со входа. */
-data class AuthSection(val refreshIdleHours: Long = 24, val sessionMaxDays: Long = 7)
+/**
+ * Сессии (реш. 417, 531): refresh живёт [refreshIdleHours] с ротации, не дольше [sessionMaxDays] со входа; повтор
+ * только что ротированного токена с неиспользованным преемником прощается [reuseGraceSec].
+ */
+data class AuthSection(val refreshIdleHours: Long = 24, val sessionMaxDays: Long = 7, val reuseGraceSec: Long = 60)
 
 /** Rate limit на клиента (IP); [pollAuthFailuresPerMinute] — неудачные Basic-проверки устройств на `/poll/…` (R-7). */
 data class RateLimitSection(

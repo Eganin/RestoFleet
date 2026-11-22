@@ -3,6 +3,7 @@ package ru.restofleet.console.root.di
 import com.arkivanov.decompose.ComponentContext
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.plugins.logging.Logger
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -52,15 +53,24 @@ fun coreModule(platform: PlatformDependencies): Module = module {
     single(named(HttpQualifiers.AUTHORIZED)) {
         HttpClientFactory.authorized(platform.engineFactory(), get(), get<SessionManager>(), platform.debugLogger)
     }
+    single(named(HttpQualifiers.REALTIME)) {
+        HttpClientFactory.realtime(platform.engineFactory(), get(), platform.debugLogger)
+    }
     single {
         val endpoint = get<ServerEndpoint>()
+        // Не AUTHORIZED: его перехватчик добавил бы второй заголовок и лишний refresh (RV-2)
         RealtimeClient(
-            connector = KtorWsConnector(get(named(HttpQualifiers.AUTHORIZED))),
+            connector = KtorWsConnector(get(named(HttpQualifiers.REALTIME))),
             tokens = get<SessionManager>(),
             url = { endpoint.wsUrl() },
-            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + realtimeErrors(platform)),
         )
     }
+}
+
+/** Последняя линия защиты (RV-3): необработанная ошибка корутины клиента реального времени не роняет приложение. */
+private fun realtimeErrors(platform: PlatformDependencies) = CoroutineExceptionHandler { _, error ->
+    platform.debugLogger?.log("realtime: unhandled ${error::class.simpleName}")
 }
 
 /** Экраны вкладок. Пока заглушки; фичи подключаются в `ScreenFactories`. */

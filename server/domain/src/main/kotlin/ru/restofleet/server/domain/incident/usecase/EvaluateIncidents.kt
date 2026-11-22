@@ -60,7 +60,7 @@ class EvaluateIncidents(
                 open, classification, stats, now, ids::newId, settings.classifier, settings.resolveAfterTicks,
             )
             result.opened.forEach { incidents.insert(it) }
-            result.changed.forEach { incidents.update(it) }
+            result.changed.forEach { incidents.updateEvaluation(it) }
             val stillOpen = result.all.filter { it.isOpen }
             val candidates = (alerts.activeInRestaurants(stillOpen.flatMap { it.restaurants }.toSet()) +
                 alerts.activeSuppressed()).distinctBy { it.id }
@@ -80,8 +80,10 @@ class EvaluateIncidents(
     private suspend fun publish(changed: List<Incident>, reparented: List<String>) {
         if (changed.isEmpty() && reparented.isEmpty()) return
         val (incidentViews, alertViews) = tx.inTransaction {
-            val counts = incidents.suppressedCounts(changed.map { it.id })
-            views(changed, restaurants.list(), counts) to alerts.views(reparented)
+            // Строки после commit, а не снимок тика: подтверждение могло прийти между чтением и записью (RV-5)
+            val current = changed.mapNotNull { incidents.find(it.id) }
+            val counts = incidents.suppressedCounts(current.map { it.id })
+            views(current, restaurants.list(), counts) to alerts.views(reparented)
         }
         incidentViews.forEach { bus.publish(RealtimeEvent.IncidentChanged(it)) }
         alertViews.forEach { bus.publish(RealtimeEvent.AlertChanged(it)) }

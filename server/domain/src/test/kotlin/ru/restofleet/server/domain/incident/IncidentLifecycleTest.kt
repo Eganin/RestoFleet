@@ -198,6 +198,33 @@ class IncidentLifecycleTest {
         assertThat(tick()).isEqualTo(0)
     }
 
+    /** RV-5: подтверждение, закоммиченное между чтением открытых инцидентов и записью тика, не затирается. */
+    @Test
+    fun acknowledgementCommittedWhileTheTickRunsIsKept() = runTest {
+        allHealthy()
+        api("r-12", down = true)
+        advance()
+        val id = open().single().id
+        w.incidents.afterOpenRead = {
+            w.seed { s ->
+                val acked = s.incidents.getValue(id).copy(ackBy = "support", ackAt = w.clock.now, comment = "звоним")
+                s.copy(incidents = s.incidents + (id to acked))
+            }
+        }
+        api("r-12", down = false)
+        advance()
+
+        val stored = w.db.state.incidents.getValue(id)
+        assertThat(stored.missedTicks).isEqualTo(1)
+        assertThat(stored.ackBy).isEqualTo("support")
+        assertThat(stored.comment).isEqualTo("звоним")
+        advance()
+        // в WS уходит строка после записи, а не снимок тика до неё
+        val pushed = w.bus.published.filterIsInstance<RealtimeEvent.IncidentChanged>().last().view.incident
+        assertThat(pushed.isOpen).isFalse()
+        assertThat(pushed.ackBy).isEqualTo("support")
+    }
+
     @Test
     fun listGetAcknowledgeAndSummary() = runTest {
         allHealthy()

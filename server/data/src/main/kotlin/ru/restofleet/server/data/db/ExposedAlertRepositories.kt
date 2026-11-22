@@ -87,6 +87,15 @@ internal class ExposedAlertRepository : AlertRepository {
         }
     }
 
+    override suspend fun autoResolve(id: String, at: Long): Boolean {
+        val uuid = id.toUuidOrNull() ?: return false
+        return AlertsTable.update({ (AlertsTable.id eq uuid) and notResolved() }) {
+            it[state] = AlertState.RESOLVED.code
+            it[resolvedAt] = at.toTimestamp()
+            it[auto] = true
+        } == 1
+    }
+
     override suspend fun findForUpdate(id: String): Alert? {
         val uuid = id.toUuidOrNull() ?: return null
         return AlertsTable.selectAll().where { AlertsTable.id eq uuid }.forUpdate(ForUpdateOption.ForUpdate)

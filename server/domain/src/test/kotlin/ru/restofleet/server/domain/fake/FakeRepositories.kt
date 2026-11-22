@@ -404,6 +404,16 @@ class FakeRefreshTokenRepository(private val db: InMemoryDb) : RefreshTokenRepos
             s.refreshTokens.values.any { it.familyId == familyId && it.revokedAt == null && it.expiresAt > now }
         }
 
+    override suspend fun activeSuccessor(tokenId: String, now: Long): RefreshToken? = db.read { s ->
+        s.refreshTokens.values.firstOrNull { it.rotatedFrom == tokenId && it.revokedAt == null && it.expiresAt > now }
+    }
+
+    override suspend fun revoke(tokenId: String, now: Long): Boolean {
+        val token = db.read { s -> s.refreshTokens[tokenId]?.takeIf { it.revokedAt == null } } ?: return false
+        insert(token.copy(revokedAt = now))
+        return true
+    }
+
     override suspend fun revokeAll(userId: String, now: Long): Int {
         val active = db.read { s -> s.refreshTokens.values.filter { it.userId == userId && it.revokedAt == null } }
         active.forEach { insert(it.copy(revokedAt = now)) }

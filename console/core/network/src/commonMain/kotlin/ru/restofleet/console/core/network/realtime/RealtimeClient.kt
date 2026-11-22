@@ -3,6 +3,7 @@ package ru.restofleet.console.core.network.realtime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,20 +58,40 @@ class RealtimeClient(
         job = scope.launch { runLoop() }
     }
 
+    /** Останавливает цикл и закрывает открытый сокет: он живёт в scope `HttpClient`, а не цикла (RV-7). */
     fun stop() {
+        val session = active
+        active = null
         job?.cancel()
         job = null
-        active = null
+        if (session != null) scope.launch(NonCancellable) { runCatching { session.close() } }
     }
 
     fun subscribeDevice(deviceId: String) {
         subscriptions.update { it + deviceId }
-        scope.launch { active?.send(encode(WsClientMessage.SubscribeDevice(WsDeviceRefDto(deviceId)))) }
+        sendIfConnected(WsClientMessage.SubscribeDevice(WsDeviceRefDto(deviceId)))
     }
 
     fun unsubscribeDevice(deviceId: String) {
         subscriptions.update { it - deviceId }
-        scope.launch { active?.send(encode(WsClientMessage.UnsubscribeDevice(WsDeviceRefDto(deviceId)))) }
+        sendIfConnected(WsClientMessage.UnsubscribeDevice(WsDeviceRefDto(deviceId)))
+    }
+
+    /**
+     * Сокет мог умереть между проверкой и отправкой: ошибка отправки не роняет приложение (RV-3), а подписка уже
+     * в [subscriptions] и уйдёт при следующем подключении.
+     */
+    private fun sendIfConnected(message: WsClientMessage) {
+        val session = active ?: return
+        scope.launch {
+            try {
+                session.send(encode(message))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (@Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception) {
+                // соединение закрыто: подписки переотправит pump после переподключения
+            }
+        }
     }
 
     private suspend fun runLoop() {
@@ -105,7 +126,7 @@ class RealtimeClient(
             token == null -> refreshThen(null) { connectOnce(onHello) }
             else -> try {
                 val session = connector.connect(endpoint, token)
-                pump(session, onHello)
+                pump(session, token, onHello)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: WsHandshakeException) {
@@ -126,23 +147,30 @@ class RealtimeClient(
             RefreshOutcome.Unavailable -> Cycle.Closed(null)
         }
 
-    private suspend fun pump(session: WsSession, onHello: () -> Unit): Cycle {
-        active = session
-        mutableEvents.emit(RealtimeEvent.Connected)
-        subscriptions.value.forEach { session.send(encode(WsClientMessage.SubscribeDevice(WsDeviceRefDto(it)))) }
+    /**
+     * [token] — с ним открыт сокет: после 4401 refresh называет именно его, и если HTTP уже обновил access, лишней
+     * ротации нет (RV-13). [active] обнуляется в `finally` — и при обрыве с исключением (RV-3).
+     */
+    private suspend fun pump(session: WsSession, token: String, onHello: () -> Unit): Cycle {
         var code: Int? = null
-        session.events.transformWhile { emit(it); it !is SocketEvent.Closed }.collect { event ->
-            when (event) {
-                is SocketEvent.Text -> decode(event.text)?.let {
-                    if (it is WsServerMessage.Hello) onHello()
-                    mutableEvents.emit(RealtimeEvent.Message(it))
+        active = session
+        try {
+            mutableEvents.emit(RealtimeEvent.Connected)
+            subscriptions.value.forEach { session.send(encode(WsClientMessage.SubscribeDevice(WsDeviceRefDto(it)))) }
+            session.events.transformWhile { emit(it); it !is SocketEvent.Closed }.collect { event ->
+                when (event) {
+                    is SocketEvent.Text -> decode(event.text)?.let {
+                        if (it is WsServerMessage.Hello) onHello()
+                        mutableEvents.emit(RealtimeEvent.Message(it))
+                    }
+                    is SocketEvent.Closed -> code = event.code
                 }
-                is SocketEvent.Closed -> code = event.code
             }
+        } finally {
+            if (active === session) active = null
         }
-        active = null
         return if (code == WsCloseCodes.TOKEN_EXPIRED) {
-            refreshThen(tokens.accessToken()) { Cycle.Closed(WsCloseCodes.TOKEN_EXPIRED) }
+            refreshThen(token) { Cycle.Closed(WsCloseCodes.TOKEN_EXPIRED) }
         } else {
             Cycle.Closed(code)
         }

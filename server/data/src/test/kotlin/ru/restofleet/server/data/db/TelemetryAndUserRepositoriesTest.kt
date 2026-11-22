@@ -178,4 +178,25 @@ internal class TelemetryAndUserRepositoriesTest : PostgresTest() {
         assertThat(tx { refresh.revokeFamily("not-a-uuid", T0) }).isEqualTo(0)
         assertThat(tx { refresh.consume(other.tokenHash, T0 + 3) }).isEqualTo(other.copy(revokedAt = T0 + 3))
     }
+
+    @Test
+    fun `active successor is found by rotated_from and revoke is atomic (RV-4)`() {
+        val user = User(Samples.uuid(), "support", "h", User.ROLE_ADMIN, T0).also { tx { users.insert(it) } }
+        val family = Samples.uuid()
+        val previous =
+            RefreshToken(Samples.uuid(), user.id, "1".padStart(64, 'd'), T0, T0 + 1_000, T0, family, T0 + 5_000)
+        val next = RefreshToken(
+            Samples.uuid(), user.id, "2".padStart(64, 'd'), T0, T0 + 1_000, null, family, T0 + 5_000, previous.id,
+        )
+        tx { listOf(previous, next).forEach { refresh.insert(it) } }
+
+        assertThat(tx { refresh.findByHash(next.tokenHash) }).isEqualTo(next)
+        assertThat(tx { refresh.activeSuccessor(previous.id, T0 + 1) }).isEqualTo(next)
+        assertThat(tx { refresh.activeSuccessor(previous.id, T0 + 1_000) }).isNull()
+        assertThat(tx { refresh.activeSuccessor("not-a-uuid", T0) }).isNull()
+        assertThat(tx { refresh.revoke(next.id, T0 + 2) }).isTrue()
+        assertThat(tx { refresh.revoke(next.id, T0 + 3) }).isFalse()
+        assertThat(tx { refresh.revoke("not-a-uuid", T0) }).isFalse()
+        assertThat(tx { refresh.activeSuccessor(previous.id, T0 + 2) }).isNull()
+    }
 }

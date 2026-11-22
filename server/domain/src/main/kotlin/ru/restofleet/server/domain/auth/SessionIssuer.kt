@@ -19,18 +19,24 @@ class SessionIssuer(
 ) {
     /** Вход: новое семейство. */
     suspend fun issue(user: User, now: Long): SessionTokens =
-        issue(user, now, familyId = ids.newId(), sessionExpiresAt = now + settings.sessionMaxMillis)
+        issue(user, now, familyId = ids.newId(), sessionExpiresAt = now + settings.sessionMaxMillis, rotatedFrom = null)
 
-    /** Ротация [previous]: то же семейство и тот же потолок. */
+    /** Ротация [previous]: то же семейство и тот же потолок; новый токен помнит, из какого выпущен. */
     suspend fun rotate(user: User, previous: RefreshToken, now: Long): SessionTokens =
-        issue(user, now, previous.familyId, previous.sessionExpiresAt)
+        issue(user, now, previous.familyId, previous.sessionExpiresAt, previous.id)
 
-    private suspend fun issue(user: User, now: Long, familyId: String, sessionExpiresAt: Long): SessionTokens {
+    private suspend fun issue(
+        user: User,
+        now: Long,
+        familyId: String,
+        sessionExpiresAt: Long,
+        rotatedFrom: String?,
+    ): SessionTokens {
         val access = accessTokens.issue(user)
         val refresh = secrets.refreshToken()
         val expiresAt = minOf(now + settings.refreshIdleMillis, sessionExpiresAt)
         val token = RefreshToken(
-            ids.newId(), user.id, digest.sha256(refresh), now, expiresAt, null, familyId, sessionExpiresAt,
+            ids.newId(), user.id, digest.sha256(refresh), now, expiresAt, null, familyId, sessionExpiresAt, rotatedFrom,
         )
         refreshTokens.insert(token)
         return SessionTokens(access.token, access.expiresAt, refresh, expiresAt)

@@ -115,7 +115,15 @@ data class RuleParams(
 interface AlertRepository {
     suspend fun insert(alert: Alert)
 
+    /** Полная запись строки — только для строки, взятой [findForUpdate] в той же транзакции (ручные действия). */
     suspend fun update(alert: Alert)
+
+    /**
+     * Автозакрытие (RV-5): `UPDATE … SET state = resolved, resolved_at, auto = true WHERE id = ?
+     * AND state <> resolved`. Остальные столбцы (подтверждение, комментарий, родитель) не трогаются;
+     * `false` — уже закрыта.
+     */
+    suspend fun autoResolve(id: String, at: Long): Boolean
 
     /** С блокировкой строки до конца транзакции. */
     suspend fun findForUpdate(id: String): Alert?

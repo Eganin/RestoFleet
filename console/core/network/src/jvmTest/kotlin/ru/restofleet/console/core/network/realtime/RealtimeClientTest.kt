@@ -2,8 +2,10 @@ package ru.restofleet.console.core.network.realtime
 
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -15,14 +17,16 @@ import ru.restofleet.console.core.network.RefreshOutcome
 import ru.restofleet.console.core.testing.Fixtures
 import ru.restofleet.shared.protocol.rest.console.ws.WsCloseCodes
 import ru.restofleet.shared.protocol.rest.console.ws.WsServerMessage
+import java.io.IOException
 
 class RealtimeClientTest {
     private class FakeSession : WsSession {
         val incoming = Channel<SocketEvent>(Channel.UNLIMITED)
         val sent = mutableListOf<String>()
+        var closeCalls = 0
         override val events: Flow<SocketEvent> = incoming.receiveAsFlow()
         override suspend fun send(text: String) { sent += text }
-        override suspend fun close() = Unit
+        override suspend fun close() { closeCalls++ }
         fun close(code: Int?) {
             incoming.trySend(SocketEvent.Closed(code))
             incoming.close()
@@ -39,12 +43,27 @@ class RealtimeClientTest {
         }
     }
 
+    /** Сессия, которую сеть оборвала: [events] бросает причину обрыва, [send] после этого бросает (как OkHttp). */
+    private class BrokenSession : WsSession {
+        val cut = CompletableDeferred<Unit>()
+        override val events: Flow<SocketEvent> = flow {
+            cut.await()
+            throw IOException("connection reset")
+        }
+        override suspend fun send(text: String) {
+            if (cut.isCompleted) throw IOException("socket closed")
+        }
+        override suspend fun close() = Unit
+    }
+
     private class FakeTokens(var access: String? = "a1", var outcome: RefreshOutcome = RefreshOutcome.Refreshed("a2")) :
         AccessTokenSource {
         var refreshCalls = 0
+        val failedArgs = mutableListOf<String?>()
         override fun accessToken(): String? = access
         override suspend fun refresh(failed: String?): RefreshOutcome {
             refreshCalls++
+            failedArgs += failed
             (outcome as? RefreshOutcome.Refreshed)?.let { access = it.accessToken }
             return outcome
         }
@@ -233,6 +252,69 @@ class RealtimeClientTest {
         second.close(null)
         advanceTimeBy(120_000)
         assertThat(connector.connects).isEqualTo(2)
+    }
+
+    @Test
+    fun `subscribe and unsubscribe after the network cut do not crash and are replayed on reconnect (RV-3)`() = runTest {
+        val broken = BrokenSession()
+        val next = FakeSession()
+        val connector = FakeConnector(mutableListOf({ broken }, { next }))
+        val rt = client(connector, FakeTokens())
+        rt.start()
+        runCurrent()
+
+        broken.cut.complete(Unit)
+        runCurrent()
+        // backoff: соединения нет, а инженер открывает и закрывает карточки устройств
+        rt.subscribeDevice("d1")
+        rt.subscribeDevice("d2")
+        rt.unsubscribeDevice("d2")
+        runCurrent()
+        advanceTimeBy(1_001)
+
+        assertThat(connector.connects).isEqualTo(2)
+        assertThat(next.sent.single()).contains("d1")
+    }
+
+    @Test
+    fun `send failing on a live session is swallowed, the subscription is kept (RV-3)`() = runTest {
+        val broken = BrokenSession()
+        val rt = client(FakeConnector(mutableListOf({ broken })), FakeTokens())
+        rt.start()
+        runCurrent()
+        broken.cut.complete(Unit)
+
+        rt.subscribeDevice("d1")
+        runCurrent()
+    }
+
+    @Test
+    fun `4401 refresh names the token the socket was opened with, not a newer one (RV-13)`() = runTest {
+        val first = FakeSession()
+        val connector = FakeConnector(mutableListOf({ first }, { FakeSession() }))
+        val tokens = FakeTokens()
+        val rt = client(connector, tokens)
+        rt.start()
+        runCurrent()
+
+        tokens.access = "a1-http" // HTTP-запрос уже обновил access, пока сокет жил
+        first.close(WsCloseCodes.TOKEN_EXPIRED)
+        runCurrent()
+
+        assertThat(tokens.failedArgs).containsExactly("a1")
+    }
+
+    @Test
+    fun `stop closes the open socket (RV-7)`() = runTest {
+        val session = FakeSession()
+        val rt = client(FakeConnector(mutableListOf({ session })), FakeTokens())
+        rt.start()
+        runCurrent()
+
+        rt.stop()
+        runCurrent()
+
+        assertThat(session.closeCalls).isEqualTo(1)
     }
 
     @Test

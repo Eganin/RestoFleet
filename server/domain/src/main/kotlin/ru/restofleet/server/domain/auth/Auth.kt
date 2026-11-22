@@ -17,7 +17,8 @@ data class User(
 
 /**
  * Refresh-токен (реш. 216, 417): в БД только SHA-256, одноразовый (ротация). [familyId] — сессия: все токены одной
- * цепочки ротаций с одного входа; [sessionExpiresAt] — абсолютный потолок сессии (вход + 7 сут).
+ * цепочки ротаций с одного входа; [sessionExpiresAt] — абсолютный потолок сессии (вход + 7 сут); [rotatedFrom] —
+ * токен, ротацией которого выпущен этот (у первого токена входа — `null`; окно прощения повтора, реш. 531).
  */
 data class RefreshToken(
     val id: String,
@@ -28,6 +29,7 @@ data class RefreshToken(
     val revokedAt: Long?,
     val familyId: String,
     val sessionExpiresAt: Long,
+    val rotatedFrom: String? = null,
 )
 
 /** Подписанный access-токен (JWT подписывает `server:api`/`server:app` — порт [AccessTokenIssuer]). */
@@ -49,17 +51,22 @@ data class SessionTokens(
 
 /**
  * Настройки сессий пользователей (реш. 417): refresh живёт [refreshIdleMillis] с последней ротации, но не дольше
- * [sessionMaxMillis] со входа. Access TTL (15 мин) — у [AccessTokenIssuer].
+ * [sessionMaxMillis] со входа. Access TTL (15 мин) — у [AccessTokenIssuer]. [reuseGraceMillis] — окно прощения
+ * повтора только что ротированного токена, чей преемник ещё не использован (потерянный ответ, реш. 531); 0 — без окна.
  */
 data class AuthSettings(
     val refreshIdleMillis: Long = DEFAULT_REFRESH_IDLE_MS,
     val sessionMaxMillis: Long = DEFAULT_SESSION_MAX_MS,
+    val reuseGraceMillis: Long = DEFAULT_REUSE_GRACE_MS,
 ) {
     init {
         require(refreshIdleMillis in 1..sessionMaxMillis) { "refresh idle must be within the session ceiling" }
+        require(reuseGraceMillis >= 0) { "reuse grace must not be negative" }
     }
 
     companion object {
+        /** Два таймаута запроса консоли (30 с): ответ потерян по таймауту, и на повтор остаётся ещё ≈ 30 с. */
+        const val DEFAULT_REUSE_GRACE_MS: Long = 60_000
         const val DEFAULT_REFRESH_IDLE_MS: Long = 24L * 60 * 60 * 1000
         const val DEFAULT_SESSION_MAX_MS: Long = 7L * 24 * 60 * 60 * 1000
     }
@@ -101,4 +108,10 @@ interface RefreshTokenRepository {
 
     /** Есть ли в семействе действующий (не погашенный и не просроченный) токен. */
     suspend fun hasActive(familyId: String, now: Long): Boolean
+
+    /** Действующий токен, выпущенный ротацией токена [tokenId] (`rotated_from`), — ещё не использованный преемник. */
+    suspend fun activeSuccessor(tokenId: String, now: Long): RefreshToken?
+
+    /** Атомарно гасит действующий токен по id (`… WHERE id = ? AND revoked_at IS NULL`); `false` — уже погашен. */
+    suspend fun revoke(tokenId: String, now: Long): Boolean
 }

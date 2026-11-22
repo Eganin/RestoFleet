@@ -54,6 +54,10 @@ internal class ExposedIncidentRepository : IncidentRepository {
         IncidentsTable.update({ IncidentsTable.id eq incident.id.toUuid() }) { it.fill(incident) }
     }
 
+    override suspend fun updateEvaluation(incident: Incident) {
+        IncidentsTable.update({ IncidentsTable.id eq incident.id.toUuid() }) { it.fillEvaluation(incident) }
+    }
+
     override suspend fun findForUpdate(id: String): Incident? {
         val uuid = id.toUuidOrNull() ?: return null
         return IncidentsTable.selectAll().where { IncidentsTable.id eq uuid }.forUpdate(ForUpdateOption.ForUpdate)
@@ -97,14 +101,19 @@ internal class ExposedIncidentRepository : IncidentRepository {
     }
 
     private fun org.jetbrains.exposed.v1.core.statements.UpdateBuilder<*>.fill(incident: Incident) {
+        fillEvaluation(incident)
+        this[IncidentsTable.ackBy] = incident.ackBy
+        this[IncidentsTable.ackAt] = incident.ackAt?.toTimestamp()
+        this[IncidentsTable.comment] = incident.comment
+    }
+
+    /** Столбцы, которыми владеет тик (RV-5). */
+    private fun org.jetbrains.exposed.v1.core.statements.UpdateBuilder<*>.fillEvaluation(incident: Incident) {
         this[IncidentsTable.restaurants] =
             RfJson.encodeToString(ids, incident.restaurants.map { it.value })
         this[IncidentsTable.resolvedAt] = incident.resolvedAt?.toTimestamp()
         this[IncidentsTable.resolveReason] = incident.resolveReason?.code
         this[IncidentsTable.missedTicks] = incident.missedTicks
-        this[IncidentsTable.ackBy] = incident.ackBy
-        this[IncidentsTable.ackAt] = incident.ackAt?.toTimestamp()
-        this[IncidentsTable.comment] = incident.comment
         this[IncidentsTable.evidence] = RfJson.encodeToString(StoredEvidence.serializer(), incident.evidence.toStored())
     }
 

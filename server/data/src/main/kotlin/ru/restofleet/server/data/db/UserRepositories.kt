@@ -60,6 +60,7 @@ internal class ExposedRefreshTokenRepository : RefreshTokenRepository {
             it[revokedAt] = token.revokedAt?.toTimestamp()
             it[familyId] = token.familyId.toUuid()
             it[sessionExpiresAt] = token.sessionExpiresAt.toTimestamp()
+            it[rotatedFrom] = token.rotatedFrom?.toUuidOrNull()
         }
     }
 
@@ -100,6 +101,20 @@ internal class ExposedRefreshTokenRepository : RefreshTokenRepository {
         }.limit(1).any()
     }
 
+    override suspend fun activeSuccessor(tokenId: String, now: Long): RefreshToken? {
+        val uuid = tokenId.toUuidOrNull() ?: return null
+        return RefreshTokensTable.selectAll().where {
+            (RefreshTokensTable.rotatedFrom eq uuid) and RefreshTokensTable.revokedAt.isNull() and
+                (RefreshTokensTable.expiresAt greater now.toTimestamp())
+        }.limit(1).singleOrNull()?.toToken()
+    }
+
+    override suspend fun revoke(tokenId: String, now: Long): Boolean {
+        val uuid = tokenId.toUuidOrNull() ?: return false
+        val active = (RefreshTokensTable.id eq uuid) and RefreshTokensTable.revokedAt.isNull()
+        return RefreshTokensTable.update({ active }) { it[revokedAt] = now.toTimestamp() } == 1
+    }
+
     private fun ResultRow.toToken() = RefreshToken(
         id = this[RefreshTokensTable.id].toString(),
         userId = this[RefreshTokensTable.userId].toString(),
@@ -109,5 +124,6 @@ internal class ExposedRefreshTokenRepository : RefreshTokenRepository {
         revokedAt = this[RefreshTokensTable.revokedAt]?.toMillis(),
         familyId = this[RefreshTokensTable.familyId].toString(),
         sessionExpiresAt = this[RefreshTokensTable.sessionExpiresAt].toMillis(),
+        rotatedFrom = this[RefreshTokensTable.rotatedFrom]?.toString(),
     )
 }

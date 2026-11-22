@@ -14,12 +14,17 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** [WsConnector] на Ktor WebSockets. Тонкий адаптер без логики: проверяется интеграционно в валидации (реш. 471). */
+/**
+ * [WsConnector] на Ktor WebSockets (реш. 471). [client] — из `HttpClientFactory.realtime`: без перехватчика токенов,
+ * токен приходит аргументом, а 401 обрабатывает `RealtimeClient` (RV-2); отказ рукопожатия приходит с кодом.
+ */
 class KtorWsConnector(private val client: HttpClient) : WsConnector {
     @Suppress("TooGenericExceptionCaught")
     override suspend fun connect(url: String, accessToken: String): WsSession = try {
         KtorWsSession(client.webSocketSession(url) { header(HttpHeaders.Authorization, "Bearer $accessToken") })
     } catch (e: CancellationException) {
+        throw e
+    } catch (e: WsHandshakeException) {
         throw e
     } catch (e: Exception) {
         throw WsHandshakeException(status = (e as? ResponseException)?.response?.status?.value, cause = e)

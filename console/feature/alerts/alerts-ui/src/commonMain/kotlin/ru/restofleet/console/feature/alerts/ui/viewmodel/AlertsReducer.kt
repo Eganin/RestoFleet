@@ -25,11 +25,18 @@ class AlertsReducer : Reducer<AlertsAction, AlertsSession> {
         is AlertsAction.ActionFailed -> state.copy(acting = false, actionError = action.error)
     }
 
-    /** Тревога переезжает между списками по своему состоянию; в списке сначала новые. */
+    /**
+     * Тревога переезжает между списками по своему состоянию; в списке сначала новые. Подавленная инцидентом
+     * убирается из всех списков — так же, как её не отдаёт REST (RV-1).
+     */
     private fun AlertLists.upsert(alert: AlertItem): AlertLists {
         fun List<AlertItem>.without() = filter { it.id != alert.id }
         fun List<AlertItem>.with(target: AlertState) =
-            if (alert.state == target) (without() + alert).sortedByDescending { it.openedAt } else without()
+            if (alert.state == target && !alert.isSuppressed) {
+                (without() + alert).sortedByDescending { it.openedAt }
+            } else {
+                without()
+            }
         return copy(
             open = open.with(AlertState.Open),
             acknowledged = acknowledged.with(AlertState.Acknowledged),

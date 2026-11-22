@@ -16,7 +16,8 @@ class SessionLifetimeTest {
     private val w = World()
     private val upsert = UpsertUser(w.users, w.hasher, w.tx, w.ids, w.clock)
     private val login = Login(w.users, w.sessionIssuer, w.hasher, w.tx, w.clock)
-    private val refresh = RefreshSession(w.refreshTokens, w.users, w.sessionIssuer, w.digest, w.tx, w.clock)
+    private val refresh =
+        RefreshSession(w.refreshTokens, w.users, w.sessionIssuer, w.digest, w.tx, w.clock, w.authSettings)
     private val logout = Logout(w.refreshTokens, w.digest, w.tx, w.clock)
     private val password = "correct horse battery"
 
@@ -83,19 +84,89 @@ class SessionLifetimeTest {
     }
 
     @Test
-    fun replayOfConsumedTokenStillRevokesEveryFamilyOfTheUser() = runTest {
+    fun replayOfConsumedTokenAfterTheGraceWindowStillRevokesEveryFamilyOfTheUser() = runTest {
         val phone = signIn()
         val desktop = (login("support", password) as Outcome.Success).value
         rotate(phone.refreshToken)
+        w.clock.now += AuthSettings.DEFAULT_REUSE_GRACE_MS + 1
 
         assertThat(refresh(phone.refreshToken)).isEqualTo(Outcome.Failure(ServerError.Unauthorized))
         assertThat(refresh(desktop.refreshToken)).isEqualTo(Outcome.Failure(ServerError.Unauthorized))
+    }
+
+    /** RV-4: ответ на refresh потерян — клиент повторяет старый токен; остальные консоли `support` не выходят. */
+    @Test
+    fun lostRefreshResponseIsForgivenWithinTheGraceWindow() = runTest {
+        val phone = signIn()
+        val desktop = (login("support", password) as Outcome.Success).value
+        w.clock.now += 1_000
+        val lost = rotate(phone.refreshToken)
+        w.clock.now += AuthSettings.DEFAULT_REUSE_GRACE_MS
+
+        val retried = rotate(phone.refreshToken)
+
+        assertThat(stored(retried.refreshToken).familyId).isEqualTo(stored(phone.refreshToken).familyId)
+        assertThat(stored(lost.refreshToken).revokedAt).isEqualTo(w.clock.now)
+        assertThat(refresh(desktop.refreshToken)).isInstanceOf(Outcome.Success::class.java)
+        assertThat(refresh(retried.refreshToken)).isInstanceOf(Outcome.Success::class.java)
+    }
+
+    @Test
+    fun repeatedRetryWithinTheWindowKeepsOnlyTheLastPair() = runTest {
+        val phone = signIn()
+        val desktop = (login("support", password) as Outcome.Success).value
+        rotate(phone.refreshToken)
+        val first = rotate(phone.refreshToken)
+        val second = rotate(phone.refreshToken)
+
+        assertThat(stored(first.refreshToken).revokedAt).isNotNull()
+        assertThat(w.db.state.refreshTokens.values.count {
+            it.familyId == stored(phone.refreshToken).familyId && it.revokedAt == null
+        }).isEqualTo(1)
+        assertThat(refresh(second.refreshToken)).isInstanceOf(Outcome.Success::class.java)
+        assertThat(refresh(desktop.refreshToken)).isInstanceOf(Outcome.Success::class.java)
+    }
+
+    @Test
+    fun replayWithinTheWindowAfterTheSuccessorWasUsedIsTheft() = runTest {
+        val phone = signIn()
+        val desktop = (login("support", password) as Outcome.Success).value
+        val next = rotate(phone.refreshToken)
+        rotate(next.refreshToken)
+
+        assertThat(refresh(phone.refreshToken)).isEqualTo(Outcome.Failure(ServerError.Unauthorized))
+        assertThat(refresh(desktop.refreshToken)).isEqualTo(Outcome.Failure(ServerError.Unauthorized))
+    }
+
+    /** Вор повторил старый токен в окне и получил пару — кража обнаруживается, когда владелец предъявит свой. */
+    @Test
+    fun forgivenReplayByAThiefIsDetectedOnTheOwnersNextRefresh() = runTest {
+        val phone = signIn()
+        val desktop = (login("support", password) as Outcome.Success).value
+        val owner = rotate(phone.refreshToken)
+        val thief = rotate(phone.refreshToken)
+
+        assertThat(refresh(owner.refreshToken)).isEqualTo(Outcome.Failure(ServerError.Unauthorized))
+        assertThat(refresh(thief.refreshToken)).isEqualTo(Outcome.Failure(ServerError.Unauthorized))
+        assertThat(refresh(desktop.refreshToken)).isEqualTo(Outcome.Failure(ServerError.Unauthorized))
+    }
+
+    @Test
+    fun replayAfterLogoutIsNotForgiven() = runTest {
+        val phone = signIn()
+        val next = rotate(phone.refreshToken)
+        logout(next.refreshToken)
+
+        assertThat(refresh(phone.refreshToken)).isEqualTo(Outcome.Failure(ServerError.Unauthorized))
     }
 
     @Test
     fun settingsRejectIdleAboveCeiling() {
         val error = runCatching { AuthSettings(refreshIdleMillis = 2, sessionMaxMillis = 1) }.exceptionOrNull()
         assertThat(error).isInstanceOf(IllegalArgumentException::class.java)
+        val grace = runCatching { AuthSettings(reuseGraceMillis = -1) }.exceptionOrNull()
+        assertThat(grace).isInstanceOf(IllegalArgumentException::class.java)
+        assertThat(AuthSettings.DEFAULT_REUSE_GRACE_MS).isEqualTo(60_000L)
     }
 
     private companion object {

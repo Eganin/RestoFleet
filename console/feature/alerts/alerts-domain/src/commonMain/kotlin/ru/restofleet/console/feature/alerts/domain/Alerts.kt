@@ -15,7 +15,10 @@ enum class AlertState(val wire: String) {
     }
 }
 
-/** Тревога (FR-CN-08). [auto] — закрыта автоматически, когда условие исчезло. */
+/**
+ * Тревога (FR-CN-08). [auto] — закрыта автоматически, когда условие исчезло. [parentIncidentId] — тревогу покрывает
+ * инцидент (реш. 416): в ленте её нет, как и в `GET /alerts` по умолчанию (RV-1).
+ */
 data class AlertItem(
     val id: String,
     val ruleId: String,
@@ -31,7 +34,10 @@ data class AlertItem(
     val comment: String?,
     val auto: Boolean,
     val details: Map<String, String>,
-)
+    val parentIncidentId: String? = null,
+) {
+    val isSuppressed: Boolean get() = parentIncidentId != null
+}
 
 /** Списки по вкладкам; [loadedAt] — момент загрузки для «N мин назад». */
 data class AlertLists(

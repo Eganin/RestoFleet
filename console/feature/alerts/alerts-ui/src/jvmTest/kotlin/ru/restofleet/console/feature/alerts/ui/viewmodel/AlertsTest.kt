@@ -65,6 +65,25 @@ class AlertsTest {
     }
 
     @Test
+    fun `reducer drops a pushed alert once an incident suppresses it and shows it again when released (RV-1)`() {
+        // Таблица S8-а: push без родителя → push с родителем (тик перепривязал) → родитель снят (инцидент закрыт)
+        val table = listOf(
+            alert("r5", rule = "R-05", opened = NOW) to listOf("r5", "a1"),
+            alert("r5", rule = "R-05", opened = NOW).copy(parentIncidentId = "i-1") to listOf("a1"),
+            alert("r5", rule = "R-05", opened = NOW) to listOf("r5", "a1"),
+        )
+        var s = AlertsSession(lists = lists, loading = false)
+        table.forEach { (pushed, open) ->
+            s = reducer.reduce(AlertsAction.Pushed(pushed), s)
+            assertThat(s.lists!!.open.map { it.id }).containsExactlyElementsIn(open).inOrder()
+        }
+        val suppressedAcked = a2.copy(parentIncidentId = "i-1")
+        val dropped = reducer.reduce(AlertsAction.Pushed(suppressedAcked), s).lists!!
+        assertThat(dropped.acknowledged).isEmpty()
+        assertThat((dropped.open + dropped.resolved).map { it.id }).doesNotContain("a2")
+    }
+
+    @Test
     fun `reducer dialog and actions`() {
         val s = AlertsSession(lists = lists, loading = false)
         val dialog = reducer.reduce(AlertsAction.ResolveRequested(a1), s)

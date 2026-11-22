@@ -101,6 +101,7 @@ class RuntimeConfig private constructor(
             auth = AuthSettings(
                 refreshIdleMillis = config.auth.refreshIdleHours * MS_PER_HOUR,
                 sessionMaxMillis = config.auth.sessionMaxDays * MS_PER_DAY,
+                reuseGraceMillis = config.auth.reuseGraceSec * MS_PER_SECOND,
             ),
             jobs = config.jobs,
             rules = RuleParams(freeMbEnter = config.alerts.freeMbEnter, freeMbExit = config.alerts.freeMbExit),

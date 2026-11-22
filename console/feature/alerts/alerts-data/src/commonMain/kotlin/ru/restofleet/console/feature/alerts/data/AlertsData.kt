@@ -94,4 +94,5 @@ internal fun AlertDto.toDomain() = AlertItem(
     comment = comment,
     auto = auto,
     details = details,
+    parentIncidentId = parentIncidentId,
 )
