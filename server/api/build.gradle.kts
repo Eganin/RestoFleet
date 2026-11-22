@@ -28,6 +28,7 @@ dependencies {
     implementation(libs.ktor.server.call.logging)
     implementation(libs.ktor.server.body.limit)
     implementation(libs.ktor.server.swagger)
+    implementation(libs.ktor.server.websockets)
     implementation(libs.kotlin.logging)
 
     implementation(project.dependencies.platform(libs.koin.bom))
@@ -39,6 +40,9 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
     testImplementation(libs.ktor.server.test.host)
+    // WebSocket-тесты — на настоящем сервере и клиенте (реальное время, реш. 455)
+    testImplementation(libs.ktor.server.netty)
+    testImplementation(libs.ktor.client.okhttp)
     testImplementation(libs.ktor.client.content.negotiation)
     testImplementation(libs.kaml)
     testImplementation(libs.logback.classic)

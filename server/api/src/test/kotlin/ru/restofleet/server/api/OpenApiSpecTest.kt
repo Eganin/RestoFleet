@@ -49,7 +49,9 @@ class OpenApiSpecTest {
             startApplication()
         }
         return routes.mapNotNull { route ->
-            val method = (route.selector as? HttpMethodRouteSelector)?.method ?: return@mapNotNull null
+            // У маршрута webSocket лист — селекторы заголовков Upgrade, метод GET — у предка (реш. 439)
+            val method = generateSequence(route) { it.parent }
+                .firstNotNullOfOrNull { (it.selector as? HttpMethodRouteSelector)?.method } ?: return@mapNotNull null
             val path = generateSequence(route) { it.parent }.toList().reversed().mapNotNull { node ->
                 when (val s = node.selector) {
                     is PathSegmentConstantRouteSelector -> s.value

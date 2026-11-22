@@ -14,7 +14,13 @@ import io.mockk.mockk
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import ru.restofleet.server.api.auth.JwtAccessTokenIssuer
+import ru.restofleet.server.api.ws.RealtimeHub
+import ru.restofleet.server.api.ws.RealtimeSettings
+import ru.restofleet.server.domain.realtime.EventBus
+import ru.restofleet.server.domain.realtime.RealtimeEvent
 import ru.restofleet.server.domain.auth.User
 import ru.restofleet.server.domain.health.usecase.CheckHealth
 import ru.restofleet.shared.kernel.Clock
@@ -28,9 +34,10 @@ import ru.restofleet.shared.protocol.RfJson
  */
 class ApiTestKit(
     val rateLimit: RateLimitSettings = RateLimitSettings(loginPerPeriod = 100, provisionPerPeriod = 100),
+    val realtimeSettings: RealtimeSettings = RealtimeSettings(),
 ) {
     val jwt = JwtSettings(secret = "test-secret-test-secret-test-secret-42")
-    val settings = ApiSettings(jwt, rateLimit, maxBodyBytes = 64 * 1024)
+    val settings = ApiSettings(jwt, rateLimit, maxBodyBytes = 64 * 1024, realtime = realtimeSettings)
 
     val auth = AuthUseCases(mockk(), mockk(), mockk(relaxed = true))
     val restaurants = RestaurantUseCases(mockk(), mockk(), mockk(), mockk())
@@ -42,9 +49,14 @@ class ApiTestKit(
     val health = mockk<CheckHealth>()
     val alerts = AlertUseCases(mockk(), mockk(), mockk(), mockk())
     val incidents = IncidentUseCases(mockk(), mockk(), mockk())
+    val bus = TestEventBus()
+    val clock = TestClock()
+    val hub = RealtimeHub(bus, alerts.summary, clock, realtimeSettings) { bus.dropped }
 
-    val useCases =
-        ApiUseCases(auth, restaurants, devices, shadows, commands, provisioning, poll, health, alerts, incidents)
+    val useCases = ApiUseCases(
+        auth, restaurants, devices, shadows, commands, provisioning, poll, health, alerts, incidents,
+        RealtimeUseCases(hub, clock),
+    )
 
     val admin = User("u-1", "admin", "hash", User.ROLE_ADMIN, 0)
 
@@ -68,3 +80,22 @@ suspend fun HttpResponse.json(): JsonObject = RfJson.parseToJsonElement(bodyAsTe
 
 /** Код ошибки из тела `{code, message}`. */
 suspend fun HttpResponse.errorCode(): String? = (json()["code"] as? JsonPrimitive)?.content
+
+/** Шина тестов: события идут в хаб WebSocket; [dropped] имитирует потери шины. */
+class TestEventBus : EventBus {
+    private val flow = MutableSharedFlow<RealtimeEvent>(extraBufferCapacity = 1_024)
+
+    @Volatile
+    var dropped: Long = 0
+
+    override fun publish(event: RealtimeEvent) {
+        check(flow.tryEmit(event)) { "test bus overflow" }
+    }
+
+    override fun events(): Flow<RealtimeEvent> = flow
+}
+
+/** Часы тестов: [now] двигает тест (4401 по `exp`). */
+class TestClock(@Volatile var now: Long = System.currentTimeMillis()) : Clock {
+    override fun nowMillis(): Long = now
+}

@@ -16,6 +16,9 @@ import io.ktor.server.request.httpMethod
 import io.ktor.server.request.path
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
+import io.ktor.server.websocket.WebSockets
+import io.ktor.server.websocket.pingPeriod
+import io.ktor.server.websocket.timeout
 import org.slf4j.event.Level
 import ru.restofleet.server.api.alert.alertRoutes
 import ru.restofleet.server.api.auth.AuthFailureBudget
@@ -29,13 +32,14 @@ import ru.restofleet.server.api.command.commandRoutes
 import ru.restofleet.server.api.device.deviceRoutes
 import ru.restofleet.server.api.error.installErrorHandling
 import ru.restofleet.server.api.health.healthRoute
-import ru.restofleet.server.api.incident.incidentRoutes
 import ru.restofleet.server.api.http.clientKey
+import ru.restofleet.server.api.incident.incidentRoutes
 import ru.restofleet.server.api.poll.pollRoutes
 import ru.restofleet.server.api.provisioning.provisionRoute
 import ru.restofleet.server.api.provisioning.tokenRoutes
 import ru.restofleet.server.api.restaurant.restaurantRoutes
 import ru.restofleet.server.api.shadow.shadowRoutes
+import ru.restofleet.server.api.ws.realtimeRoute
 import ru.restofleet.shared.protocol.RfJson
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -63,6 +67,13 @@ internal object RateLimits {
  */
 fun Application.restofleetApi(useCases: ApiUseCases, settings: ApiSettings) {
     install(ContentNegotiation) { json(RfJson) }
+    install(WebSockets) {
+        pingPeriod = settings.realtime.pingPeriodMillis.takeIf { it > 0 }?.milliseconds
+        timeout = settings.realtime.timeoutMillis.milliseconds
+        maxFrameSize = settings.realtime.maxFrameBytes
+        masking = false
+    }
+    useCases.realtime.hub.start(this)
     install(RequestBodyLimit) { bodyLimit { settings.maxBodyBytes } }
     installCallLogging()
     installErrorHandling()
@@ -92,6 +103,7 @@ fun Application.restofleetApi(useCases: ApiUseCases, settings: ApiSettings) {
                 tokenRoutes(useCases.provisioning)
                 alertRoutes(useCases.alerts)
                 incidentRoutes(useCases.incidents)
+                realtimeRoute(useCases.realtime.hub, useCases.realtime.clock)
             }
         }
     }

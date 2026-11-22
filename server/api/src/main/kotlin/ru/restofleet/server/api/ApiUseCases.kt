@@ -34,6 +34,8 @@ import ru.restofleet.server.domain.restaurant.usecase.ListRestaurants
 import ru.restofleet.server.domain.restaurant.usecase.UpdateRestaurant
 import ru.restofleet.server.domain.shadow.usecase.GetShadow
 import ru.restofleet.server.domain.shadow.usecase.UpdateDesired
+import ru.restofleet.server.api.ws.RealtimeHub
+import ru.restofleet.shared.kernel.Clock
 import ru.restofleet.shared.kernel.DeviceId
 import ru.restofleet.shared.kernel.Outcome
 
@@ -52,7 +54,11 @@ class ApiUseCases(
     val health: CheckHealth,
     val alerts: AlertUseCases,
     val incidents: IncidentUseCases,
+    val realtime: RealtimeUseCases,
 )
+
+/** WebSocket консоли: хаб рассылки (создаёт composition root вместе с шиной) и часы для `exp`. */
+class RealtimeUseCases(val hub: RealtimeHub, val clock: Clock)
 
 class AuthUseCases(val login: Login, val refresh: RefreshSession, val logout: Logout)
 

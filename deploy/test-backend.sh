@@ -80,6 +80,32 @@ jget "$tmp/resp" accessToken >"$tmp/access-token"
 jget "$tmp/resp" refreshToken >"$tmp/refresh-token"
 pass "вход admin (JWT)"
 
+# --- 2a. сессии (реш. 417): ротация, повтор погашенного refresh, выход; WebSocket только с заголовком ---
+printf '{"refreshToken":"%s"}' "$(cat "$tmp/refresh-token")" >"$tmp/refresh1.json"
+[ "$(api POST /api/v1/auth/refresh "$tmp/refresh1.json")" = 200 ] || fail "refresh: $(jget "$tmp/resp" code)"
+jget "$tmp/resp" refreshToken >"$tmp/refresh-token-2"
+printf '{"refreshToken":"%s"}' "$(cat "$tmp/refresh-token-2")" >"$tmp/refresh2.json"
+pass "POST /auth/refresh: новая пара"
+[ "$(api POST /api/v1/auth/refresh "$tmp/refresh1.json")" = 401 ] || fail "повтор погашенного refresh не 401"
+[ "$(api POST /api/v1/auth/refresh "$tmp/refresh2.json")" = 401 ] || fail "после повтора погашенного свежий refresh жив"
+pass "повтор погашенного refresh → 401 и отзыв всех токенов пользователя"
+if [ -s out/support-password ]; then
+  printf '{"login":"support","password":"%s"}' "$(cat out/support-password)" >"$tmp/login-support.json"
+  [ "$(api POST /api/v1/auth/login "$tmp/login-support.json")" = 200 ] || fail "вход support: $(jget "$tmp/resp" code)"
+  printf '{"refreshToken":"%s"}' "$(jget "$tmp/resp" refreshToken)" >"$tmp/refresh-support.json"
+  jget "$tmp/resp" refreshToken >"$tmp/refresh-token-support"
+  [ "$(api POST /api/v1/auth/logout "$tmp/refresh-support.json")" = 204 ] || fail "logout не 204"
+  [ "$(api POST /api/v1/auth/refresh "$tmp/refresh-support.json")" = 401 ] || fail "refresh после logout не 401"
+  pass "вход support, POST /auth/logout → 204, refresh после выхода → 401"
+else
+  say "SKIP вход support: нет out/support-password (./prepare-stand.sh)"
+fi
+ws_code="$(curl -sS --max-time 10 --cacert "$CA" -o /dev/null -w '%{http_code}' --http1.1 \
+  -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
+  -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' "$BASE/api/v1/ws" || echo 000)"
+[ "$ws_code" = 401 ] || fail "upgrade /api/v1/ws без токена → $ws_code, ожидался 401"
+pass "upgrade /api/v1/ws без токена → 401"
+
 # --- 3. ресторан и код регистрации ---
 suffix="$(date +%s)"
 printf '{"code":"SMOKE-%s","name":"Smoke","city":"Тест","timezone":"Europe/Moscow"}' "$suffix" >"$tmp/restaurant.json"
@@ -228,7 +254,8 @@ pass "выведенная учётка: брокер отказывает в п
 patterns="$tmp/patterns"
 {
   cat out/admin-password out/jwt-secret out/postgres-password out/backend-mqtt-password
-  cat "$tmp/device-password" "$tmp/provisioning-code" "$tmp/access-token" "$tmp/refresh-token"
+  cat "$tmp/device-password" "$tmp/provisioning-code" "$tmp/access-token" "$tmp/refresh-token" "$tmp/refresh-token-2"
+  if [ -s "$tmp/refresh-token-support" ]; then cat "$tmp/refresh-token-support" out/support-password; fi
 } | grep -v '^$' >"$patterns"
 leaks="$(docker compose logs --no-color backend migrate 2>/dev/null | grep -cFf "$patterns" || true)"
 own="$(grep -cFf "$patterns" "$log" || true)"

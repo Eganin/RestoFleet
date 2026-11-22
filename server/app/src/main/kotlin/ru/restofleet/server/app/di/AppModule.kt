@@ -7,7 +7,11 @@ import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
 import ru.restofleet.server.api.AlertUseCases
 import ru.restofleet.server.api.ApiUseCases
+import ru.restofleet.server.api.ApiSettings
 import ru.restofleet.server.api.IncidentUseCases
+import ru.restofleet.server.api.RealtimeUseCases
+import ru.restofleet.server.api.ws.RealtimeHub
+import ru.restofleet.server.data.realtime.SharedFlowEventBus
 import ru.restofleet.server.api.AuthUseCases
 import ru.restofleet.server.api.CommandUseCases
 import ru.restofleet.server.api.DevicePayloadDecoder
@@ -105,6 +109,10 @@ fun apiUseCases(koin: Koin): ApiUseCases = with(koin) {
         health = get(),
         alerts = AlertUseCases(get(), get(), get(), get()),
         incidents = IncidentUseCases(get(), get(), get()),
+        realtime = RealtimeUseCases(
+            RealtimeHub(get(), get(), get(), get<ApiSettings>().realtime) { get<SharedFlowEventBus>().dropped },
+            get(),
+        ),
     )
 }
 

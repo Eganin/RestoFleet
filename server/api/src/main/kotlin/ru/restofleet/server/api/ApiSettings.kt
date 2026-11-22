@@ -1,11 +1,14 @@
 package ru.restofleet.server.api
 
+import ru.restofleet.server.api.ws.RealtimeSettings
+
 /** Настройки REST API; заполняет `server:app` из конфигурации (секрет JWT — из файла, реш. 252). */
 data class ApiSettings(
     val jwt: JwtSettings,
     val rateLimit: RateLimitSettings = RateLimitSettings(),
     /** Предел тела запроса (413 сверх него); nginx стенда режет на том же уровне. */
     val maxBodyBytes: Long = DEFAULT_MAX_BODY_BYTES,
+    val realtime: RealtimeSettings = RealtimeSettings(),
 ) {
     companion object {
         const val DEFAULT_MAX_BODY_BYTES: Long = 1024L * 1024

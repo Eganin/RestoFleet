@@ -545,7 +545,6 @@ paths:
   /api/v1/ws:
     get:
       tags: [realtime]
-      x-planned: true
       summary: WebSocket обновлений консоли (FR-BE-33, 51; реш. 418, 419)
       description: |
         Upgrade до WebSocket. Токен — **только** заголовок `Authorization: Bearer <access>` upgrade-запроса;

@@ -71,3 +71,27 @@
 **Не проверено:** на стенде не запускалось (валидация — ПМ11); поведение при > 1 000 незакрытых тревог в сводке — только по коду (реш. 449).
 - 22.11 — ПМ2 закоммичен (`65e026a`). Место: 12 ГБ — удалён кэш `~/.gradle/caches/9.6.1/transforms` (12 ГБ, Gradle 9.6.1 проектом не используется, последнее обращение 02.10; кэш восстанавливаемый), свободно 32 ГБ. ПМ3: сессии (семейство, потолок 7 сут, простой 24 ч, logout, `support` в seed) — домен и API готовы, тесты зелёные; начат домен инцидентов.
 - 22.11 — ПМ3, часть 1 в рабочей копии: сессии (3.4), домен инцидентов (агрегатор, классификатор — 19 строк таблицы, сверка, подавление, `EvaluateIncidents` под `pg_try_advisory_xact_lock`), `V3__incidents_sessions.sql`, репозитории, тик в `serve`, API `/incidents`, `/auth/logout`. Rulings 450–454. Модульные тесты зелёные; запущен гейт для промежуточного коммита. Дальше — WebSocket (3.5) и стенд (3.6).
+- 22.11 — ПМ3 часть 1 закоммичена (`fdb40e7`). Часть 2: WebSocket `/api/v1/ws` (`RealtimeHub`, `realtimeRoute`, `x-planned` снят), тесты на Netty + OkHttp (реш. 455), nginx `location = /api/v1/ws` (реш. 456), `test-backend.sh` — ротация, повтор погашенного, logout, upgrade без токена. Rulings 455–457. Запущен гейт.
+- 22.11 — ПМ3 часть 2: гейт №1 rc=1 (detekt: `ReturnCount` в разборе кадров WS, длина строки) → №2 rc=0. Коммит.
+
+## ПМ3. Инциденты, WebSocket, сессии
+
+**Итог.** Тик `EvaluateIncidents` каждые 30 с под `pg_try_advisory_xact_lock`: агрегатор → классификатор → сверка с открытыми инцидентами → пересчёт подавления; сессии с семейством и потолком; WebSocket `/api/v1/ws` с хабом рассылки. Все операции контракта ПМ1 реализованы, `x-planned` в `openapi.yaml` не осталось.
+
+| Что | Где |
+|---|---|
+| Агрегатор, классификатор, сверка, подавление, настройки | `server/domain/.../incident/` |
+| Use cases: тик, список, карточка, подтверждение | `incident/usecase/` |
+| Сессии: семейство, потолок, logout | `auth/SessionIssuer.kt`, `auth/usecase/Logout.kt`, `RefreshSession.kt` |
+| Миграция | `V3__incidents_sessions.sql` (incidents, probe_agg_1m, FK тревог, `refresh_tokens.family_id`/`session_expires_at`, `probe_states.error`) |
+| Репозитории, блокировка тика | `data/db/ExposedIncidentRepositories.kt`, `ExposedFleetQueries` |
+| API | `api/incident/IncidentRoutes.kt`, `POST /auth/logout`, `api/ws/` (`RealtimeHub`, `realtimeRoute`) |
+| Стенд | `deploy/nginx/apk-host.conf` (`location = /api/v1/ws`, журнал без query), `deploy/test-backend.sh` (ротация, повтор, logout, upgrade без токена), `deploy/seed/users.yaml` (`support`) |
+
+**Тесты.** `IncidentClassifierTest` — таблица 19 строк (S8 а/б/в, P = 49/50/51 %, |A| = 2, 3 при N = 12 и 9, 10 при N = 40, одно устройство, 50 % офлайн из двух, `ref` у части, нет данных по `api`, нет данных по `ref`, сеть не входит в A) и агрегатор; `IncidentLifecycleTest` («локально → глобально → локально» с переносом дочерней тревоги, закрытие на втором тике, возврат условия в гистерезисе, R-07 подавляет R-01 и R-05, блокировка, молчащие устройства, события, выдача и подтверждение, сводка); `SessionLifetimeTest` (потолок, простой, logout, повтор); Testcontainers `IncidentsOnPostgresTest` (S8 а/б/в на данных через `IngestBatch`, `probe_agg_1m`, взаимоисключение `pg_try_advisory_xact_lock`); `IncidentRoutesTest`, `LogoutRouteTest`; `RealtimeTest` на Netty + OkHttp (401 без заголовка и с токеном в query, `hello`, телеметрия только подписчику, `summary_changed`, 4401 по фейковым часам, 1013, пятое соединение и шестая подписка — 1008, мусорные кадры — 1008, `resync` при потерях шины).
+
+**Метрики:** гейт rc=0; 1 983 теста, 0 упавших; строки проекта 96,85 %; `server.domain.incident` 97,5 %, `incident.usecase` 100 %, `auth` 100 %, `auth.usecase` 98,5 %, `api.ws` 99,1 %, `api.incident` 100 %.
+
+**Отклонения:** состав и доказательства инцидента — `jsonb` (реш. 452); тесты WS — на реальном сервере (реш. 455); повтор токена после выхода — не кража (реш. 451).
+
+**Не проверено:** `test-backend.sh` с новыми шагами и nginx-проксирование WS на живом стенде — проверены `bash -n` и `nginx -t` (до загрузки сертификата); прогон — в ПМ4 (smoke s8-a) и ПМ11.
