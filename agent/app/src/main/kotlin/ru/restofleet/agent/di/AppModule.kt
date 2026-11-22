@@ -19,6 +19,7 @@ import ru.restofleet.agent.StandCaSource
 import ru.restofleet.agent.SettingsIntents
 import ru.restofleet.agent.WatchdogWorker
 import ru.restofleet.agent.BuildConfig
+import ru.restofleet.agent.data.collectors.DefaultWatchedApps
 import ru.restofleet.agent.WorkManagerWatchdogSchedule
 import ru.restofleet.agent.data.device.AndroidDeviceInfoSource
 import ru.restofleet.agent.data.di.ADMIN_COMPONENT
@@ -71,6 +72,7 @@ val appModule: Module = module {
     )
 
     single<Clock> { SystemClock }
+    single { DefaultWatchedApps.parse(BuildConfig.WATCHED_APPS) }
     // CA стенда для MQTT: debug читает R.raw.stand_ca, release возвращает null (fail closed, решение 3.6a)
     single<CaSource> { StandCaSource(androidContext()) }
     // Провижининг по коду (план 3.5): debug доверяет только CA стенда (как MQTT), release — системному хранилищу

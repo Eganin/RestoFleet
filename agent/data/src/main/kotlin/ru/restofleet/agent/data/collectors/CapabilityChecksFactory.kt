@@ -94,7 +94,7 @@ class CapabilityChecksFactory(
     private val hardware: HardwarePropertiesCollector,
     private val serial: SerialCollector,
     private val scope: CoroutineScope,
-    private val watched: List<String> = DEFAULT_WATCHED,
+    private val watched: List<String>,
 ) {
     fun create(): List<CapabilityCheck> = listOf(
         ReadingCheck(CheckId.R1, clock, { battery.read() }, CheckValues::batteryRaw),
@@ -121,8 +121,14 @@ class CapabilityChecksFactory(
         },
     )
 
+}
+
+/**
+ * Отслеживаемые приложения по умолчанию, пока тень их не задала (реш. 425): список задаёт сборка — Gradle-свойство
+ * `rf.watchedApps` → `BuildConfig.WATCHED_APPS` (`agent:app`). Видимость пакетов — `<queries>` с launcher-intent.
+ */
+data class DefaultWatchedApps(val packages: List<String>) {
     companion object {
-        /** Должен совпадать с `<queries>` в AndroidManifest.xml. */
-        val DEFAULT_WATCHED = listOf("com.android.chrome", "ru.restofleet.dummy.waiter")
+        fun parse(csv: String) = DefaultWatchedApps(csv.split(',').map { it.trim() }.filter { it.isNotEmpty() })
     }
 }

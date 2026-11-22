@@ -20,6 +20,11 @@ android {
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
         versionName = "0.1.0-mvp"
+        // Отслеживаемые приложения по умолчанию (реш. 425): ./gradlew -Prf.watchedApps=a,b … — без правки кода
+        val watchedApps = providers.gradleProperty("rf.watchedApps")
+            .getOrElse("com.android.chrome,ru.restofleet.dummy.waiter")
+        require(Regex("^[A-Za-z0-9._,]*$").matches(watchedApps)) { "rf.watchedApps: package names separated by commas" }
+        buildConfigField("String", "WATCHED_APPS", "\"$watchedApps\"")
     }
     buildFeatures {
         compose = true

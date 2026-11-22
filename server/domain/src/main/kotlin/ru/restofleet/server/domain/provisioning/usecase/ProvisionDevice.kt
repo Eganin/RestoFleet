@@ -19,7 +19,6 @@ import ru.restofleet.server.domain.provisioning.ProvisioningCode
 import ru.restofleet.server.domain.provisioning.ProvisioningSettings
 import ru.restofleet.server.domain.provisioning.ProvisioningToken
 import ru.restofleet.server.domain.provisioning.TokenRepository
-import ru.restofleet.server.domain.shadow.DefaultDesired
 import ru.restofleet.server.domain.shadow.Shadow
 import ru.restofleet.server.domain.shadow.ShadowRepository
 import ru.restofleet.shared.kernel.Clock
@@ -69,7 +68,7 @@ class ProvisionDevice(
                 devices.insert(device)
                 credentials.insert(device.id, hasher.hash(password), now)
                 tokens.attachDevice(token.id, device.id)
-                val shadow = Shadow.initial(device.id, DefaultDesired.document, now)
+                val shadow = Shadow.initial(device.id, settings.desired.forRole(token.role), now)
                 shadows.insert(shadow)
                 when (val created = broker.createDevice(device.id, password)) {
                     is Outcome.Failure -> created

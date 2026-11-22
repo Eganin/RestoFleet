@@ -11,6 +11,7 @@ import org.koin.dsl.module
 import ru.restofleet.agent.data.collectors.AppVersionsCollector
 import ru.restofleet.agent.data.collectors.BatteryCollector
 import ru.restofleet.agent.data.collectors.CapabilityChecksFactory
+import ru.restofleet.agent.data.collectors.DefaultWatchedApps
 import ru.restofleet.agent.data.collectors.ForegroundAppCollector
 import ru.restofleet.agent.data.collectors.LightSensorCollector
 import ru.restofleet.agent.data.collectors.MotionCollector
@@ -78,6 +79,7 @@ val checksModule: Module = module {
             packageEvents = get(),
             networkChanges = get(),
             hardware = get(),
+            watched = get<DefaultWatchedApps>().packages,
             serial = get(),
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
         ).create()

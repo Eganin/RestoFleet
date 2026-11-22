@@ -17,11 +17,10 @@
     <!-- R13: Build.getSerial() (адаптер Device Owner выдаёт разрешение сам себе; объявлено, иначе выдавать нечего) -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
-    <!-- R7/R12: видимость пакетов на Android 11+; D4: пакет для lock task приходит в команде, поэтому видны все
-         приложения с лаунчером (иначе getPackageInfo для них бросит NameNotFoundException) -->
+    <!-- R7/R12: видимость пакетов на Android 11+ (реш. 425): отслеживаемые приложения задаёт тень или сборка
+         (rf.watchedApps), поэтому видны все приложения с лаунчером, без QUERY_ALL_PACKAGES; D4: пакет lock task тоже
+         приходит в команде (иначе getPackageInfo бросит NameNotFoundException) -->
     <queries>
-        <package android:name="com.android.chrome" />
-        <package android:name="ru.restofleet.dummy.waiter" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />

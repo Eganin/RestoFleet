@@ -24,6 +24,8 @@ data class AppConfig(
     val jobs: JobsSection = JobsSection(),
     val alerts: AlertsSection = AlertsSection(),
     val incidents: IncidentsSection = IncidentsSection(),
+    /** `desired` нового устройства по ролям `kitchen`, `hall`, `assembly` (реш. 425); нет роли — умолчание без проб. */
+    val desired: Map<String, RoleDesiredSection> = emptyMap(),
     /** Каталог секретов для `seed` (`passwordSecret` в `users.yaml`): в контейнере — `/run/secrets`. */
     val secretsDir: String = "/run/secrets",
 )
@@ -65,6 +67,28 @@ data class PollingSection(val staleAfterMs: Long = 90_000)
 
 /** Пороги, которые проверяет бэкенд (реш. 415): R-06 — вход < [freeMbEnter], выход ≥ [freeMbExit]. */
 data class AlertsSection(val freeMbEnter: Long = 500, val freeMbExit: Long = 600)
+
+/** `desired` роли: интервал телеметрии, пороги, отслеживаемые приложения и цели проверок (ТЗ 7.2). */
+data class RoleDesiredSection(
+    val intervalSec: Int = 30,
+    val thresholds: ThresholdsSection = ThresholdsSection(),
+    val watchedApps: List<String> = emptyList(),
+    val probes: List<ProbeSection> = emptyList(),
+)
+
+data class ThresholdsSection(val batteryLowPct: Int = 20, val tempHighC: Double = 45.0, val fgAbsentMin: Int = 10)
+
+/** Цель проверки (FR-AG-30): `reference` — эталонная цель классификатора (`ref`). */
+data class ProbeSection(
+    val id: String,
+    val url: String,
+    val type: String = "http",
+    val intervalSec: Int = 30,
+    val timeoutMs: Long = 5_000,
+    val failThreshold: Int = 3,
+    val reference: Boolean = false,
+    val expectedStatus: Int? = null,
+)
 
 /** Классификатор инцидентов (реш. 409–412): пороги P и M, окно, тик, цели. */
 data class IncidentsSection(

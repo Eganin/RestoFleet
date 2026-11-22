@@ -36,6 +36,28 @@ auth:
 alerts:
   freeMbEnter: 500
   freeMbExit: 600
+# Умолчания desired по ролям (реш. 425). Адреса — стенд: из эмулятора 10.0.2.2, через Toxiproxy (api 18443,
+# ref 18444, kds 18445 → nginx стенда). Реальные цели и package name подставляются здесь или переменными
+# RF_DESIRED_<РОЛЬ>_…, код не меняется.
+desired:
+  kitchen:
+    watchedApps: [com.android.chrome]
+    probes:
+      - { id: api, url: "https://10.0.2.2:18443/health", intervalSec: 30, failThreshold: 3 }
+      - { id: kds, url: "https://10.0.2.2:18445/kds", intervalSec: 60, failThreshold: 3, expectedStatus: 204 }
+      - { id: ref, url: "https://10.0.2.2:18444/ref", intervalSec: 60, failThreshold: 3, reference: true, expectedStatus: 204 }
+  hall:
+    # [[ДАННЫЕ ПРЕДПРИЯТИЯ: package name приложения официанта]] — пример: тестовое приложение стенда
+    watchedApps: [ru.restofleet.dummy.waiter]
+    probes:
+      - { id: api, url: "https://10.0.2.2:18443/health", intervalSec: 30, failThreshold: 3 }
+      - { id: ref, url: "https://10.0.2.2:18444/ref", intervalSec: 60, failThreshold: 3, reference: true, expectedStatus: 204 }
+  assembly:
+    # [[ДАННЫЕ ПРЕДПРИЯТИЯ: package name приложения сборщика]] — пример
+    watchedApps: [ru.restofleet.dummy.assembly]
+    probes:
+      - { id: api, url: "https://10.0.2.2:18443/health", intervalSec: 30, failThreshold: 3 }
+      - { id: ref, url: "https://10.0.2.2:18444/ref", intervalSec: 60, failThreshold: 3, reference: true, expectedStatus: 204 }
 # Классификатор инцидентов (реш. 409–412): P = 50 %, M = max(3, ⌈0,25·N⌉), окно 2 мин, тик 30 с
 incidents:
   backendDownPct: 50

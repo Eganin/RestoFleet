@@ -1,6 +1,7 @@
 package ru.restofleet.server.domain.shadow
 
 import ru.restofleet.server.domain.common.ServerError
+import ru.restofleet.server.domain.device.DeviceRole
 import ru.restofleet.shared.shadow.ShadowDocument
 import ru.restofleet.shared.shadow.ShadowKeys
 import ru.restofleet.shared.shadow.ShadowValue
@@ -27,6 +28,24 @@ object DefaultDesired {
     )
 
     private fun obj(vararg pairs: Pair<String, ShadowValue>) = ShadowValue.Obj(mapOf(*pairs))
+}
+
+/**
+ * Умолчания `desired` по ролям (реш. 425): цели проверок и отслеживаемые приложения задаёт конфиг `server:app`, а не
+ * код — реальные адреса и package name подставит пользователь. Роль без записи получает [DefaultDesired]. Каждый
+ * документ проходит [DesiredRules] при создании: неверный конфиг не запустит бэкенд, а не выдаст устройству тень,
+ * которую оно отвергнет.
+ */
+class DesiredDefaults(private val byRole: Map<DeviceRole, ShadowDocument> = emptyMap()) {
+    init {
+        byRole.forEach { (role, document) ->
+            DesiredRules.validate(document)?.let { error ->
+                throw IllegalArgumentException("desired.${role.code}.${error.field}: ${error.reason}")
+            }
+        }
+    }
+
+    fun forRole(role: DeviceRole): ShadowDocument = byRole[role] ?: DefaultDesired.document
 }
 
 /**

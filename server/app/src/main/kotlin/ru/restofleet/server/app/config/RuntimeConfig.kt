@@ -6,13 +6,17 @@ import ru.restofleet.server.api.RateLimitSettings
 import ru.restofleet.server.data.config.DataConfig
 import ru.restofleet.server.data.config.DatabaseConfig
 import ru.restofleet.server.data.config.MqttConfig
-import ru.restofleet.server.domain.auth.AuthSettings
 import ru.restofleet.server.domain.alert.RuleParams
+import ru.restofleet.server.domain.auth.AuthSettings
+import ru.restofleet.server.domain.device.DeviceRole
 import ru.restofleet.server.domain.incident.ClassifierParams
 import ru.restofleet.server.domain.incident.IncidentSettings
 import ru.restofleet.server.domain.polling.PollingSettings
 import ru.restofleet.server.domain.provisioning.BrokerEndpoint
 import ru.restofleet.server.domain.provisioning.ProvisioningSettings
+import ru.restofleet.server.domain.shadow.DesiredDefaults
+import ru.restofleet.shared.shadow.ShadowDocument
+import ru.restofleet.shared.shadow.ShadowValue
 
 /**
  * Готовые настройки модулей с прочитанными секретами. Каждая команда читает только свои секреты: `serve` — пароль БД,
@@ -86,6 +90,12 @@ class RuntimeConfig private constructor(
             provisioning = ProvisioningSettings(
                 broker = BrokerEndpoint(config.provisioning.brokerHost, config.provisioning.brokerPort),
                 tokenTtlMillis = config.provisioning.tokenTtlHours * MS_PER_HOUR,
+                desired = DesiredDefaults(
+                    config.desired.entries.associate { (code, section) ->
+                        val role = requireNotNull(DeviceRole.fromCode(code)) { "desired: unknown role '$code'" }
+                        role to section.toDocument()
+                    },
+                ),
             ),
             polling = PollingSettings(staleAfterMillis = config.polling.staleAfterMs),
             auth = AuthSettings(
@@ -113,3 +123,36 @@ class RuntimeConfig private constructor(
         )
     }
 }
+
+/** Секция конфига → документ `desired` (те же ключи, что `ShadowDesiredDto`; проверку делает [DesiredDefaults]). */
+internal fun RoleDesiredSection.toDocument(): ShadowDocument = ShadowDocument(
+    mapOf(
+        "telemetry" to obj("intervalSec" to num(intervalSec)),
+        "thresholds" to obj(
+            "batteryLowPct" to num(thresholds.batteryLowPct),
+            "tempHighC" to ShadowValue.Num(thresholds.tempHighC),
+            "fgAbsentMin" to num(thresholds.fgAbsentMin),
+        ),
+        "watchedApps" to ShadowValue.List(watchedApps.map { ShadowValue.Str(it) }),
+        "probes" to ShadowValue.List(
+            probes.map { p ->
+                ShadowValue.Obj(
+                    buildMap {
+                        put("id", ShadowValue.Str(p.id))
+                        put("type", ShadowValue.Str(p.type))
+                        put("url", ShadowValue.Str(p.url))
+                        put("intervalSec", num(p.intervalSec))
+                        put("timeoutMs", ShadowValue.Num(p.timeoutMs.toDouble()))
+                        put("failThreshold", num(p.failThreshold))
+                        if (p.reference) put("reference", ShadowValue.Bool(true))
+                        p.expectedStatus?.let { put("expectedStatus", num(it)) }
+                    },
+                )
+            },
+        ),
+    ),
+)
+
+private fun obj(vararg pairs: Pair<String, ShadowValue>) = ShadowValue.Obj(mapOf(*pairs))
+
+private fun num(value: Int) = ShadowValue.Num(value.toDouble())

@@ -5,7 +5,7 @@ import org.koin.core.module.Module
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import ru.restofleet.agent.data.collectors.AndroidTelemetrySource
-import ru.restofleet.agent.data.collectors.CapabilityChecksFactory
+import ru.restofleet.agent.data.collectors.DefaultWatchedApps
 import ru.restofleet.agent.data.credentials.CredentialsCheck
 import ru.restofleet.agent.data.lifecycle.AndroidCpuWakeLock
 import ru.restofleet.agent.data.lifecycle.AndroidWizardPermissions
@@ -48,7 +48,7 @@ val lifecycleModule: Module = module {
         TelemetryTick(
             get(),
             get(),
-            CapabilityChecksFactory.DEFAULT_WATCHED,
+            get<DefaultWatchedApps>().packages,
             publish = { get<PublishTelemetry>()(it) },
             evaluate = { get<EvaluateThresholds>()(it) },
         )

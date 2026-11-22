@@ -12,6 +12,18 @@
     "enabled": true
   },
   {
+    "name": "ref",
+    "listen": "0.0.0.0:18444",
+    "upstream": "apk-host:443",
+    "enabled": true
+  },
+  {
+    "name": "kds",
+    "listen": "0.0.0.0:18445",
+    "upstream": "apk-host:443",
+    "enabled": true
+  },
+  {
     "name": "rest",
     "listen": "0.0.0.0:18080",
     "upstream": "backend:8080",

@@ -3,6 +3,7 @@ package ru.restofleet.server.domain.provisioning
 import ru.restofleet.server.domain.device.DeviceInfo
 import ru.restofleet.server.domain.device.DeviceRole
 import ru.restofleet.server.domain.restaurant.RestaurantId
+import ru.restofleet.server.domain.shadow.DesiredDefaults
 import ru.restofleet.shared.kernel.DeviceId
 
 /** Одноразовый код регистрации (FR-BE-02). В БД — только SHA-256 кода; сам код отдаётся один раз при выпуске. */
@@ -71,6 +72,8 @@ data class ProvisioningSettings(
     /** Публичный адрес брокера для агентов (стенд: `10.0.2.2:8883` для эмулятора). */
     val broker: BrokerEndpoint,
     val tokenTtlMillis: Long = DEFAULT_TOKEN_TTL_MS,
+    /** `desired` нового устройства по роли (реш. 425): из конфига `server:app`. */
+    val desired: DesiredDefaults = DesiredDefaults(),
 ) {
     companion object {
         /** TTL кода — 24 ч (FR-BE-02). */

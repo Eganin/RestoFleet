@@ -12,7 +12,10 @@ import ru.restofleet.server.domain.provisioning.usecase.IssueProvisioningTokens
 import ru.restofleet.server.domain.provisioning.usecase.ProvisionDevice
 import ru.restofleet.server.domain.restaurant.RestaurantId
 import ru.restofleet.server.domain.shadow.DefaultDesired
+import ru.restofleet.server.domain.shadow.DesiredDefaults
 import ru.restofleet.shared.kernel.Outcome
+import ru.restofleet.shared.shadow.ShadowDocument
+import ru.restofleet.shared.shadow.ShadowValue
 
 class ProvisioningUseCasesTest {
     private val w = World()
@@ -151,5 +154,23 @@ class ProvisioningUseCasesTest {
     @Test
     fun codeNormalization() {
         assertThat(ProvisioningCode.normalize(" ab-cd ef\n")).isEqualTo("ABCDEF")
+    }
+
+    @Test
+    fun newDeviceGetsTheDesiredOfItsRole() = runTest {
+        val apps = ShadowValue.List(listOf(ShadowValue.Str("com.android.chrome")))
+        val kitchen = ShadowDocument(DefaultDesired.document.fields + ("watchedApps" to apps))
+        val settings = w.provisioningSettings.copy(desired = DesiredDefaults(mapOf(DeviceRole.HALL to kitchen)))
+        val byRole = ProvisionDevice(
+            w.tokens, w.devices, w.credentials, w.shadows, w.broker, w.publisher, w.hasher, w.secrets, w.digest,
+            settings, w.tx, w.ids, w.clock,
+        )
+        issueOne()
+        val device = (byRole(request("CODE1")) as Outcome.Success).value
+        assertThat(w.db.state.shadows.getValue(device.deviceId).desired).isEqualTo(kitchen)
+        assertThat(DesiredDefaults().forRole(DeviceRole.KITCHEN)).isEqualTo(DefaultDesired.document)
+        val invalid = ShadowDocument(DefaultDesired.document.fields + ("watchedApps" to ShadowValue.Num(1.0)))
+        assertThat(runCatching { DesiredDefaults(mapOf(DeviceRole.HALL to invalid)) }.exceptionOrNull())
+            .hasMessageThat().contains("desired.hall.watchedApps")
     }
 }
