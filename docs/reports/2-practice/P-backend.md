@@ -12,6 +12,7 @@
 - 23.11 — ПМ3 закоммичена (`fdb40e7`, `d724538`). ПМ4 в рабочей копии: отказы устройств (`domain/fault`), `synthetic` и генератор эпизодов (`domain/synthetic`), драйвер отказов в прогоне, эталон CSV, команда `prepare`, сценарии `tools/incidents/scenarios`, `accuracy.py` + `test_accuracy.py` (9 тестов), `run-accuracy.sh`; R-22, R-24 (домен 99,1 %). Гейт №1 — rc=1 (detekt: длина `invoke`, `TooManyFunctions`, `ThrowsCount`) → исправлено, запущен №2. Rulings 458–461.
 - 23.11 — ПМ4 закоммичена (`fa8e70e`, гейт rc=0). Стенд пересобран (`prepare-stand.sh`, Flyway V2, V3), `test-backend.sh` — 24/24 PASS, утечек 0. `run-accuracy.sh prepare` — 72 устройства (первая попытка упёрлась в предел `/provision` 60/мин, повтор через минуту). Smoke `s8-a` — приёмка выполнена (раздел ПМ4). Хвост R-07 после остановки → окно прогона в `accuracy.py` (реш. 462).
 - 23.11 — ПМ5 начат: 5.1 (`DesiredDefaults` из `application.yaml`, прокси `ref`/`kds`), 5.2 (`rf.watchedApps` → `BuildConfig`, `<queries>` только launcher-intent, `DefaultWatchedApps` через Koin) — гейт №1 rc=1 (тест манифеста искал `QUERY_ALL_PACKAGES` и в комментарии → проверяется разрешение), гейт №2 rc=0; коммит 5.1–5.2. Реш. 462, 463. Дальше — 5.3 по группам.
+- 23.11 — 5.3 по группам, гейты №3 (детект: длина строки, `TooManyFunctions` у `MqttBrokerSession` → `ReconnectWaits`; smart cast в `InfoRows`), №4 rc=0 → коммиты `62238d0`, `1526660`, `6603658`; сервер — гейт №5 rc=1 (длина строк; `BrokerRestartDeliveryTest`: команда QoS 1 после рестарта не пришла → разбор, реш. 469), №6 rc=0 → `894eb2f`. ПМ5 закрыта.
 
 ## ПМ1. Контракт API и зависимости
 
@@ -121,3 +122,25 @@
 **Отклонения:** после штатной остановки симулятора парк офлайн → 12 инцидентов R-07; в оценку не входят (окно прогона, реш. 462). `sm04` — `synthetic` (реш. 462).
 
 **Не проверено:** `s8-b`, `s8-c`, `sm04` и полный прогон точности (40 мин) на стенде — ПМ11.
+
+## ПМ5. Цели проверок, package name, бэклог К
+
+**Итог.** Умолчания `desired` по ролям — в конфиге сервера, отслеживаемые приложения агента — свойство сборки; бэклог К (реш. 426) и два долга (реш. 326) закрыты, кроме находки FR-BR-08 по очереди QoS 1.
+
+| Что | Где | Решение |
+|---|---|---|
+| 5.1 `DesiredDefaults` по ролям, проверка при старте; `kitchen` — `api`, `kds`, `ref` + Chrome | `server/domain/.../shadow/DesiredRules.kt`, `server/app/.../config/`, `application.yaml`; прокси `ref` 18444, `kds` 18445 (`deploy/toxiproxy.json`, nginx `204`) | 463 |
+| 5.2 `rf.watchedApps` → `BuildConfig`, `DefaultWatchedApps` через Koin, `<queries>` только launcher-intent | `agent/app/build.gradle.kts`, `AppModule`, `agent/data` (манифест, модули) | 463 |
+| V-4 возврат сети прерывает паузу переподключения | `agent/data/.../mqtt/NetworkReturns.kt` (`NetworkReturns`, `ReconnectWaits`), `MqttBrokerSession` | 464 |
+| FR-AG-79 тайм-аут публикации 10 с | `HiveMqLink.kt` (`awaitPublish`), `PublishTimeoutTest` | 467 |
+| R-14 сначала outbox, потом состояние; R-15 интервал через смену целей | `ProbeStates.preview`, `RunProbes`, `ThresholdTracker`/`ForegroundTracker` (снимок), `EvaluateThresholds`, `ProbeLoop` | 465 |
+| V-5 код и название ресторана; R-12 `NonCancellable`; R-13 статус → мастер; R-17 клиент провижининга | `ProvisionResponseDto`, `ProvisionDevice`, `CredentialCodec` v3, `InfoRows`, `Provision`, `RootReducer`/`StatusViewModel`, `ProvisioningHttpClient.kt` | 466 |
+| R-1/R-2 очередь QoS 0; R-7 фиктивный bcrypt; V-1 повтор SUBACK; R-11 ACL; FR-BR-08 | `IngestPipeline` (`maxQueuedQos0`, `overflow`), `AuthenticateDevice`, `Resubscription.kt`, `BrokerAclAndPublisherTest`, `BrokerRestartDeliveryTest` | 468, 469 |
+
+**Тесты.** `DesiredDefaultsConfigTest`, `ProvisioningUseCasesTest` (роль → документ, код и название), `DefaultWatchedAppsTest`; `NetworkReturnTest` (7: пауза прервана, уже имевшаяся сеть не прерывает, `auth_failed` не прерывается, потерянное соединение — сразу и без `offline`, колебания при живом соединении, сбой наблюдателя), `PublishTimeoutTest` (10 с на виртуальном времени), `OutboxFirstTest` (сбой outbox не теряет переход, зону и `fg_absent`), `ProbeLoopTest` (+2), `ProvisionTest` (отмена после 201, код и название), `CredentialCodecTest` (v3, v2 читается), `OkHttpProvisioningApiTest` (поля V-5, без повторов и редиректов), `StatusViewModelTest`/`RootViewModelTest`/`AgentRouterTest` (R-13); `IngestPipelineTest` (предел QoS 0), `PollingUseCasesTest` (R-7), `ResubscriptionTest` (3), `BrokerAclAndPublisherTest` (R-11), `BrokerRestartDeliveryTest`.
+
+**Метрики:** гейт rc=0; 2 041 тест, 0 упавших; строки проекта 96,85 %; `agent.data.mqtt` 82,1 % (обёртка HiveMQ без брокера — как в К), `agent.domain.probe` 100 %, `agent.domain.threshold` 97,8 %, `server.data.ingest` 98,9 %, `server.data.mqtt` 98,1 %; `verifyReleaseNoDebugSurface` зелёный. Приёмка: устройство роли `kitchen` получает `api`, `kds`, `ref` и Chrome (`DesiredDefaultsConfigTest`, провижининг — `ProvisioningUseCasesTest`).
+
+**Отклонения:** очередь QoS 1 отключённого устройства не переживает рестарт Mosquitto 2.1.2 — находка, команда уходит в `expired` (реш. 469). Пауза `auth_failed` возвратом сети не прерывается (реш. 464). R-13 — кнопка на статусе, а не автопереход (реш. 466).
+
+**Не проверено (валидация, ПМ11):** V-4 и V-5 на эмуляторе (новый агент: `CredentialCodec` v3, показ «код · название»); стенд с новыми прокси `ref`/`kds` и умолчаниями ролей — нужен `prepare-stand.sh` и пересборка образа бэкенда; `docker compose restart mosquitto` с офлайн-агентом и командой в очереди (реш. 469); `s8-b`, `s8-c`, `sm04`, полный прогон точности.
