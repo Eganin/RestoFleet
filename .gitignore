@@ -26,3 +26,8 @@ docs/coursework/*.pdf
 tools/experiments/__pycache__/
 # Coursework title page with real personal data (decision 322); the template is tools/coursework/title.example.yaml
 tools/coursework/*.local.yaml
+# Practice report: docx is built by tools/practice/build_report.py, title with personal data stays local (decisions 403, 501)
+docs/practice/*.local.yaml
+docs/practice/*.docx
+docs/practice/*.pdf
+tools/practice/__pycache__/

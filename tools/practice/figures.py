@@ -23,8 +23,10 @@ BASE = ROOT / "tools" / "coursework" / "figures.py"
 
 
 def load_base():
+    sys.dont_write_bytecode = True       # без __pycache__ в tools/coursework (чужой каталог)
     spec = importlib.util.spec_from_file_location("rf_figures", BASE)
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module      # dataclass ищет модуль класса в sys.modules
     spec.loader.exec_module(module)
     module.OUT = SRC / "img"          # Canvas.save пишет в module.OUT
     return module

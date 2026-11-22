@@ -3,7 +3,7 @@
 Оформление, разбор разметки и проверки (рисунки, таблицы, ссылки, источники, [[TODO]]) — tools/coursework/build_docx.py,
 он импортируется как модуль и не меняется: курсовая собирается и проверяется по-прежнему. Здесь добавлены:
   - умолчания практики: --src docs/practice, --out docs/practice/RestoFleet-practice.docx, вид работы и тема по ТЗ 16.4,
-    титул из docs/practice/title.local.yaml (в .gitignore, образец — title.example.yaml);
+    титул из docs/practice/title.local.yaml (в .gitignore), без него — заглушки из образца title.example.yaml;
   - заглушки [[ДАННЫЕ ПРЕДПРИЯТИЯ: …]] (решение 402): выделяются в docx жёлтым, как [[TODO]], и перечисляются в отчёте
     раздела «Данные предприятия»; любой другой маркер [[…]], кроме FIG и TODO, — ошибка разметки;
   - защита анонимности: название вида ООО «Имя» вместо ООО «…» — ошибка;
@@ -29,6 +29,7 @@ GENERATOR = ROOT / "tools" / "coursework" / "build_docx.py"
 SRC = ROOT / "docs" / "practice"
 OUT_NAME = "RestoFleet-practice.docx"
 TITLE_LOCAL = SRC / "title.local.yaml"
+TITLE_EXAMPLE = SRC / "title.example.yaml"      # без title.local.yaml — заглушки практики, а не курсовой
 WORK_TYPE = "ОТЧЁТ"
 TOPIC = ("Анализ инфраструктуры устройств ресторанов и инцидентов доступности серверной части ООО „…“; "
          "проектирование и реализация подсистемы проверок доступности и корреляции инцидентов")
@@ -36,14 +37,20 @@ TOPIC = ("Анализ инфраструктуры устройств рест�
 DATA_TAG = "ДАННЫЕ ПРЕДПРИЯТИЯ"
 DATA_RE = re.compile(r"\[\[ДАННЫЕ ПРЕДПРИЯТИЯ:\s*([^\[\]]+?)\s*\]\]")
 ANY_MARK_RE = re.compile(r"\[\[([^\]:|]*)")          # имя любого маркера [[ИМЯ: …]] / [[ИМЯ …]]
-KNOWN_MARKS = ("FIG", "TODO", DATA_TAG)
 NAMED_COMPANY_RE = re.compile(r"ООО\s*[«\"„“](?!…)")   # ООО «…» — можно, ООО «Имя» — нет (решение 402)
 SECTION = "Данные предприятия"
 
 
+def known_mark(name):
+    """FIG, TODO и TODO с пояснением, ДАННЫЕ ПРЕДПРИЯТИЯ — только с двоеточием (имя без хвоста)."""
+    return name in ("FIG", "TODO", DATA_TAG) or name.startswith("TODO ")
+
+
 def load_generator():
+    sys.dont_write_bytecode = True       # без __pycache__ в tools/coursework (чужой каталог)
     spec = importlib.util.spec_from_file_location("rf_build_docx", GENERATOR)
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module      # dataclass ищет модуль класса в sys.modules
     spec.loader.exec_module(module)
     return module
 
@@ -76,7 +83,7 @@ def check_placeholders(bd, files, report, *, final):
                 continue
             for m in ANY_MARK_RE.finditer(raw):
                 name = m.group(1).strip()
-                if not any(name == k or name.startswith(k + " ") for k in KNOWN_MARKS):
+                if not known_mark(name):
                     report.add(SECTION, f"{path.name}:{ln}: неизвестный маркер «[[{name[:40]}…» — допустимы "
                                         f"[[FIG: …]], [[TODO …]], [[{DATA_TAG}: …]]", "error")
                 elif name == DATA_TAG and not DATA_RE.match(raw, m.start()):
@@ -136,7 +143,11 @@ def main():
     check_placeholders(bd, files, report, final=args.final)
     bd.check_layout(docs, report)
     bd.check_volume(docs, report)
-    title = bd.load_title(args.title.resolve(), report)
+    title_path = args.title.resolve()
+    if not title_path.exists() and title_path == TITLE_LOCAL:
+        report.add("Титульный лист", f"{TITLE_LOCAL.relative_to(ROOT)} нет — заглушки из образца")
+        title_path = TITLE_EXAMPLE
+    title = bd.load_title(title_path, report)
 
     if not args.check:
         try:
