@@ -18,7 +18,6 @@ import io.ktor.server.response.respond
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import ru.restofleet.server.api.JwtSettings
-import ru.restofleet.server.api.error.ErrorBody
 import ru.restofleet.server.api.error.ErrorCodes
 import ru.restofleet.server.domain.auth.AccessToken
 import ru.restofleet.server.domain.auth.AccessTokenIssuer
@@ -28,6 +27,7 @@ import ru.restofleet.shared.kernel.Clock
 import ru.restofleet.shared.kernel.DeviceId
 import ru.restofleet.shared.kernel.IdGenerator
 import ru.restofleet.shared.kernel.getOrNull
+import ru.restofleet.shared.protocol.rest.ApiErrorDto
 import java.util.Date
 
 /** Имена провайдеров аутентификации. */
@@ -98,7 +98,7 @@ fun Application.installSecurity(settings: JwtSettings, authenticateDevice: Authe
                 call.response.header(HttpHeaders.WWWAuthenticate, "Bearer realm=\"$realm\"")
                 call.respond(
                     HttpStatusCode.Unauthorized,
-                    ErrorBody(ErrorCodes.UNAUTHORIZED, "valid admin access token required"),
+                    ApiErrorDto(ErrorCodes.UNAUTHORIZED, "valid admin access token required"),
                 )
             }
         }

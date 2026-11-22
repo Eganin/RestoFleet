@@ -1,0 +1,23 @@
+{
+  "devicesOnline": 214,
+  "devicesTotal": 228,
+  "devicesOffline": 14,
+  "offlineLastHour": 3,
+  "alertsOpen": 9,
+  "alertsCritical": 3,
+  "incidentsOpen": 1,
+  "restaurantsWithProblems": 3,
+  "restaurantsTotal": 38,
+  "problemRestaurants": [
+    {
+      "restaurant": { "id": "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e601", "code": "MSK-01", "name": "Северная кухня" },
+      "ruleId": "R-05", "count": 4, "devicesTotal": 6, "target": "api", "since": 1795332940000,
+      "details": { "error": "timeout", "failures": "3" }
+    },
+    {
+      "restaurant": { "id": "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e602", "code": "MSK-02", "name": "Пять специй" },
+      "ruleId": "R-03", "count": 1, "devicesTotal": 5, "deviceId": "d-0b1f6c2a9e7d4c3b", "deviceName": "Кухня 2",
+      "since": 1795334260000, "details": { "tempC": "46.8", "thermal": "SEVERE", "limit": "45.0" }
+    }
+  ]
+}

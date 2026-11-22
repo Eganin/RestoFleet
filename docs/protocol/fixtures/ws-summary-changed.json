@@ -1,0 +1,8 @@
+{
+  "v": 1, "type": "summary_changed", "ts": 1795334500000,
+  "data": {
+    "devicesOnline": 213, "devicesTotal": 228, "devicesOffline": 15, "offlineLastHour": 4, "alertsOpen": 10,
+    "alertsCritical": 3, "incidentsOpen": 1, "restaurantsWithProblems": 3, "restaurantsTotal": 38,
+    "problemRestaurants": []
+  }
+}

@@ -3,8 +3,8 @@ package ru.restofleet.server.api.http
 import io.ktor.http.HttpStatusCode
 import kotlinx.serialization.json.JsonObject
 import ru.restofleet.server.api.error.ApiException
-import ru.restofleet.server.api.error.ErrorBody
 import ru.restofleet.shared.protocol.RfJson
+import ru.restofleet.shared.protocol.rest.ApiErrorDto
 
 /** Строка от клиента, которую запишут в БД: без NUL (PostgreSQL отвергнет) и не длиннее [max] символов. */
 fun requireText(field: String, value: String, max: Int): String = when {
@@ -21,7 +21,7 @@ fun parseJsonObject(text: String): JsonObject {
     val error = when {
         text.contains('\u0000') || text.contains("\\u0000") -> ApiException.validation("body", "nul_char")
         else -> when (val element = parseOrNull(text)) {
-            null -> ApiException(HttpStatusCode.BadRequest, ErrorBody("bad_request", "malformed request body"))
+            null -> ApiException(HttpStatusCode.BadRequest, ApiErrorDto("bad_request", "malformed request body"))
             is JsonObject -> return element
             else -> ApiException.validation("body", "not_an_object")
         }

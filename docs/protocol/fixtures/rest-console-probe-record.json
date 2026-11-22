@@ -1,0 +1,4 @@
+{
+  "ts": 1795334460000, "target": "kds", "ok": true, "status": 204, "totalMs": 212,
+  "dnsMs": 9, "connectMs": 31, "tlsMs": 64, "ttfbMs": 108
+}

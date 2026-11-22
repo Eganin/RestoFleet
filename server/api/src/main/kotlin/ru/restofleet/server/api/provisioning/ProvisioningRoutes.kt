@@ -7,11 +7,9 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.Serializable
 import ru.restofleet.server.api.ProvisioningUseCases
 import ru.restofleet.server.api.error.ApiException
 import ru.restofleet.server.api.error.orThrow
-import ru.restofleet.server.api.http.ItemsDto
 import ru.restofleet.server.api.http.noStore
 import ru.restofleet.server.api.http.requireText
 import ru.restofleet.server.domain.device.DeviceInfo
@@ -24,38 +22,21 @@ import ru.restofleet.server.domain.restaurant.RestaurantId
 import ru.restofleet.shared.protocol.rest.MqttEndpointDto
 import ru.restofleet.shared.protocol.rest.ProvisionRequestDto
 import ru.restofleet.shared.protocol.rest.ProvisionResponseDto
-
-/** `POST /provisioning/tokens`: один код; роль и ресторан фиксируются в коде (реш. 210). */
-@Serializable
-data class IssueTokenRequest(val restaurantId: String, val role: String, val name: String? = null)
-
-/** `POST /provisioning/tokens:batch`: 1…1000 кодов (симулятор, КМ4). */
-@Serializable
-data class IssueTokensBatchRequest(val restaurantId: String, val role: String, val name: String? = null, val count: Int)
-
-/** Выпущенный код: `code` показывается один раз (в БД — SHA-256), TTL 24 ч. */
-@Serializable
-data class IssuedTokenDto(
-    val id: String,
-    val code: String,
-    val restaurantId: String,
-    val role: String,
-    val name: String? = null,
-    val expiresAt: Long,
-) {
-    override fun toString(): String = "IssuedTokenDto(id=$id, code=***, restaurantId=$restaurantId, role=$role)"
-}
+import ru.restofleet.shared.protocol.rest.console.IssueTokenRequestDto
+import ru.restofleet.shared.protocol.rest.console.IssueTokensBatchRequestDto
+import ru.restofleet.shared.protocol.rest.console.IssuedTokenDto
+import ru.restofleet.shared.protocol.rest.console.ItemsDto
 
 /** Выпуск кодов (admin JWT). Ответ несёт секреты — `Cache-Control: no-store`. */
 fun Route.tokenRoutes(useCases: ProvisioningUseCases) {
     post("/provisioning/tokens") {
-        val request = call.receive<IssueTokenRequest>()
+        val request = call.receive<IssueTokenRequestDto>()
         val issued = useCases.issue(issue(request.restaurantId, request.role, request.name, 1)).orThrow()
         call.noStore()
         call.respond(HttpStatusCode.Created, issued.single().toDto())
     }
     post("/provisioning/tokens:batch") {
-        val request = call.receive<IssueTokensBatchRequest>()
+        val request = call.receive<IssueTokensBatchRequestDto>()
         val issued = useCases.issue(issue(request.restaurantId, request.role, request.name, request.count)).orThrow()
         call.noStore()
         call.respond(HttpStatusCode.Created, ItemsDto(issued.map { it.toDto() }))

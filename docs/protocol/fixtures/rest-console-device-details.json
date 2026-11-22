@@ -1,0 +1,17 @@
+{
+  "device": {
+    "id": "d-5a7e2b1c0f9d8e6a",
+    "restaurantId": "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e601",
+    "role": "hall",
+    "name": "Зал 3",
+    "status": "offline",
+    "transport": "mqtt",
+    "lastSeenAt": 1795334080000,
+    "createdAt": 1793500000000,
+    "agentVersion": "1.0.0",
+    "mode": "normal",
+    "deviceInfo": { "model": "sdk_gphone64_arm64", "manufacturer": "Google", "osVersion": "16", "apiLevel": 36 }
+  },
+  "lastTelemetry": { "ts": 1795334060000, "seq": 912, "batteryLevel": 77, "charging": false, "tempC": 31.2 },
+  "lastSession": { "connId": "k-7f3a9c", "connectedAt": 1795320000000, "disconnectedAt": 1795334080000, "reason": "lwt" }
+}

@@ -1,0 +1,12 @@
+{
+  "v": 1, "type": "incident", "ts": 1795332970000,
+  "data": {
+    "id": "i-215", "kind": "backend_global", "ruleId": "R-08", "state": "open", "target": "api",
+    "restaurants": [
+      { "id": "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e601", "code": "MSK-01", "name": "Северная кухня" },
+      { "id": "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e602", "code": "MSK-02", "name": "Пять специй" },
+      { "id": "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e603", "code": "MSK-03", "name": "Тёплый двор" }
+    ],
+    "startedAt": 1795332940000, "suppressedAlerts": 143
+  }
+}

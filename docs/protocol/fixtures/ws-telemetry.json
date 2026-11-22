@@ -1,0 +1,10 @@
+{
+  "v": 1, "type": "telemetry", "ts": 1795334490300,
+  "data": {
+    "deviceId": "d-0b1f6c2a9e7d4c3b",
+    "point": {
+      "ts": 1795334490000, "seq": 18300, "batteryLevel": 34, "charging": true, "tempC": 46.8, "thermal": "SEVERE",
+      "rssi": -71, "freeMb": 4800, "availMb": 1200, "foregroundApp": "com.android.chrome"
+    }
+  }
+}

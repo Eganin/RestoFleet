@@ -1,0 +1,4 @@
+{
+  "v": 1, "type": "hello", "ts": 1795334500000,
+  "data": { "connectionId": "ws-4f2a", "user": "support", "accessExpiresAt": 1795335400000, "maxSubscriptions": 5 }
+}

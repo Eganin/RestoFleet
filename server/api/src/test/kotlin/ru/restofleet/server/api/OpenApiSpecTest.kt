@@ -19,17 +19,24 @@ import io.ktor.server.testing.testApplication
 import org.junit.Test
 import java.io.File
 
-/** Рукописная спецификация (реш. 212) не расходится с маршрутами Ktor, копия в `docs/` — с ресурсом модуля. */
+/**
+ * Рукописная спецификация (реш. 212) не расходится с маршрутами Ktor, копия в `docs/` — с ресурсом модуля.
+ * Операции контракта П, которых ещё нет в Ktor, помечены `x-planned: true` (ПМ1): они исключаются из сверки, а тест
+ * падает, если помеченная операция уже реализована, — задача, которая добавляет маршрут, снимает пометку.
+ */
 class OpenApiSpecTest {
     private val kit = ApiTestKit()
     private val specText = checkNotNull(javaClass.classLoader.getResource(ApiPaths.OPENAPI_RESOURCE)).readText()
 
-    private fun specOperations(): Set<String> {
+    /** Операция спецификации → помечена ли она `x-planned: true`. */
+    private fun specOperations(): Map<String, Boolean> {
         val paths = Yaml.default.parseToYamlNode(specText).yamlMap.get<YamlMap>("paths")!!
         return paths.entries.flatMap { (path, item) ->
-            (item as YamlMap).entries.keys.map { it.content }.filter { it in METHODS }
-                .map { "${it.uppercase()} ${path.content}" }
-        }.toSet()
+            (item as YamlMap).entries.filter { (method, _) -> method.content in METHODS }.map { (method, operation) ->
+                val planned = (operation as YamlMap).getScalar("x-planned")?.toBoolean() ?: false
+                "${method.content.uppercase()} ${path.content}" to planned
+            }
+        }.toMap()
     }
 
     private fun ktorOperations(): Set<String> {
@@ -57,11 +64,24 @@ class OpenApiSpecTest {
     @Test
     fun `every ktor route is described in the specification and nothing else is`() {
         val ktor = ktorOperations()
-        val spec = specOperations()
+        val spec = specOperations().filterValues { planned -> !planned }.keys
 
         assertWithMessage("routes found in Ktor").that(ktor.size).isAtLeast(MIN_OPERATIONS)
         assertWithMessage("routes missing from documentation.yaml").that(ktor - spec).isEmpty()
         assertWithMessage("documented operations without a route").that(spec - ktor).isEmpty()
+    }
+
+    @Test
+    fun `a planned operation is not routed yet`() {
+        val planned = specOperations().filterValues { it }.keys
+
+        assertWithMessage("x-planned operations already present in Ktor (remove the mark)")
+            .that(planned intersect ktorOperations()).isEmpty()
+    }
+
+    @Test
+    fun `the specification contains every operation of the practice contract`() {
+        assertThat(specOperations().keys).containsAtLeastElementsIn(PRACTICE_OPERATIONS)
     }
 
     @Test
@@ -86,5 +106,12 @@ class OpenApiSpecTest {
     private companion object {
         val METHODS = setOf("get", "post", "put", "patch", "delete")
         const val MIN_OPERATIONS = 24
+
+        /** Контракт этапа П (план ПМ1, 1.3; реш. 408, 417–419). */
+        val PRACTICE_OPERATIONS = setOf(
+            "GET /api/v1/alerts", "PATCH /api/v1/alerts/{id}", "GET /api/v1/incidents", "GET /api/v1/incidents/{id}",
+            "PATCH /api/v1/incidents/{id}", "GET /api/v1/summary", "POST /api/v1/auth/logout",
+            "GET /api/v1/devices/{id}/commands", "GET /api/v1/ws",
+        )
     }
 }

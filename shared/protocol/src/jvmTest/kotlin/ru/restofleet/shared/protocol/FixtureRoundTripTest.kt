@@ -5,6 +5,9 @@ import com.google.common.truth.Truth.assertWithMessage
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.elementNames
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Test
@@ -23,6 +26,35 @@ import ru.restofleet.shared.protocol.rest.PollCommandsResponseDto
 import ru.restofleet.shared.protocol.rest.PollTelemetryRequestDto
 import ru.restofleet.shared.protocol.rest.ProvisionRequestDto
 import ru.restofleet.shared.protocol.rest.ProvisionResponseDto
+import ru.restofleet.shared.protocol.rest.ApiErrorDto
+import ru.restofleet.shared.protocol.rest.console.AlertActionDto
+import ru.restofleet.shared.protocol.rest.console.AlertDto
+import ru.restofleet.shared.protocol.rest.console.CommandDto
+import ru.restofleet.shared.protocol.rest.console.CreateRestaurantRequestDto
+import ru.restofleet.shared.protocol.rest.console.DecommissionDto
+import ru.restofleet.shared.protocol.rest.console.EventRecordDto
+import ru.restofleet.shared.protocol.rest.console.IssueTokensBatchRequestDto
+import ru.restofleet.shared.protocol.rest.console.ProbeRecordDto
+import ru.restofleet.shared.protocol.rest.console.UpdateRestaurantRequestDto
+import ru.restofleet.shared.protocol.rest.console.DeviceDetailsDto
+import ru.restofleet.shared.protocol.rest.console.DeviceDto
+import ru.restofleet.shared.protocol.rest.console.IncidentActionDto
+import ru.restofleet.shared.protocol.rest.console.IncidentDetailsDto
+import ru.restofleet.shared.protocol.rest.console.IncidentDto
+import ru.restofleet.shared.protocol.rest.console.IssueTokenRequestDto
+import ru.restofleet.shared.protocol.rest.console.IssuedTokenDto
+import ru.restofleet.shared.protocol.rest.console.ItemsDto
+import ru.restofleet.shared.protocol.rest.console.LoginRequestDto
+import ru.restofleet.shared.protocol.rest.console.LogoutRequestDto
+import ru.restofleet.shared.protocol.rest.console.RefreshRequestDto
+import ru.restofleet.shared.protocol.rest.console.RestaurantDto
+import ru.restofleet.shared.protocol.rest.console.SendCommandRequestDto
+import ru.restofleet.shared.protocol.rest.console.ShadowDto
+import ru.restofleet.shared.protocol.rest.console.SummaryDto
+import ru.restofleet.shared.protocol.rest.console.TokenResponseDto
+import ru.restofleet.shared.protocol.rest.console.ws.WsClientMessage
+import ru.restofleet.shared.protocol.rest.console.ws.WsServerMessage
+import ru.restofleet.shared.protocol.rest.console.ws.WsTypes
 import java.io.File
 import kotlin.test.assertFailsWith
 
@@ -30,7 +62,7 @@ class FixtureRoundTripTest {
 
     private val fixturesDir = File(requireNotNull(System.getProperty("fixturesDir")) { "fixturesDir is not set" })
 
-    /** Порядок важен: более длинный префикс — раньше (`rest-poll-commands-response` до `rest-poll-command`). */
+    /** Файлу — сериализатор самого длинного подходящего префикса (`rest-poll-commands-response`, а не `-command`). */
     private val serializers: List<Pair<String, KSerializer<*>>> = listOf(
         "rest-provision-request" to ProvisionRequestDto.serializer(),
         "rest-provision-response" to ProvisionResponseDto.serializer(),
@@ -45,13 +77,42 @@ class FixtureRoundTripTest {
         "shadow-reported" to ShadowReportedDto.serializer(),
         "cmd-req" to CommandRequestDto.serializer(),
         "cmd-res" to CommandResultDto.serializer(),
+        // REST-контракт консоли (ПМ1, реш. 408) и WebSocket (реш. 418, 419)
+        "rest-console-login-request" to LoginRequestDto.serializer(),
+        "rest-console-refresh-request" to RefreshRequestDto.serializer(),
+        "rest-console-logout-request" to LogoutRequestDto.serializer(),
+        "rest-console-token-response" to TokenResponseDto.serializer(),
+        "rest-console-error" to ApiErrorDto.serializer(),
+        "rest-console-restaurant" to RestaurantDto.serializer(),
+        "rest-console-device" to DeviceDto.serializer(),
+        "rest-console-device-details" to DeviceDetailsDto.serializer(),
+        "rest-console-shadow" to ShadowDto.serializer(),
+        "rest-console-command" to CommandDto.serializer(),
+        "rest-console-command-request" to SendCommandRequestDto.serializer(),
+        "rest-console-issue-token-request" to IssueTokenRequestDto.serializer(),
+        "rest-console-issued-token" to IssuedTokenDto.serializer(),
+        "rest-console-alert" to AlertDto.serializer(),
+        "rest-console-alert-action" to AlertActionDto.serializer(),
+        "rest-console-alerts-page" to ItemsDto.serializer(AlertDto.serializer()),
+        "rest-console-incident" to IncidentDto.serializer(),
+        "rest-console-incident-action" to IncidentActionDto.serializer(),
+        "rest-console-incident-details" to IncidentDetailsDto.serializer(),
+        "rest-console-summary" to SummaryDto.serializer(),
+        "rest-console-decommission" to DecommissionDto.serializer(),
+        "rest-console-event-record" to EventRecordDto.serializer(),
+        "rest-console-probe-record" to ProbeRecordDto.serializer(),
+        "rest-console-create-restaurant-request" to CreateRestaurantRequestDto.serializer(),
+        "rest-console-update-restaurant-request" to UpdateRestaurantRequestDto.serializer(),
+        "rest-console-issue-tokens-batch-request" to IssueTokensBatchRequestDto.serializer(),
+        "ws-" to WsServerMessage.serializer(),
+        "ws-client-" to WsClientMessage.serializer(),
     )
 
     private val fixtures: List<File>
         get() = fixturesDir.listFiles { f -> f.extension == "json" }.orEmpty().sortedBy { it.name }
 
     private fun serializerFor(file: File): KSerializer<*>? =
-        serializers.firstOrNull { file.name.startsWith(it.first) }?.second
+        serializers.filter { file.name.startsWith(it.first) }.maxByOrNull { it.first.length }?.second
 
     @Test
     fun fixturesArePresent() {
@@ -75,6 +136,61 @@ class FixtureRoundTripTest {
     @Test
     fun everyCommandTypeHasFixture() {
         assertThat(typesOf("cmd-req-", "type")).containsExactlyElementsIn(CommandTypes.ALL)
+    }
+
+    @Test
+    fun everyWebSocketTypeHasFixture() {
+        assertThat(typesOf("ws-", "type") - WsTypes.CLIENT).containsExactlyElementsIn(WsTypes.SERVER)
+        assertThat(typesOf("ws-client-", "type")).containsExactlyElementsIn(WsTypes.CLIENT)
+    }
+
+    @Test
+    fun webSocketFixturesDecodeToKnownMessages() {
+        // Ни одна фикстура не должна молча превратиться в Unknown (опечатка в type или v)
+        fixtures.filter { it.name.startsWith("ws-") && !it.name.startsWith("ws-client-") }.forEach { file ->
+            val message = RfJson.decodeFromString(WsServerMessage.serializer(), file.readText())
+            assertWithMessage(file.name).that(message).isNotInstanceOf(WsServerMessage.Unknown::class.java)
+        }
+        fixtures.filter { it.name.startsWith("ws-client-") }.forEach { file ->
+            val message = RfJson.decodeFromString(WsClientMessage.serializer(), file.readText())
+            assertWithMessage(file.name).that(message).isNotInstanceOf(WsClientMessage.Unknown::class.java)
+        }
+    }
+
+    @Test
+    fun everyConsoleFixtureFieldReachesItsProperty() {
+        // Каждое поле фикстуры консоли декодируется в свойство DTO с тем же именем и значением (ПМ1, реш. 442)
+        fixtures.filter { it.name.startsWith("rest-console-") || it.name.startsWith("ws-") }.forEach { file ->
+            @Suppress("UNCHECKED_CAST")
+            val serializer = requireNotNull(serializerFor(file)) as KSerializer<Any>
+            val decoded = RfJson.decodeFromString(serializer, file.readText())
+            assertReachesProperties(file.name, RfJson.parseToJsonElement(file.readText()), decoded)
+        }
+    }
+
+    private fun assertReachesProperties(path: String, json: JsonElement, value: Any?) {
+        when {
+            value is JsonElement -> assertWithMessage(path).that(value).isEqualTo(json)
+            json is JsonObject && value is Map<*, *> ->
+                json.forEach { (key, child) -> assertReachesProperties("$path.$key", child, value[key]) }
+            json is JsonObject -> json.forEach { (key, child) ->
+                val getter = value?.javaClass?.methods?.firstOrNull { m ->
+                    m.parameterCount == 0 && m.name == "get" + key.replaceFirstChar { it.uppercase() }
+                }
+                if (getter == null) {
+                    // Служебные поля конверта WS (`v`, `type`) у типизированных сообщений свойств не имеют
+                    assertWithMessage("$path.$key").that(key).isIn(ENVELOPE_KEYS)
+                } else {
+                    assertReachesProperties("$path.$key", child, getter.invoke(value))
+                }
+            }
+            json is JsonArray && value is List<*> -> {
+                assertWithMessage(path).that(value).hasSize(json.size)
+                json.forEachIndexed { i, child -> assertReachesProperties("$path[$i]", child, value[i]) }
+            }
+            json is JsonNull -> assertWithMessage(path).that(value).isNull()
+            else -> assertWithMessage(path).that(value.toString()).isEqualTo((json as JsonPrimitive).content)
+        }
     }
 
     @Test
@@ -179,6 +295,7 @@ class FixtureRoundTripTest {
 
     private companion object {
         const val MIN_FIXTURES = 39
+        val ENVELOPE_KEYS = setOf("v", "type")
     }
 
     @Test

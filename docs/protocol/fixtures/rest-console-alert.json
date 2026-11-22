@@ -1,0 +1,19 @@
+{
+  "id": "a-7b21d4e0",
+  "ruleId": "R-05",
+  "severity": "critical",
+  "state": "resolved",
+  "deviceId": "d-2e4c6a8b0d1f3e5a",
+  "deviceName": "Кухня 1",
+  "restaurantId": "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e601",
+  "restaurantCode": "MSK-01",
+  "restaurantName": "Северная кухня",
+  "target": "api",
+  "openedAt": 1795330000000,
+  "ackBy": "support",
+  "ackAt": 1795330120000,
+  "resolvedAt": 1795330600000,
+  "auto": true,
+  "parentIncidentId": "i-214",
+  "details": { "error": "timeout", "failures": "3" }
+}

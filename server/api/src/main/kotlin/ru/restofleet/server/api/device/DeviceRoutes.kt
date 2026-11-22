@@ -9,7 +9,6 @@ import io.ktor.server.routing.route
 import ru.restofleet.server.api.DeviceUseCases
 import ru.restofleet.server.api.error.ApiException
 import ru.restofleet.server.api.error.orThrow
-import ru.restofleet.server.api.http.ItemsDto
 import ru.restofleet.server.api.http.page
 import ru.restofleet.server.api.http.pathDeviceId
 import ru.restofleet.server.api.http.queryParam
@@ -18,6 +17,7 @@ import ru.restofleet.server.domain.device.DeviceFilter
 import ru.restofleet.server.domain.device.DeviceRole
 import ru.restofleet.server.domain.device.DeviceStatus
 import ru.restofleet.server.domain.restaurant.RestaurantId
+import ru.restofleet.shared.protocol.rest.console.ItemsDto
 
 /**
  * Устройства (FR-BE-01, 04, 11): список с фильтрами, карточка, вывод из эксплуатации (`DELETE`, запись остаётся со

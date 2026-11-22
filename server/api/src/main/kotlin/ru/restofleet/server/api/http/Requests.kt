@@ -6,16 +6,16 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.plugins.origin
 import io.ktor.server.response.header
 import ru.restofleet.server.api.error.ApiException
-import ru.restofleet.server.api.error.ErrorBody
 import ru.restofleet.server.domain.common.PageRequest
 import ru.restofleet.server.domain.common.TimeRange
 import ru.restofleet.shared.kernel.DeviceId
+import ru.restofleet.shared.protocol.rest.ApiErrorDto
 import java.time.Instant
 import java.time.format.DateTimeParseException
 
 /** `{id}` устройства из пути: не `DeviceId` — такого устройства нет (404), а не 400. */
 fun ApplicationCall.pathDeviceId(): DeviceId = DeviceId.parse(pathParam("id"))
-    ?: throw ApiException(HttpStatusCode.NotFound, ErrorBody("not_found", "device not found"))
+    ?: throw ApiException(HttpStatusCode.NotFound, ApiErrorDto("not_found", "device not found"))
 
 fun ApplicationCall.pathParam(name: String): String =
     parameters[name] ?: throw ApiException.validation(name, "required")

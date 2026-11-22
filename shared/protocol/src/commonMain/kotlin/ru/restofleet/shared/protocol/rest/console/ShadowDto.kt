@@ -1,14 +1,13 @@
-package ru.restofleet.server.api.shadow
+package ru.restofleet.shared.protocol.rest.console
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
-import ru.restofleet.server.domain.shadow.Shadow
-import ru.restofleet.shared.protocol.ShadowJson
 
 /**
  * Тень устройства (FR-BE-20, 21). `delta` — что из `desired` устройство ещё не применило (пустая — применено, S4);
  * `pending` — устройство не подтвердило текущую версию. `published` — только в ответе на `PUT`: `false` — брокер не
- * принял retained `desired`, повтор — при подключении устройства (реш. 233).
+ * принял retained `desired`, повтор — при подключении устройства (реш. 233). `PUT` принимает merge-patch к `desired`
+ * (реш. 237); перед отправкой консоль проверяет итог через `shared:shadow` `validateDesired`.
  */
 @Serializable
 data class ShadowDto(
@@ -24,18 +23,4 @@ data class ShadowDto(
     val delta: JsonObject,
     val pending: Boolean,
     val published: Boolean? = null,
-)
-
-internal fun Shadow.toDto() = ShadowDto(
-    deviceId = deviceId.value,
-    desired = ShadowJson.toJson(desired),
-    desiredVersion = desiredVersion,
-    desiredUpdatedAt = desiredUpdatedAt,
-    reported = reported?.let(ShadowJson::toJson),
-    reportedVersion = reportedVersion,
-    appliedAt = appliedAt,
-    reportedAt = reportedAt,
-    errors = errors,
-    delta = ShadowJson.toJson(delta),
-    pending = isPending,
 )

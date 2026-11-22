@@ -1,0 +1,29 @@
+{
+  "incident": {
+    "id": "i-213",
+    "kind": "restaurant_network",
+    "ruleId": "R-07",
+    "state": "resolved",
+    "target": "ref",
+    "restaurants": [ { "id": "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e603", "code": "MSK-03", "name": "Тёплый двор" } ],
+    "startedAt": 1795316000000,
+    "resolvedAt": 1795317140000,
+    "resolveReason": "cleared",
+    "suppressedAlerts": 6,
+    "ackBy": "support",
+    "ackAt": 1795316300000,
+    "comment": "Провайдер подтвердил аварию"
+  },
+  "evidence": {
+    "evaluatedAt": 1795316030000,
+    "restaurants": [
+      {
+        "id": "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e603", "code": "MSK-03", "name": "Тёплый двор",
+        "devicesTotal": 6, "devicesOnline": 2, "targetOnline": 2, "targetDown": 2, "refOnline": 2, "refUp": 0,
+        "errorClasses": { "timeout": 2 }
+      }
+    ],
+    "otherRestaurantsOk": 37,
+    "thresholds": { "p": 50, "m": 10, "n": 38 }
+  }
+}

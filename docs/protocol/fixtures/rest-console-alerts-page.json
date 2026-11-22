@@ -1,0 +1,18 @@
+{
+  "items": [
+    {
+      "id": "a-1f0e9d8c", "ruleId": "R-01", "severity": "warning", "state": "acknowledged",
+      "deviceId": "d-5a7e2b1c0f9d8e6a", "deviceName": "Зал 3",
+      "restaurantId": "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e601", "restaurantCode": "MSK-01",
+      "restaurantName": "Северная кухня", "openedAt": 1795334080000, "ackBy": "support", "ackAt": 1795334200000,
+      "comment": "Смотрим", "auto": false, "details": { "reason": "lwt" }
+    },
+    {
+      "id": "a-2a3b4c5d", "ruleId": "R-06", "severity": "warning", "state": "open",
+      "deviceId": "d-6b7c8d9e0f1a2b3c",
+      "restaurantId": "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e601", "restaurantCode": "MSK-01",
+      "restaurantName": "Северная кухня", "openedAt": 1795333000000, "auto": false,
+      "details": { "freeMb": "410", "limit": "500" }
+    }
+  ]
+}

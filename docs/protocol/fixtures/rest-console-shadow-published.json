@@ -1,0 +1,10 @@
+{
+  "deviceId": "d-0b1f6c2a9e7d4c3b",
+  "desired": { "version": 14, "telemetry": { "intervalSec": 30 } },
+  "desiredVersion": 14,
+  "desiredUpdatedAt": 1795334800000,
+  "errors": ["probes[0].url: invalid"],
+  "delta": {},
+  "pending": true,
+  "published": false
+}

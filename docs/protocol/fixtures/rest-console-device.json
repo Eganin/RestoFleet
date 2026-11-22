@@ -1,0 +1,29 @@
+{
+  "id": "d-0b1f6c2a9e7d4c3b",
+  "restaurantId": "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e601",
+  "role": "kitchen",
+  "name": "Кухня 2",
+  "status": "online",
+  "transport": "mqtt",
+  "lastSeenAt": 1795334490000,
+  "createdAt": 1793500000000,
+  "agentVersion": "1.0.0",
+  "mode": "normal",
+  "deviceInfo": { "model": "Lenovo M10", "manufacturer": "Lenovo", "osVersion": "13", "apiLevel": 33 },
+  "restaurantCode": "MSK-01",
+  "restaurantName": "Северная кухня",
+  "lastTelemetry": {
+    "ts": 1795334490000, "seq": 18300, "batteryLevel": 34, "charging": true, "tempC": 46.8, "thermal": "SEVERE",
+    "rssi": -71, "freeMb": 4800, "availMb": 1200, "foregroundApp": "com.android.chrome"
+  },
+  "lastSessionReason": "lwt",
+  "alerts": [
+    {
+      "id": "a-3c9e1f20", "ruleId": "R-03", "severity": "critical", "state": "open",
+      "deviceId": "d-0b1f6c2a9e7d4c3b", "deviceName": "Кухня 2",
+      "restaurantId": "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e601", "restaurantCode": "MSK-01",
+      "restaurantName": "Северная кухня", "openedAt": 1795334260000, "auto": false,
+      "details": { "tempC": "46.8", "thermal": "SEVERE", "limit": "45.0" }
+    }
+  ]
+}

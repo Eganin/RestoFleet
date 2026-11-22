@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.compose.multiplatform) apply false
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.android.library) apply false
     alias(libs.plugins.android.kotlin.multiplatform.library) apply false
@@ -20,7 +21,6 @@ dependencies {
     kover(projects.shared.protocol)
     kover(projects.shared.shadow)
     kover(projects.shared.probes)
-    kover(projects.console.core.mvi)
     kover(projects.agent.domain)
     kover(projects.agent.data)
     kover(projects.agent.presentation)
@@ -30,6 +30,10 @@ dependencies {
     kover(projects.server.api)
     kover(projects.server.app)
     kover(projects.server.simulator)
+
+    // console — модули консоли (этап П); строки в этом блоке добавляет поток B (реш. 407)
+    kover(projects.console.core.mvi)
+    // end console
 }
 
 kover {

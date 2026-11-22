@@ -1,0 +1,7 @@
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiJ9.example.signature",
+  "accessExpiresAt": 1795335400000,
+  "refreshToken": "rt-example-2",
+  "refreshExpiresAt": 1795420900000,
+  "tokenType": "Bearer"
+}

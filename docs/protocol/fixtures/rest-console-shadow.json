@@ -1,0 +1,19 @@
+{
+  "deviceId": "d-0b1f6c2a9e7d4c3b",
+  "desired": {
+    "version": 13,
+    "telemetry": { "intervalSec": 15 },
+    "thresholds": { "batteryLowPct": 20, "tempHighC": 45.0, "fgAbsentMin": 10 },
+    "watchedApps": ["com.android.chrome"],
+    "probes": [ { "id": "api", "url": "https://10.0.2.2:8443/api/v1/health", "intervalSec": 30, "timeoutMs": 5000 } ]
+  },
+  "desiredVersion": 13,
+  "desiredUpdatedAt": 1795334450000,
+  "reported": { "version": 12, "telemetry": { "intervalSec": 30 } },
+  "reportedVersion": 12,
+  "appliedAt": 1795300000000,
+  "reportedAt": 1795300000500,
+  "errors": [],
+  "delta": { "telemetry": { "intervalSec": 15 } },
+  "pending": true
+}

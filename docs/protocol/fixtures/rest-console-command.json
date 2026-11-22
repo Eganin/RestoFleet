@@ -1,0 +1,12 @@
+{
+  "cmdId": "c-0b1f6c2a",
+  "deviceId": "d-0b1f6c2a9e7d4c3b",
+  "type": "show_message",
+  "params": { "text": "Проверьте планшет" },
+  "status": "succeeded",
+  "createdAt": 1795334400000,
+  "expiresAt": 1795334700000,
+  "deliveredAt": 1795334400400,
+  "finishedAt": 1795334401200,
+  "result": { "shown": "true" }
+}

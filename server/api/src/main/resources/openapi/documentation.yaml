@@ -1,15 +1,19 @@
 openapi: 3.0.3
 info:
   title: RestoFleet backend API
-  version: "1.0.0-coursework"
+  version: "1.1.0-practice"
   description: |
-    REST API бэкенда RestoFleet (этап «курсовая», ТЗ 8.2). Рукописная спецификация (реш. 212): тест
+    REST API бэкенда RestoFleet (этапы «курсовая» и «практика», ТЗ 8.2). Рукописная спецификация (реш. 212): тест
     `OpenApiSpecTest` сверяет, что каждый маршрут Ktor описан здесь, а `docs/openapi.yaml` — копия этого файла.
+    Контракт консоли зафиксирован в ПМ1 практики (реш. 408): DTO — `shared:protocol`, пакет `rest.console`,
+    `ConsoleContractTest` сверяет схемы с ними. Операции с `x-planned: true` ещё не реализованы — пометку снимает
+    задача, которая добавляет маршрут.
 
     * Консоль и Swagger: `POST /api/v1/auth/login` → `accessToken` (JWT, 15 мин) в кнопке **Authorize** (`bearerAuth`).
     * Агент и симулятор: `POST /api/v1/provision` (без JWT) по одноразовому коду; REST-polling — HTTP Basic
       `deviceId:password` (`deviceBasic`).
     * Время — epoch ms (UTC). Ошибки — `{code, message, field?, reason?}`.
+    * Реальное время консоли — WebSocket `GET /api/v1/ws` (конверт `{v, type, ts, data}`, схема `WsEnvelope`).
     * Стенд: `https://localhost:8443` (nginx стенда, CA `deploy/certs/out/public/ca.crt`), из эмулятора —
       `https://10.0.2.2:8443`.
 servers:
@@ -21,6 +25,9 @@ tags:
   - name: shadow
   - name: commands
   - name: provisioning
+  - name: alerts
+  - name: incidents
+  - name: realtime
   - name: polling
   - name: health
 security:
@@ -74,11 +81,40 @@ paths:
             schema: { $ref: "#/components/schemas/RefreshRequest" }
       responses:
         "200":
-          description: Новая пара токенов
+          description: |
+            Новая пара токенов. Срок refresh — `min(now + 24 ч, вход + 7 сут)`, семейство наследуется (реш. 417).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TokenResponse" }
         "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/auth/logout:
+    post:
+      tags: [auth]
+      x-planned: true
+      summary: Выход — отзыв семейства refresh-токенов сессии (реш. 417)
+      description: JWT не нужен (access мог истечь). Ответ всегда 204, даже для неизвестного или погашенного токена.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LogoutRequest" }
+      responses:
+        "204": { description: Сессия завершена (или уже не существовала) }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /api/v1/summary:
+    get:
+      tags: [alerts]
+      x-planned: true
+      summary: Сводка для экрана «Обзор» (FR-CN-02); те же данные приходят по WS `summary_changed`
+      responses:
+        "200":
+          description: Счётчики и рестораны с проблемами
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Summary" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /api/v1/restaurants:
@@ -158,11 +194,28 @@ paths:
         - { name: restaurant, in: query, schema: { type: string, format: uuid } }
         - { name: role, in: query, schema: { $ref: "#/components/schemas/DeviceRole" } }
         - { name: status, in: query, schema: { $ref: "#/components/schemas/DeviceStatus" } }
+        - name: q
+          in: query
+          x-planned: true
+          description: Поиск без учёта регистра по имени устройства, коду и названию ресторана, модели (`%` и `_` — буквально)
+          schema: { type: string, maxLength: 100 }
+        - name: version
+          in: query
+          x-planned: true
+          description: Точная версия агента (`agentVersion`, реш. 424)
+          schema: { type: string, maxLength: 64 }
+        - name: problems
+          in: query
+          x-planned: true
+          description: true — только устройства с открытой или подтверждённой неподавленной тревогой
+          schema: { type: boolean, default: false }
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
       responses:
         "200":
-          description: Устройства (по времени регистрации)
+          description: |
+            Устройства (по времени регистрации). С ПМ2 у элементов заполнены поля консоли: `restaurantCode`,
+            `restaurantName`, `lastTelemetry`, `lastSessionReason`, `alerts`.
           content:
             application/json:
               schema:
@@ -344,6 +397,28 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "410": { $ref: "#/components/responses/Gone" }
         "503": { $ref: "#/components/responses/Unavailable" }
+    get:
+      tags: [commands]
+      x-planned: true
+      summary: История команд устройства, новые сначала (FR-CN-07)
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Команды
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Command" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/commands/{cmdId}:
     get:
       tags: [commands]
@@ -358,6 +433,152 @@ paths:
               schema: { $ref: "#/components/schemas/Command" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/alerts:
+    get:
+      tags: [alerts]
+      x-planned: true
+      summary: Тревоги R-01…R-06 (FR-BE-30, 31), новые сначала
+      parameters:
+        - { name: state, in: query, schema: { $ref: "#/components/schemas/AlertState" } }
+        - { name: restaurant, in: query, schema: { type: string, format: uuid } }
+        - { name: device, in: query, schema: { type: string } }
+        - { name: rule, in: query, schema: { type: string, enum: [R-01, R-02, R-03, R-04, R-05, R-06] } }
+        - name: includeSuppressed
+          in: query
+          description: true — включить тревоги, покрытые инцидентом (`parentIncidentId`, реш. 416)
+          schema: { type: boolean, default: false }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Тревоги
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Alert" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/alerts/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    patch:
+      tags: [alerts]
+      x-planned: true
+      summary: Подтвердить или закрыть тревогу (закрытие — с комментарием 1…500)
+      description: Автор — `sub` JWT. Повтор над подтверждённой или закрытой — 409 `conflict`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlertAction" }
+      responses:
+        "200":
+          description: Тревога после действия
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Alert" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/incidents:
+    get:
+      tags: [incidents]
+      x-planned: true
+      summary: Сводные инциденты доступности R-07…R-09 (FR-BE-36, 37), новые сначала
+      parameters:
+        - { name: state, in: query, schema: { type: string, enum: [open, resolved] } }
+        - name: from
+          in: query
+          description: "Интервал инцидента `[startedAt, resolvedAt ?: now)` пересекается с `[from, to)`; epoch ms или ISO-8601"
+          schema: { type: string }
+        - { name: to, in: query, schema: { type: string } }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Инциденты
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Incident" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/incidents/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [incidents]
+      x-planned: true
+      summary: Инцидент и доказательства классификации (текст объяснения строит консоль)
+      responses:
+        "200":
+          description: Инцидент
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IncidentDetails" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [incidents]
+      x-planned: true
+      summary: Подтвердить инцидент с комментарием (закрывается только автоматически, реш. 412)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IncidentAction" }
+      responses:
+        "200":
+          description: Инцидент после подтверждения
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Incident" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/ws:
+    get:
+      tags: [realtime]
+      x-planned: true
+      summary: WebSocket обновлений консоли (FR-BE-33, 51; реш. 418, 419)
+      description: |
+        Upgrade до WebSocket. Токен — **только** заголовок `Authorization: Bearer <access>` upgrade-запроса;
+        параметр `?token=` и любые query игнорируются (без заголовка — 401). Фреймы — текст JSON, конверт
+        `WsEnvelope`; первым приходит `hello`.
+
+        * Всем соединениям: `device_status`, `alert`, `incident`, `summary_changed` (не чаще раза в 2 с).
+        * `telemetry` — только устройств из `subscribe_device` (не больше 5); `unsubscribe_device` — отписка.
+        * После каждого подключения клиент перечитывает состояние через REST; `resync` — сделать это без
+          переподключения.
+        * Ping каждые 20 с, таймаут 30 с, фрейм ≤ 64 КиБ, не больше 4 соединений на пользователя, очередь — 256.
+
+        Коды закрытия:
+        * `1001` — сервер останавливается: переподключиться с backoff;
+        * `1008` — нарушение политики (пятое соединение, шестая подписка, неразборчивый фрейм): не переподключаться
+          сразу;
+        * `1013` — очередь соединения переполнена: переподключиться и перечитать состояние через REST;
+        * `4401` — истёк `exp` access-токена: refresh и переподключение.
+      parameters:
+        - { name: Upgrade, in: header, required: true, schema: { type: string, enum: [websocket] } }
+        - { name: Connection, in: header, required: true, schema: { type: string, example: Upgrade } }
+      responses:
+        "101": { description: Переход на WebSocket; сообщения — `WsEnvelope` }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /api/v1/provisioning/tokens:
     post:
@@ -531,7 +752,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     Conflict:
-      description: Конфликт с текущим состоянием
+      description: Конфликт с текущим состоянием (`reason` — причина)
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -584,6 +805,11 @@ components:
       required: [refreshToken]
       properties:
         refreshToken: { type: string }
+    LogoutRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string }
     TokenResponse:
       type: object
       required: [accessToken, accessExpiresAt, refreshToken, refreshExpiresAt, tokenType]
@@ -605,6 +831,13 @@ components:
         timezone: { type: string, example: Europe/Moscow }
         createdAt: { type: integer, format: int64 }
         updatedAt: { type: integer, format: int64 }
+    RestaurantRef:
+      type: object
+      required: [id, code, name]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, example: MSK-01 }
+        name: { type: string }
     CreateRestaurantRequest:
       type: object
       required: [code, name, city, timezone]
@@ -652,6 +885,16 @@ components:
         agentVersion: { type: string }
         mode: { type: string, enum: [normal, device_owner] }
         deviceInfo: { $ref: "#/components/schemas/DeviceInfo" }
+        restaurantCode: { type: string, description: "С ПМ2" }
+        restaurantName: { type: string, description: "С ПМ2" }
+        lastTelemetry:
+          allOf: [{ $ref: "#/components/schemas/TelemetryPoint" }]
+          description: Последняя точка — только в `GET /devices` (с ПМ2)
+        lastSessionReason: { type: string, example: lwt, description: "Причина закрытия последней сессии офлайн-устройства (с ПМ2)" }
+        alerts:
+          type: array
+          description: Открытые и подтверждённые неподавленные тревоги — сначала критичные, затем новые (с ПМ2)
+          items: { $ref: "#/components/schemas/Alert" }
     TelemetryPoint:
       type: object
       required: [ts, seq]
@@ -795,6 +1038,183 @@ components:
           properties:
             host: { type: string, example: 10.0.2.2 }
             port: { type: integer, example: 8883 }
+    AlertState:
+      type: string
+      enum: [open, acknowledged, resolved]
+    Alert:
+      type: object
+      required: [id, ruleId, severity, state, deviceId, restaurantId, restaurantCode, restaurantName, openedAt, auto, details]
+      properties:
+        id: { type: string }
+        ruleId: { type: string, enum: [R-01, R-02, R-03, R-04, R-05, R-06] }
+        severity: { type: string, enum: [critical, warning] }
+        state: { $ref: "#/components/schemas/AlertState" }
+        deviceId: { type: string }
+        deviceName: { type: string }
+        restaurantId: { type: string, format: uuid }
+        restaurantCode: { type: string }
+        restaurantName: { type: string }
+        target: { type: string, description: "Цель проверки у R-05 (api, kds, ref)" }
+        openedAt: { type: integer, format: int64 }
+        ackBy: { type: string, description: "sub JWT" }
+        ackAt: { type: integer, format: int64 }
+        resolvedAt: { type: integer, format: int64 }
+        resolvedBy: { type: string, description: "sub JWT; у автоматически закрытых нет" }
+        comment: { type: string, maxLength: 500 }
+        auto: { type: boolean, description: "Закрыта автоматически по выходу из условия" }
+        parentIncidentId: { type: string, description: "Покрыта инцидентом (реш. 416)" }
+        details:
+          type: object
+          additionalProperties: { type: string }
+          description: |
+            Значения условия строками. R-01 `reason`; R-02 `batteryLevel`, `limit`; R-03 `tempC`, `thermal`, `limit`;
+            R-04 `pkg`, `foregroundApp`, `sinceTs`, `limitMin`; R-05 `error`, `failures`; R-06 `freeMb`, `limit`.
+          example: { error: timeout, failures: "3" }
+    AlertAction:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [acknowledge, resolve] }
+        comment: { type: string, minLength: 1, maxLength: 500, description: "Обязателен для resolve" }
+    Incident:
+      type: object
+      required: [id, kind, ruleId, state, target, restaurants, startedAt, suppressedAlerts]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [restaurant_network, backend_global, backend_local] }
+        ruleId: { type: string, enum: [R-07, R-08, R-09] }
+        state: { type: string, enum: [open, resolved] }
+        target: { type: string, example: api }
+        restaurants: { type: array, items: { $ref: "#/components/schemas/RestaurantRef" } }
+        startedAt: { type: integer, format: int64 }
+        resolvedAt: { type: integer, format: int64 }
+        resolveReason: { type: string, enum: [cleared, superseded] }
+        suppressedAlerts: { type: integer }
+        ackBy: { type: string }
+        ackAt: { type: integer, format: int64 }
+        comment: { type: string, maxLength: 500 }
+    IncidentAction:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [acknowledge] }
+        comment: { type: string, maxLength: 500 }
+    IncidentDetails:
+      type: object
+      required: [incident, evidence]
+      properties:
+        incident: { $ref: "#/components/schemas/Incident" }
+        evidence: { $ref: "#/components/schemas/IncidentEvidence" }
+    IncidentEvidence:
+      type: object
+      required: [evaluatedAt, restaurants, otherRestaurantsOk, thresholds]
+      properties:
+        evaluatedAt: { type: integer, format: int64 }
+        restaurants: { type: array, items: { $ref: "#/components/schemas/RestaurantEvidence" } }
+        otherRestaurantsOk: { type: integer, description: "Рестораны со свежими данными по цели, где она доступна" }
+        thresholds: { $ref: "#/components/schemas/IncidentThresholds" }
+    RestaurantEvidence:
+      type: object
+      required: [id, code, name, devicesTotal, devicesOnline, targetOnline, targetDown, refOnline, refUp, errorClasses]
+      description: |
+        Окно агрегатора (2 мин). devicesTotal — учитываемые устройства (без выведенных и молчащих > 24 ч);
+        targetOnline и refOnline — онлайн-устройства со свежими данными по цели и по `ref`.
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        devicesTotal: { type: integer }
+        devicesOnline: { type: integer }
+        targetOnline: { type: integer }
+        targetDown: { type: integer }
+        refOnline: { type: integer }
+        refUp: { type: integer }
+        errorClasses:
+          type: object
+          additionalProperties: { type: integer }
+          example: { timeout: 9, dns_fail: 2 }
+    IncidentThresholds:
+      type: object
+      required: [p, m, n]
+      properties:
+        p: { type: integer, description: "Порог P, % онлайн-устройств ресторана (реш. 409)" }
+        m: { type: integer, description: "Порог M = max(3, ⌈0,25·n⌉)" }
+        n: { type: integer, description: "Ресторанов со свежими данными по цели" }
+    Summary:
+      type: object
+      required: [devicesOnline, devicesTotal, devicesOffline, offlineLastHour, alertsOpen, alertsCritical, incidentsOpen, restaurantsWithProblems, restaurantsTotal, problemRestaurants]
+      properties:
+        devicesOnline: { type: integer }
+        devicesTotal: { type: integer, description: "Без выведенных из эксплуатации" }
+        devicesOffline: { type: integer }
+        offlineLastHour: { type: integer }
+        alertsOpen: { type: integer, description: "Открытые и подтверждённые, без подавленных" }
+        alertsCritical: { type: integer }
+        incidentsOpen: { type: integer }
+        restaurantsWithProblems: { type: integer }
+        restaurantsTotal: { type: integer }
+        problemRestaurants: { type: array, maxItems: 10, items: { $ref: "#/components/schemas/ProblemRestaurant" } }
+    ProblemRestaurant:
+      type: object
+      required: [restaurant, ruleId, count, devicesTotal, since, details]
+      properties:
+        restaurant: { $ref: "#/components/schemas/RestaurantRef" }
+        ruleId: { type: string, example: R-05 }
+        count: { type: integer, description: "Затронуто устройств" }
+        devicesTotal: { type: integer }
+        target: { type: string }
+        deviceId: { type: string, description: "При count = 1" }
+        deviceName: { type: string }
+        since: { type: integer, format: int64 }
+        details: { type: object, additionalProperties: { type: string } }
+    WsEnvelope:
+      type: object
+      required: [v, type, data]
+      description: |
+        Фрейм WebSocket. Сервер: `ts` обязателен; `data` по типу — `hello` WsHello, `device_status` WsDeviceStatus,
+        `telemetry` WsTelemetry, `alert` Alert, `incident` Incident, `summary_changed` Summary, `resync` WsResync.
+        Клиент: без `ts`; `subscribe_device` и `unsubscribe_device` — WsDeviceRef. Неизвестный `type` или `v` ≠ 1
+        получатель пропускает.
+      properties:
+        v: { type: integer, enum: [1] }
+        type:
+          type: string
+          enum: [hello, device_status, telemetry, alert, incident, summary_changed, resync, subscribe_device, unsubscribe_device]
+        ts: { type: integer, format: int64 }
+        data: { type: object, additionalProperties: true }
+    WsHello:
+      type: object
+      required: [connectionId, user, accessExpiresAt, maxSubscriptions]
+      properties:
+        connectionId: { type: string }
+        user: { type: string }
+        accessExpiresAt: { type: integer, format: int64, description: "В этот момент сервер закроет соединение кодом 4401" }
+        maxSubscriptions: { type: integer, example: 5 }
+    WsDeviceStatus:
+      type: object
+      required: [deviceId, restaurantId, status]
+      properties:
+        deviceId: { type: string }
+        restaurantId: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/DeviceStatus" }
+        lastSeenAt: { type: integer, format: int64 }
+        reason: { type: string, example: lwt }
+    WsTelemetry:
+      type: object
+      required: [deviceId, point]
+      properties:
+        deviceId: { type: string }
+        point: { $ref: "#/components/schemas/TelemetryPoint" }
+    WsResync:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, example: events_dropped }
+    WsDeviceRef:
+      type: object
+      required: [deviceId]
+      properties:
+        deviceId: { type: string }
     PollTelemetryRequest:
       type: object
       required: [telemetry]

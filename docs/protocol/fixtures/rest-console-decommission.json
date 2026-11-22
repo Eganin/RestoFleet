@@ -1,0 +1,7 @@
+{
+  "device": {
+    "id": "d-5a7e2b1c0f9d8e6a", "restaurantId": "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e601", "role": "hall",
+    "status": "decommissioned", "decommissionedAt": 1795334700000, "createdAt": 1793500000000
+  },
+  "retainedCleared": true
+}

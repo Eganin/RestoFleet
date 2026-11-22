@@ -91,6 +91,17 @@ class ArchitectureTest {
     }
 
     @Test
+    fun serverApiDeclaresNoRestDtoOfItsOwn() {
+        // REST-DTO консоли — в shared:protocol `rest.console` (реш. 408, 432): server:api их импортирует, а не копирует
+        val api = production.filter { "/server/api/src/" in it.normalizedPath }
+        api.assertFalse(testName = "server api declares its own serializable DTO") { file ->
+            file.classes(includeNested = true).any { cls ->
+                cls.annotations.any { it.name == "Serializable" } && cls.name !in SERVER_API_OWN_DTO
+            }
+        }
+    }
+
+    @Test
     fun simulatorDomainIsFoundAndUsesOnlySharedDomain() {
         // server:simulator (КМ4, реш. 279): слои — пакеты одного модуля; domain — без фреймворков, протокола и HiveMQ,
         // из своих — только shared:kernel/shadow/probes
@@ -190,6 +201,9 @@ class ArchitectureTest {
             "ru.restofleet.server.app", "org.jetbrains.exposed.", "com.hivemq.", "org.flywaydb.", "com.zaxxer.",
             "org.postgresql.", "at.favre.", "javax.sql.",
         )
+
+        /** `GET /health` — служебный ответ бэкенда, не контракт консоли. */
+        val SERVER_API_OWN_DTO = setOf("HealthDto")
 
         /** Сейчас их 30 (КМ2a); порог ловит потерю правила при переносе пакетов. */
         const val MIN_SERVER_USE_CASES = 30

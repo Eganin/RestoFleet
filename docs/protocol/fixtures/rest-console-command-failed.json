@@ -1,0 +1,4 @@
+{
+  "cmdId": "c-1a2b3c4d", "deviceId": "d-5a7e2b1c0f9d8e6a", "type": "ping", "params": {}, "status": "expired",
+  "createdAt": 1795330000000, "expiresAt": 1795330300000, "finishedAt": 1795330300500, "reason": "expired"
+}
