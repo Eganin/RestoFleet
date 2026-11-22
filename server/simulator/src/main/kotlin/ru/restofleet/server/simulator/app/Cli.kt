@@ -12,6 +12,9 @@ enum class Command(val code: String) {
 
     /** Прогон эксперимента: устройства + команды измерителя + замер пропажи + CSV (ТЗ 13.2). */
     EXPERIMENT("experiment"),
+
+    /** Парк точности (реш. 428): рестораны `fleet` сценария и регистрация их устройств в отдельный кэш учёток. */
+    PREPARE("prepare"),
 }
 
 /** Ошибка командной строки: текст и справка — в stderr, код выхода 2. */
@@ -33,18 +36,21 @@ data class CliOptions(
     val adminLogin: String = "admin",
     val adminPasswordFile: Path = Path.of("/run/secrets/admin-password"),
     val parallelism: Int = DEFAULT_PARALLELISM,
+    /** Куда писать эталон отказов `truth-<run>.csv` (том `deploy/out/sim`). */
+    val truthDir: Path = Path.of("/var/lib/simulator"),
 ) {
     companion object {
         const val DEFAULT_PARALLELISM = 8
 
-        const val USAGE = """Использование: restofleet-simulator <register|run|experiment> --scenario <файл.yaml> [параметры]
+        const val USAGE = """Использование: restofleet-simulator <register|run|experiment|prepare> --scenario <файл>
   --devices N               сколько устройств (по умолчанию — из сценария; register дорегистрирует до N)
   --creds <файл>            кэш учёток, JSON Lines, права 600 (/var/lib/simulator/creds.jsonl)
   --results <каталог>       результаты CSV (/results)
   --ca <файл>               CA стенда (/certs/ca.crt)
   --admin-login <логин>     оператор REST API (admin)
   --admin-password-file <файл>  пароль оператора (/run/secrets/admin-password)
-  --parallel N              параллельных /provision при регистрации (8)"""
+  --parallel N              параллельных /provision при регистрации (8)
+  --truth-dir <каталог>     эталон отказов truth-<run>.csv (/var/lib/simulator)"""
 
         fun parse(args: List<String>): CliOptions {
             val command = Command.entries.firstOrNull { it.code == args.firstOrNull() }
@@ -59,11 +65,13 @@ data class CliOptions(
                 adminLogin = map["admin-login"] ?: defaults.adminLogin,
                 adminPasswordFile = map["admin-password-file"]?.let(Path::of) ?: defaults.adminPasswordFile,
                 parallelism = map["parallel"]?.let { positive("parallel", it) } ?: defaults.parallelism,
+                truthDir = map["truth-dir"]?.let(Path::of) ?: defaults.truthDir,
             )
         }
 
         private val KEYS = setOf(
             "scenario", "devices", "creds", "results", "ca", "admin-login", "admin-password-file", "parallel",
+            "truth-dir",
         )
 
         private fun keyValues(pairs: List<String>): Map<String, String> {

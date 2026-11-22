@@ -7,6 +7,7 @@ import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import ru.restofleet.server.simulator.app.CliOptions
 import ru.restofleet.server.simulator.data.csv.CsvResultSink
+import ru.restofleet.server.simulator.data.csv.CsvTruthSink
 import ru.restofleet.server.simulator.data.mqtt.MqttDeviceConnector
 import ru.restofleet.server.simulator.data.mqtt.MqttSettings
 import ru.restofleet.server.simulator.data.net.InterfaceTrafficMeter
@@ -26,9 +27,11 @@ import ru.restofleet.server.simulator.domain.port.ProvisioningApi
 import ru.restofleet.server.simulator.domain.port.ResultSink
 import ru.restofleet.server.simulator.domain.port.Ticker
 import ru.restofleet.server.simulator.domain.port.TrafficMeter
+import ru.restofleet.server.simulator.domain.port.TruthSink
 import ru.restofleet.server.simulator.domain.runtime.CommandReceipts
 import ru.restofleet.server.simulator.domain.runtime.DeviceRunner
 import ru.restofleet.server.simulator.domain.runtime.RunMetrics
+import ru.restofleet.server.simulator.domain.usecase.PrepareFleet
 import ru.restofleet.server.simulator.domain.usecase.RegisterDevices
 import ru.restofleet.server.simulator.domain.usecase.RunExperiment
 import ru.restofleet.shared.kernel.Clock
@@ -70,6 +73,7 @@ fun simulatorModule(options: CliOptions, loaded: LoadedScenario): Module = modul
     single<ProvisioningApi> { OkHttpProvisioningApi(get(CONTROL), endpoints.api, SIMULATOR_VERSION) }
     single<CredentialStore> { JsonlCredentialStore(options.credentials) }
     single<ResultSink> { CsvResultSink(options.results, get()) }
+    single<TruthSink> { CsvTruthSink(options.truthDir) }
     single<TrafficMeter> {
         val deviceHost = when (loaded.scenario.mode) {
             TransportMode.MQTT -> endpoints.brokerHost
@@ -88,8 +92,9 @@ fun simulatorModule(options: CliOptions, loaded: LoadedScenario): Module = modul
         }
     }
     single { DeviceRunner(get(), get(), get(), get()) }
-    single { RunExperiment(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { RunExperiment(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { RegisterDevices(get(), get(), get(), get(), get()) }
+    single { PrepareFleet(get(), get()) }
 }
 
 private const val DEVICE_MAX_REQUESTS = 1_024

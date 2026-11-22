@@ -1,14 +1,24 @@
 package ru.restofleet.server.simulator.data.scenario
 
 import com.charleskorn.kaml.Yaml
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
+import ru.restofleet.server.simulator.domain.fault.DeviceFault
+import ru.restofleet.server.simulator.domain.fault.DeviceFaultType
 import ru.restofleet.server.simulator.domain.model.CommandLoad
+import ru.restofleet.server.simulator.domain.model.EpisodePlan
+import ru.restofleet.server.simulator.domain.model.FleetSpec
 import ru.restofleet.server.simulator.domain.model.LossMode
 import ru.restofleet.server.simulator.domain.model.LossTest
+import ru.restofleet.server.simulator.domain.model.ProbeTarget
 import ru.restofleet.server.simulator.domain.model.RoleMix
 import ru.restofleet.server.simulator.domain.model.Scenario
 import ru.restofleet.server.simulator.domain.model.TransportMode
+import ru.restofleet.server.simulator.domain.synthetic.EpisodeGenerator
+import ru.restofleet.server.simulator.domain.synthetic.NetworkVariant
+import ru.restofleet.server.simulator.domain.synthetic.Outage
+import ru.restofleet.server.simulator.domain.synthetic.OutageKind
+import ru.restofleet.server.simulator.domain.synthetic.ProbeMode
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.DateTimeException
@@ -75,6 +85,14 @@ object YamlScenarioLoader {
                 LossTest(file.devices, lossMode, file.timeoutSec)
             },
             network = network,
+            probeMode = probeMode(probeMode),
+            syntheticTargets = syntheticTargets?.map { it.toDomain() } ?: Scenario.DEFAULT_SYNTHETIC_TARGETS,
+            faults = faults.map { it.toDomain() },
+            outages = outages.map { it.toDomain() },
+            episodes = episodes?.let {
+                EpisodePlan(it.rounds, it.roundSec, it.activeFromSec, it.activeSec, it.globalShare)
+            },
+            fleet = fleet?.let { FleetSpec(it.prefix, it.restaurants, it.perRestaurant) },
         )
         return LoadedScenario(
             scenario,
@@ -82,6 +100,9 @@ object YamlScenarioLoader {
         )
     }
 }
+
+private fun probeMode(code: String): ProbeMode = ProbeMode.fromCode(code)
+    ?: throw ScenarioException("probeMode must be one of ${ProbeMode.entries.map { it.code }}")
 
 @Serializable
 private data class ScenarioFile(
@@ -101,8 +122,80 @@ private data class ScenarioFile(
     val commands: CommandsFile? = null,
     val loss: LossFile? = null,
     val network: String = "baseline",
+    val probeMode: String = "real",
+    val syntheticTargets: List<TargetFile>? = null,
+    val faults: List<FaultFile> = emptyList(),
+    val outages: List<OutageFile> = emptyList(),
+    val episodes: EpisodesFile? = null,
+    val fleet: FleetFile? = null,
     val endpoints: EndpointsFile,
 )
+
+/** `faults:` — отказ устройств (FR-SM-04). */
+@Serializable
+private data class FaultFile(
+    val type: String,
+    val atSec: Int,
+    val durationSec: Int,
+    val devices: Int = 1,
+    val offset: Int = 0,
+) {
+    fun toDomain() = DeviceFault(
+        DeviceFaultType.fromCode(type)
+            ?: throw ScenarioException("faults.type must be one of ${DeviceFaultType.entries.map { it.code }}"),
+        atSec, durationSec, devices, offset,
+    )
+}
+
+/** `outages:` — отказ сети или бэкенда (FR-SM-05); рестораны — коды. */
+@Serializable
+private data class OutageFile(
+    val kind: String,
+    val atSec: Int,
+    val durationSec: Int,
+    val restaurants: List<String> = emptyList(),
+    val devices: List<String> = emptyList(),
+    val variant: String = "offline",
+    val latencyMs: Long = Outage.DEFAULT_DEGRADED_MS,
+) {
+    fun toDomain() = Outage(
+        kind = OutageKind.fromCode(kind)
+            ?: throw ScenarioException("outages.kind must be one of ${OutageKind.entries.joinToString { it.code }}"),
+        fromMs = atSec * MS,
+        toMs = (atSec + durationSec) * MS,
+        restaurants = restaurants.toSet(),
+        devices = devices.toSet(),
+        variant = NetworkVariant.fromCode(variant)
+            ?: throw ScenarioException("outages.variant must be one of ${NetworkVariant.entries.map { it.code }}"),
+        latencyMs = latencyMs,
+    )
+}
+
+@Serializable
+private data class EpisodesFile(
+    val rounds: Int,
+    val roundSec: Int = EpisodeGenerator.DEFAULT_ROUND_SEC,
+    val activeFromSec: Int = EpisodeGenerator.DEFAULT_ACTIVE_FROM_SEC,
+    val activeSec: Int = EpisodeGenerator.DEFAULT_ACTIVE_SEC,
+    val globalShare: Double = EpisodeGenerator.DEFAULT_GLOBAL_SHARE,
+)
+
+@Serializable
+private data class FleetFile(val prefix: String, val restaurants: Int, val perRestaurant: Int = 6)
+
+/** Цель проверки режима `synthetic`. */
+@Serializable
+private data class TargetFile(
+    val id: String,
+    val intervalSec: Int = 15,
+    val failThreshold: Int = 3,
+    val reference: Boolean = false,
+) {
+    fun toDomain() = ProbeTarget(id, "http", "synthetic://$id", intervalSec, TIMEOUT_MS, failThreshold, reference)
+}
+
+private const val MS = 1_000L
+private const val TIMEOUT_MS = 5_000L
 
 private const val DEFAULT_INTERVAL = 30
 private const val DEFAULT_TTL = 300

@@ -1,0 +1,17 @@
+# S8 (а): глобальный отказ бэкенда — api недоступен из всех 12 ресторанов при живом ref → один инцидент R-08.
+# Подготовка: tools/incidents/run-accuracy.sh prepare; прогон: tools/incidents/run-accuracy.sh s8-a (≈ 5 мин)
+name: s8-a
+mode: mqtt
+devices: 72
+seed: 81
+rampPerSec: 20
+warmupSec: 0
+durationSec: 300
+probeMode: synthetic
+fleet: { prefix: S8, restaurants: 12 }
+outages:
+  - { kind: backend_global_down, atSec: 60, durationSec: 150 }
+endpoints:
+  api: http://backend-devices:8080
+  control: http://backend-ctl:8080
+  broker: { host: mosquitto, port: 8883 }

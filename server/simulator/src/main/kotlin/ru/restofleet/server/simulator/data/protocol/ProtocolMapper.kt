@@ -23,6 +23,8 @@ import ru.restofleet.shared.protocol.dto.CommandStatusDto
 import ru.restofleet.shared.protocol.dto.DeviceInfoDto
 import ru.restofleet.shared.protocol.dto.DeviceStateDto
 import ru.restofleet.shared.protocol.dto.EventDto
+import ru.restofleet.shared.protocol.dto.FgAbsentEventDto
+import ru.restofleet.shared.protocol.dto.FgChangedEventDto
 import ru.restofleet.shared.protocol.dto.MemoryDto
 import ru.restofleet.shared.protocol.dto.NetDto
 import ru.restofleet.shared.protocol.dto.ProbeReportDto
@@ -71,6 +73,9 @@ object ProtocolMapper {
     fun event(event: SimEvent): EventDto = when (event) {
         is SimEvent.Threshold -> ThresholdEventDto(event.ts, event.metric, event.state, event.value, event.limit)
         is SimEvent.ProbeState -> ProbeStateEventDto(event.ts, event.target, event.state, event.error, event.failures)
+        is SimEvent.FgChanged -> FgChangedEventDto(event.ts, event.from, event.to)
+        is SimEvent.FgAbsent ->
+            FgAbsentEventDto(event.ts, event.pkg, event.sinceTs, event.limitMin, event.foregroundApp)
     }
 
     fun probe(report: ProbeReport) = ProbeReportDto(

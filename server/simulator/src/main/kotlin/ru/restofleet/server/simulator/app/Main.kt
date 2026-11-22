@@ -11,12 +11,13 @@ import ru.restofleet.server.simulator.app.di.simulatorModule
 import ru.restofleet.server.simulator.data.scenario.LoadedScenario
 import ru.restofleet.server.simulator.data.scenario.ScenarioException
 import ru.restofleet.server.simulator.data.scenario.YamlScenarioLoader
+import ru.restofleet.server.simulator.domain.model.RegistrationRequest
 import ru.restofleet.server.simulator.domain.model.RunReport
 import ru.restofleet.server.simulator.domain.port.CredentialStore
 import ru.restofleet.server.simulator.domain.runtime.RunMetrics
 import ru.restofleet.server.simulator.domain.stats.Percentiles
+import ru.restofleet.server.simulator.domain.usecase.PrepareFleet
 import ru.restofleet.server.simulator.domain.usecase.RegisterDevices
-import ru.restofleet.server.simulator.domain.model.RegistrationRequest
 import ru.restofleet.server.simulator.domain.usecase.RunExperiment
 import java.io.IOException
 import java.io.PrintStream
@@ -68,6 +69,20 @@ class SimulatorApp(private val out: PrintStream, private val err: PrintStream) {
                     "in ${report.durationMs} ms ${report.failures}",
             )
             if (report.failed == 0) EXIT_OK else EXIT_FAILED
+        }
+        Command.PREPARE -> {
+            val fleet = loaded.scenario.fleet
+            if (fleet == null) {
+                err.println("prepare: scenario has no fleet")
+                EXIT_USAGE
+            } else {
+                out.println("prepare: ${fleet.codes.first()}…${fleet.codes.last()}, ${fleet.devices} devices")
+                val report = koin.get<PrepareFleet>()(fleet, loaded.scenario.mix, options.parallelism)
+                out.println(
+                    "prepare: cached=${report.cached} registered=${report.registered} failed=${report.failed}",
+                )
+                if (report.failed == 0) EXIT_OK else EXIT_FAILED
+            }
         }
         Command.RUN, Command.EXPERIMENT -> {
             val base = options.devices?.let { loaded.scenario.copy(devices = it) } ?: loaded.scenario

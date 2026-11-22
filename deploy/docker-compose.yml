@@ -208,6 +208,7 @@ services:
       - ./certs/out/public/ca.crt:/certs/ca.crt:ro
       - ./out/sim:/var/lib/simulator
       - ../tools/experiments/scenarios:/scenarios:ro
+      - ../tools/incidents/scenarios:/incident-scenarios:ro
       - ../logs/experiments:/results
     networks: [default, control]
 

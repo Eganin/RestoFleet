@@ -1,0 +1,16 @@
+# S8 (б): отказ сети одного ресторана — устройства S8-03 молча пропадают → R-07 только для него.
+name: s8-b
+mode: mqtt
+devices: 72
+seed: 82
+rampPerSec: 20
+warmupSec: 0
+durationSec: 300
+probeMode: synthetic
+fleet: { prefix: S8, restaurants: 12 }
+outages:
+  - { kind: restaurant_network_down, atSec: 60, durationSec: 150, restaurants: [S8-03], variant: offline }
+endpoints:
+  api: http://backend-devices:8080
+  control: http://backend-ctl:8080
+  broker: { host: mosquitto, port: 8883 }

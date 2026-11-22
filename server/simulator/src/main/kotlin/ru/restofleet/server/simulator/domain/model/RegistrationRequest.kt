@@ -7,6 +7,8 @@ data class RegistrationRequest(
     val parallelism: Int = DEFAULT_PARALLELISM,
     val maxAttempts: Int = DEFAULT_ATTEMPTS,
     val retryDelayMs: Long = DEFAULT_RETRY_DELAY_MS,
+    /** Только эти рестораны (парк S8, реш. 428); `null` — все рестораны стенда. */
+    val restaurantIds: List<String>? = null,
 ) {
     init {
         require(devices >= 1) { "devices must be >= 1" }

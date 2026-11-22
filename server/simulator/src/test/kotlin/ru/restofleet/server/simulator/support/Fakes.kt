@@ -26,6 +26,8 @@ import ru.restofleet.server.simulator.domain.port.DeviceLink
 import ru.restofleet.server.simulator.domain.port.Incoming
 import ru.restofleet.server.simulator.domain.port.ProbeRunner
 import ru.restofleet.server.simulator.domain.port.ResultSink
+import ru.restofleet.server.simulator.domain.port.TruthSink
+import ru.restofleet.server.simulator.domain.synthetic.TruthRow
 import ru.restofleet.server.simulator.domain.port.TrafficMeter
 import java.util.Collections
 
@@ -87,9 +89,15 @@ class FakeConnector(private val pushes: Boolean) : DeviceConnector {
     val victims = mutableSetOf<String>()
     var shutdown = false
 
+    /** Все связи устройства по порядку создания (пропажа и возврат создают новую). */
+    val history = LinkedHashMap<String, MutableList<FakeLink>>()
+
     override fun link(credentials: DeviceCredentials, victim: Boolean): DeviceLink {
         if (victim) victims += credentials.deviceId
-        return FakeLink(pushes).also { links[credentials.deviceId] = it }
+        return FakeLink(pushes).also {
+            links[credentials.deviceId] = it
+            history.getOrPut(credentials.deviceId) { mutableListOf() } += it
+        }
     }
 
     override suspend fun shutdown() {
@@ -126,6 +134,20 @@ class FakeControl(
     }
 
     override suspend fun restaurants() = restaurantIds
+
+    /** Коды ресторанов (`id → code`); по умолчанию код = id. */
+    val codes = HashMap<String, String>()
+
+    override suspend fun restaurantCodes(): Map<String, String> = restaurantIds.associateWith { codes[it] ?: it }
+
+    override suspend fun ensureRestaurant(code: String, name: String): String {
+        restaurantCodes().entries.firstOrNull { it.value == code }?.let { return it.key }
+        val id = "id-$code"
+        restaurantIds = restaurantIds + id
+        codes[id] = code
+        calls += "create:$code"
+        return id
+    }
 
     override suspend fun issueCodes(restaurantId: String, role: DeviceRole, count: Int): List<String> {
         issued += Triple(restaurantId, role, count)
@@ -176,5 +198,14 @@ class FakeTraffic(private val perRead: Long = 1_000) : TrafficMeter {
     override fun snapshot(): TrafficSnapshot {
         total += perRead
         return TrafficSnapshot(total, total * 2)
+    }
+}
+
+/** Эталон отказов в памяти. */
+class FakeTruth : TruthSink {
+    val written = mutableMapOf<String, List<TruthRow>>()
+
+    override fun write(run: String, rows: List<TruthRow>) {
+        written[run] = rows
     }
 }

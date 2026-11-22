@@ -32,6 +32,18 @@ sealed interface SimEvent {
         val limit: Double,
     ) : SimEvent
 
+    /** Смена приложения на экране (FR-AG-24): [from] → [to]. */
+    data class FgChanged(override val ts: Long, val from: String?, val to: String?) : SimEvent
+
+    /** Отслеживаемое [pkg] не на экране с [sinceTs] дольше [limitMin] минут. */
+    data class FgAbsent(
+        override val ts: Long,
+        val pkg: String,
+        val sinceTs: Long,
+        val limitMin: Int,
+        val foregroundApp: String?,
+    ) : SimEvent
+
     /** Смена состояния цели проверки: [state] `up` | `down`. */
     data class ProbeState(
         override val ts: Long,

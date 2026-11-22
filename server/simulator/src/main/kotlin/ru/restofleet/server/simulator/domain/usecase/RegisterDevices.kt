@@ -36,7 +36,8 @@ class RegisterDevices(
         val failures = mutableMapOf<String, Int>()
         var registered = 0
         if (cached < request.devices) {
-            val slots = DevicePlan.slots(control.restaurants(), request.mix, cached, request.devices)
+            val restaurants = request.restaurantIds ?: control.restaurants()
+            val slots = DevicePlan.slots(restaurants, request.mix, cached, request.devices)
             val codes = arrayOfNulls<String>(slots.size)
             slots.withIndex().groupBy({ it.value }, { it.index }).forEach { (slot, indices) ->
                 indices.chunked(MAX_BATCH).forEach { chunk ->

@@ -13,11 +13,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import ru.restofleet.server.simulator.domain.device.VirtualDevice
+import ru.restofleet.server.simulator.domain.fault.DeviceFaultType
+import ru.restofleet.server.simulator.domain.fault.FaultPlan
 import ru.restofleet.server.simulator.domain.model.CommandLoad
 import ru.restofleet.server.simulator.domain.model.CommandRecord
 import ru.restofleet.server.simulator.domain.model.DetectionRecord
 import ru.restofleet.server.simulator.domain.model.DeviceConfig
 import ru.restofleet.server.simulator.domain.model.DeviceCredentials
+import ru.restofleet.server.simulator.domain.model.LossMode
 import ru.restofleet.server.simulator.domain.model.LossTest
 import ru.restofleet.server.simulator.domain.model.Scenario
 import ru.restofleet.server.simulator.domain.model.StatusInfo
@@ -26,13 +29,20 @@ import ru.restofleet.server.simulator.domain.model.TransportMode
 import ru.restofleet.server.simulator.domain.port.ControlApi
 import ru.restofleet.server.simulator.domain.port.DeviceConnector
 import ru.restofleet.server.simulator.domain.port.DeviceLink
+import ru.restofleet.server.simulator.domain.port.ProbeRunner
 import ru.restofleet.server.simulator.domain.port.Ticker
 import ru.restofleet.server.simulator.domain.port.TrafficMeter
 import ru.restofleet.server.simulator.domain.profile.DayClock
 import ru.restofleet.server.simulator.domain.profile.profileOf
+import ru.restofleet.server.simulator.domain.synthetic.EpisodeGenerator
+import ru.restofleet.server.simulator.domain.synthetic.ExplicitTruth
+import ru.restofleet.server.simulator.domain.synthetic.ProbeMode
+import ru.restofleet.server.simulator.domain.synthetic.SyntheticNetwork
+import ru.restofleet.server.simulator.domain.synthetic.TruthRow
 import ru.restofleet.shared.kernel.Clock
 import java.time.ZoneId
 import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.random.Random
 
 private data class SentCommand(
@@ -46,7 +56,7 @@ private data class SentCommand(
  * Состояние и шаги одного прогона [RunExperiment]: устройства и их связи, команды измерителя, временной ряд, замер
  * пропажи, остановка. Отдельный класс: в use case остаётся только последовательность фаз.
  */
-@Suppress("LongParameterList") // порты прогона передаются из use case как есть
+@Suppress("LongParameterList", "TooManyFunctions") // порты прогона из use case как есть; функции — фазы прогона
 internal class ExperimentRun(
     private val scenario: Scenario,
     private val started: Long,
@@ -64,8 +74,12 @@ internal class ExperimentRun(
     @Volatile var sendFailures: Int = 0
 
     val timeline: MutableList<TimelineRow> = Collections.synchronizedList(mutableListOf())
-    private val links = LinkedHashMap<String, DeviceLink>()
-    private val jobs = HashMap<String, Job>()
+    private val links = ConcurrentHashMap<String, DeviceLink>()
+    private val jobs = ConcurrentHashMap<String, Job>()
+    private val running = ConcurrentHashMap<String, RunningDevice>()
+    private val vanished: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private var network: SyntheticNetwork? = null
+    private var codes: Map<String, String> = emptyMap()
     private val sent = mutableListOf<SentCommand>()
     private val rampRandom = Random(scenario.seed)
     private val commandRandom = Random(scenario.seed + 1)
@@ -75,22 +89,99 @@ internal class ExperimentRun(
         jitter = scenario.jitter,
     )
 
+    /** Устройство прогона: всё, что нужно, чтобы вернуть его после пропажи. */
+    private class RunningDevice(
+        val index: Int,
+        val credentials: DeviceCredentials,
+        val device: VirtualDevice,
+        val status: StatusInfo,
+        val seed: Long,
+        val probes: ProbeRunner?,
+    )
+
+    /**
+     * Отказы сети и бэкенда (FR-SM-05): коды ресторанов, эпизоды генератора, синтетическая сеть. Возвращает эталонную
+     * разметку; без отказов — пусто.
+     */
+    suspend fun prepareDisruptions(devices: List<DeviceCredentials>): List<TruthRow> {
+        if (!scenario.hasDisruptions && scenario.probeMode != ProbeMode.SYNTHETIC) return emptyList()
+        codes = control.restaurantCodes()
+        val byCode = devices.groupBy({ codeOf(it) }, { it.deviceId })
+        val generated = scenario.episodes?.let { plan ->
+            EpisodeGenerator(scenario.seed, plan.roundSec, plan.activeFromSec, plan.activeSec, plan.globalShare)
+                .generate(scenario.name, plan.rounds, byCode, started)
+        }
+        network = SyntheticNetwork(scenario.outages + generated?.outages.orEmpty(), started)
+        return ExplicitTruth.of(scenario.name, scenario.outages, byCode, started) + generated?.truth.orEmpty()
+    }
+
+    private fun codeOf(credentials: DeviceCredentials) = codes[credentials.restaurantId] ?: credentials.restaurantId
+
     suspend fun start(scope: CoroutineScope, index: Int, credentials: DeviceCredentials, victim: Boolean) {
         val slotMs = MS_IN_SEC.toDouble() / scenario.rampPerSec
         val due = started + (index * slotMs + rampRandom.nextDouble() * slotMs).toLong()
         (due - clock.nowMillis()).takeIf { it > 0 }?.let { delay(it) }
-        val link = connector.link(credentials, victim)
+        val link = connector.link(credentials, victim || scenario.hasDisruptions)
         val seed = scenario.seed + index
+        val synthetic = scenario.probeMode == ProbeMode.SYNTHETIC
         val device = VirtualDevice(
             profile = profileOf(credentials.role),
             dayClock = dayClock,
             random = Random(seed),
             startMillis = clock.nowMillis(),
             initialConfig = DeviceConfig(telemetryIntervalSec = scenario.telemetryIntervalSec),
+            faults = FaultPlan(scenario.faults, index, started),
+            fixedProbes = scenario.syntheticTargets.takeIf { synthetic },
         )
         val status = StatusInfo(credentials.role, AGENT_VERSION, "boot-$started-$index")
+        val probes = network?.takeIf { synthetic }?.let { world ->
+            val code = codeOf(credentials)
+            ProbeRunner { target -> world.probe(credentials.deviceId, code, target.id, clock.nowMillis()) }
+        }
+        val record = RunningDevice(index, credentials, device, status, seed, probes)
+        running[credentials.deviceId] = record
         links[credentials.deviceId] = link
-        jobs[credentials.deviceId] = scope.launch { runner.run(device, link, status, timing, seed) }
+        jobs[credentials.deviceId] = scope.launch { runner.run(device, link, status, timing, seed, probes) }
+    }
+
+    /**
+     * Драйвер отказов (раз в секунду): устройство, которому по сценарию положено пропасть (сеть ресторана в варианте
+     * `offline`, `device_down` — молча; `mass_reconnect` — с обрывом соединения), отключается, по окончании
+     * отказа — подключается заново с прежним состоянием.
+     */
+    suspend fun driveDisruptions(scope: CoroutineScope) {
+        while (currentCoroutineContext().isActive) {
+            val now = clock.nowMillis()
+            running.values.forEach { r ->
+                val id = r.credentials.deviceId
+                val silent = network?.offline(id, codeOf(r.credentials), now) == true
+                val faults = FaultPlan(scenario.faults, r.index, started).activeAt(now)
+                val reconnect = DeviceFaultType.MASS_RECONNECT in faults
+                val down = silent || reconnect
+                when {
+                    down && id !in vanished -> vanish(id, if (silent) LossMode.SILENT else LossMode.CLOSE)
+                    !down && id in vanished -> restore(scope, r)
+                }
+            }
+            delay(DISRUPTION_STEP_MS)
+        }
+    }
+
+    private suspend fun vanish(id: String, mode: LossMode) {
+        vanished += id
+        jobs.remove(id)?.cancelAndJoin()
+        links.remove(id)?.let { link ->
+            link.vanish(mode)
+            link.release()
+        }
+    }
+
+    private fun restore(scope: CoroutineScope, r: RunningDevice) {
+        val id = r.credentials.deviceId
+        val link = connector.link(r.credentials, victim = true)
+        links[id] = link
+        jobs[id] = scope.launch { runner.run(r.device, link, r.status, timing, r.seed, r.probes) }
+        vanished -= id
     }
 
     suspend fun sampleTimeline() {
@@ -200,5 +291,6 @@ internal class ExperimentRun(
         private const val RESULT_SETTLE_MS = 2_000L
         private const val LOSS_POLL_MS = 1_000L
         private const val STOP_PARALLELISM = 64
+        private const val DISRUPTION_STEP_MS = 1_000L
     }
 }

@@ -48,13 +48,22 @@ class DeviceRunner(
     private val metrics: RunMetrics,
     private val receipts: CommandReceipts,
 ) {
-    suspend fun run(device: VirtualDevice, link: DeviceLink, status: StatusInfo, timing: DeviceTiming, seed: Long) {
+    /** [probeRunner] — свой исполнитель проб устройства (режим `synthetic`); `null` — общий [probes]. */
+    @Suppress("LongParameterList")
+    suspend fun run(
+        device: VirtualDevice,
+        link: DeviceLink,
+        status: StatusInfo,
+        timing: DeviceTiming,
+        seed: Long,
+        probeRunner: ProbeRunner? = null,
+    ) {
         if (!link.open(status)) {
             metrics.connectFailed()
             return
         }
         metrics.connected()
-        val session = Session(device, link, Mutex())
+        val session = Session(device, link, Mutex(), probeRunner ?: probes)
         try {
             coroutineScope {
                 launch { link.incoming.collect { session.onIncoming(it) } }
@@ -69,7 +78,12 @@ class DeviceRunner(
         }
     }
 
-    private inner class Session(val device: VirtualDevice, val link: DeviceLink, val lock: Mutex) {
+    private inner class Session(
+        val device: VirtualDevice,
+        val link: DeviceLink,
+        val lock: Mutex,
+        val probes: ProbeRunner,
+    ) {
         suspend fun telemetryLoop(random: Random, jitter: Double) {
             delay(random.nextLong(lock.withLock { device.config.telemetryIntervalSec } * MS_IN_SEC))
             while (currentCoroutineContext().isActive) {
@@ -93,7 +107,7 @@ class DeviceRunner(
             while (currentCoroutineContext().isActive) {
                 val due = lock.withLock { device.dueProbes(clock.nowMillis()) }
                 if (due.isNotEmpty()) runProbes(due)
-                val idle = lock.withLock { device.config.probes.isEmpty() }
+                val idle = lock.withLock { device.probeTargets.isEmpty() }
                 delay(if (idle) IDLE_PROBE_TICK_MS else PROBE_TICK_MS)
             }
         }

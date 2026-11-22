@@ -4,6 +4,7 @@ import ru.restofleet.server.simulator.domain.model.DeviceRole
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.math.exp
+import kotlin.math.floor
 import kotlin.random.Random
 
 /**
@@ -18,6 +19,8 @@ data class ProfileState(
     val availMb: Long,
     val rssi: Int,
     val heatBias: Double,
+    /** Дробная часть убыли свободного места (R-22): при `timeScale = 1` за тик убывает меньше 1 МБ. */
+    val freeMbCarry: Double = 0.0,
 )
 
 /**
@@ -153,15 +156,19 @@ internal object Physics {
         heatBias = 0.0,
     )
 
-    fun step(state: ProfileState, dtSec: Double, random: Random, charging: Boolean, ratePerHour: Double) =
-        state.copy(
+    fun step(state: ProfileState, dtSec: Double, random: Random, charging: Boolean, ratePerHour: Double): ProfileState {
+        val drop = FREE_MB_PER_HOUR * dtSec / SEC_IN_HOUR + state.freeMbCarry
+        val whole = floor(drop).toLong()
+        return state.copy(
             batteryPct = (state.batteryPct + ratePerHour * dtSec / SEC_IN_HOUR).coerceIn(MIN_BATTERY, MAX_BATTERY),
             charging = charging,
-            freeMb = (state.freeMb - (FREE_MB_PER_HOUR * dtSec / SEC_IN_HOUR).toLong()).coerceAtLeast(MIN_FREE_MB),
+            freeMb = (state.freeMb - whole).coerceAtLeast(MIN_FREE_MB),
+            freeMbCarry = drop - whole,
             availMb = (state.availMb + random.nextLong(-AVAIL_STEP, AVAIL_STEP + 1))
                 .coerceIn(AVAIL_RANGE.first, AVAIL_RANGE.last),
             rssi = (state.rssi + random.nextInt(-RSSI_STEP, RSSI_STEP + 1)).coerceIn(RSSI_RANGE.first, RSSI_RANGE.last),
         )
+    }
 
     fun relax(current: Double, target: Double, dtSec: Double, tauSec: Double, random: Random): Double =
         target + (current - target) * exp(-dtSec / tauSec) + random.nextDouble(-TEMP_NOISE, TEMP_NOISE)

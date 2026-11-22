@@ -1,0 +1,16 @@
+# Точность классификатора (реш. 428): 8 раундов по 5 мин = 40 мин, ≥ 30 размеченных случаев. Раунд — глобальный
+# отказ или смесь: сеть ресторана, бэкенд локально у двух, одно устройство, остальные без отказа.
+name: accuracy
+mode: mqtt
+devices: 72
+seed: 428
+rampPerSec: 20
+warmupSec: 0
+durationSec: 2400
+probeMode: synthetic
+fleet: { prefix: S8, restaurants: 12 }
+episodes: { rounds: 8, roundSec: 300, activeFromSec: 30, activeSec: 150, globalShare: 0.25 }
+endpoints:
+  api: http://backend-devices:8080
+  control: http://backend-ctl:8080
+  broker: { host: mosquitto, port: 8883 }

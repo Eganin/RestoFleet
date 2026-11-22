@@ -18,6 +18,7 @@ import ru.restofleet.server.simulator.domain.model.SimEvent
 import ru.restofleet.server.simulator.domain.model.StatusInfo
 import ru.restofleet.server.simulator.domain.model.TelemetrySample
 import ru.restofleet.server.simulator.domain.model.TrafficSnapshot
+import ru.restofleet.server.simulator.domain.synthetic.TruthRow
 
 /** Монотонные часы процесса, нс: отправка и получение команды меряются по одним часам (план 4.2). */
 fun interface Ticker {
@@ -34,6 +35,12 @@ interface ControlApi {
 
     /** id существующих ресторанов. */
     suspend fun restaurants(): List<String>
+
+    /** Коды ресторанов: `id → code`. */
+    suspend fun restaurantCodes(): Map<String, String>
+
+    /** Ресторан с кодом [code]: существующий или созданный (`POST /restaurants`); его id. */
+    suspend fun ensureRestaurant(code: String, name: String): String
 
     /** Пакет одноразовых кодов (`POST /provisioning/tokens:batch`, 1…1000 за вызов). */
     suspend fun issueCodes(restaurantId: String, role: DeviceRole, count: Int): List<String>
@@ -128,6 +135,11 @@ fun interface ProbeRunner {
 /** Счётчик байт сетевого интерфейса устройств; `null` — недоступен (запуск вне контейнера). */
 fun interface TrafficMeter {
     fun snapshot(): TrafficSnapshot?
+}
+
+/** Эталонная разметка отказов (`deploy/out/sim/truth-<run>.csv`, FR-SM-05). */
+fun interface TruthSink {
+    fun write(run: String, rows: List<TruthRow>)
 }
 
 /** Запись результатов (CSV, FR-SM-07). */

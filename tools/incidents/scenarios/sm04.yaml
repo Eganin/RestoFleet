@@ -1,0 +1,20 @@
+# FR-SM-04: отказы устройств — перегрев (R-03), закрытое приложение (R-04 через fgAbsentMin), разряд (R-02),
+# мало места (R-06), массовое переподключение. Устройства по номеру прогона, окна — от старта.
+name: sm04
+mode: mqtt
+devices: 12
+seed: 404
+rampPerSec: 20
+warmupSec: 0
+durationSec: 900
+fleet: { prefix: S8, restaurants: 2 }
+faults:
+  - { type: overheat, atSec: 60, durationSec: 120, devices: 1, offset: 0 }
+  - { type: app_closed, atSec: 60, durationSec: 720, devices: 1, offset: 1 }
+  - { type: discharge, atSec: 60, durationSec: 120, devices: 1, offset: 2 }
+  - { type: low_storage, atSec: 60, durationSec: 120, devices: 1, offset: 3 }
+  - { type: mass_reconnect, atSec: 300, durationSec: 30, devices: 6, offset: 6 }
+endpoints:
+  api: http://backend-devices:8080
+  control: http://backend-ctl:8080
+  broker: { host: mosquitto, port: 8883 }

@@ -28,6 +28,7 @@ import java.io.IOException
  * файла в момент входа, в логи и argv не попадает), access JWT в памяти; ответ 401 — один повторный вход.
  * Сетевая ошибка и неожиданный код — `null`/исключение по смыслу метода.
  */
+@Suppress("TooManyFunctions") // операции порта ControlApi и помощники HTTP
 class OkHttpControlApi(
     client: OkHttpClient,
     apiBase: String,
@@ -47,6 +48,32 @@ class OkHttpControlApi(
         }
         check(result.code == OK) { "GET /restaurants: HTTP ${result.code}" }
         return items(result.body).mapNotNull { it.string("id") }
+    }
+
+    override suspend fun restaurantCodes(): Map<String, String> {
+        val result = authorized {
+            url("/api/v1/restaurants").newBuilder().addQueryParameter("limit", "1000").build().get()
+        }
+        check(result.code == OK) { "GET /restaurants: HTTP ${result.code}" }
+        return items(result.body).mapNotNull { item ->
+            val id = item.string("id")
+            val code = item.string("code")
+            if (id == null || code == null) null else id to code
+        }.toMap()
+    }
+
+    override suspend fun ensureRestaurant(code: String, name: String): String {
+        restaurantCodes().entries.firstOrNull { it.value == code }?.let { return it.key }
+        val body = buildJsonObject {
+            put("code", code)
+            put("name", name)
+            put("city", "Симулятор")
+            put("address", "")
+            put("timezone", "Europe/Moscow")
+        }
+        val result = authorized { url("/api/v1/restaurants").post(body) }
+        check(result.code == CREATED) { "POST /restaurants $code: HTTP ${result.code}" }
+        return checkNotNull(parse(result.body)?.string("id")) { "POST /restaurants $code: no id" }
     }
 
     override suspend fun issueCodes(restaurantId: String, role: DeviceRole, count: Int): List<String> {

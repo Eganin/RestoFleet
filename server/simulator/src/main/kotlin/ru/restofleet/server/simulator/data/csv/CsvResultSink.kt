@@ -3,11 +3,14 @@ package ru.restofleet.server.simulator.data.csv
 import ru.restofleet.server.simulator.domain.model.RegistrationReport
 import ru.restofleet.server.simulator.domain.model.RunReport
 import ru.restofleet.server.simulator.domain.port.ResultSink
+import ru.restofleet.server.simulator.domain.port.TruthSink
 import ru.restofleet.server.simulator.domain.stats.Percentiles
+import ru.restofleet.server.simulator.domain.synthetic.TruthRow
 import ru.restofleet.shared.kernel.Clock
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
+import java.nio.file.attribute.PosixFilePermissions
 import java.util.Locale
 
 /**
@@ -102,5 +105,26 @@ class CsvResultSink(private val root: Path, private val clock: Clock) : ResultSi
             "payload_bytes_out,payload_bytes_in,rx_bytes,tx_bytes,commands_sent,command_send_failures," +
             "commands_received,latency_p50_ms,latency_p95_ms,latency_max_ms,latency_mean_ms,loss_devices," +
             "loss_detected,detection_p50_ms,detection_max_ms,loss_mode"
+    }
+}
+
+/**
+ * Эталон отказов (FR-SM-05): `truth-<run>.csv` в каталоге учёток (`deploy/out/sim`), поля `scenario, restaurant,
+ * device, expected_class, from, to` (время — epoch ms). Файл создаётся заново, права 600 — как у кэша учёток.
+ */
+class CsvTruthSink(private val dir: Path) : TruthSink {
+    override fun write(run: String, rows: List<TruthRow>) {
+        Files.createDirectories(dir)
+        val file = dir.resolve("truth-$run.csv")
+        val text = buildString {
+            append("scenario,restaurant,device,expected_class,from,to\n")
+            rows.forEach {
+                val fields = listOf(it.scenario, it.restaurant, it.device.orEmpty(), it.expectedClass, it.from, it.to)
+                append(fields.joinToString(","))
+                append('\n')
+            }
+        }
+        Files.writeString(file, text)
+        runCatching { Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rw-------")) }
     }
 }

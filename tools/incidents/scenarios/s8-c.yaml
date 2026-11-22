@@ -1,0 +1,16 @@
+# S8 (в): бэкенд недоступен из двух ресторанов при живом ref → два инцидента R-09.
+name: s8-c
+mode: mqtt
+devices: 72
+seed: 83
+rampPerSec: 20
+warmupSec: 0
+durationSec: 300
+probeMode: synthetic
+fleet: { prefix: S8, restaurants: 12 }
+outages:
+  - { kind: backend_local_down, atSec: 60, durationSec: 150, restaurants: [S8-05, S8-06] }
+endpoints:
+  api: http://backend-devices:8080
+  control: http://backend-ctl:8080
+  broker: { host: mosquitto, port: 8883 }

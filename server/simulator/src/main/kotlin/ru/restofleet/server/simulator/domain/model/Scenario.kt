@@ -1,5 +1,11 @@
 package ru.restofleet.server.simulator.domain.model
 
+import ru.restofleet.server.simulator.domain.fault.DeviceFault
+import ru.restofleet.server.simulator.domain.fault.DeviceFaultType
+import ru.restofleet.server.simulator.domain.synthetic.EpisodeGenerator
+import ru.restofleet.server.simulator.domain.synthetic.Outage
+import ru.restofleet.server.simulator.domain.synthetic.ProbeMode
+
 /** Транспорт устройств: MQTT (как агент) или REST-polling (FR-SM-06, эксперимент ТЗ 13.2). */
 enum class TransportMode(val code: String) {
     MQTT("mqtt"),
@@ -63,6 +69,15 @@ data class Scenario(
     val commands: CommandLoad? = null,
     val loss: LossTest? = null,
     val network: String = "baseline",
+    /** `synthetic`: пробы не ходят в сеть, результат задают [outages] и [episodes] (FR-SM-05). */
+    val probeMode: ProbeMode = ProbeMode.REAL,
+    /** Цели проверок в режиме `synthetic` (по умолчанию `api` и эталон `ref`). */
+    val syntheticTargets: List<ProbeTarget> = DEFAULT_SYNTHETIC_TARGETS,
+    val faults: List<DeviceFault> = emptyList(),
+    val outages: List<Outage> = emptyList(),
+    val episodes: EpisodePlan? = null,
+    /** Парк ресторанов для `prepare` и отказов по коду (реш. 428): `S8-01…S8-12`. */
+    val fleet: FleetSpec? = null,
 ) {
     init {
         require(NAME.matches(name)) { "name must match ${NAME.pattern}" }
@@ -74,7 +89,14 @@ data class Scenario(
         require(jitter in 0.0..MAX_JITTER) { "jitter must be in 0..$MAX_JITTER" }
         require(timeScale > 0.0) { "timeScale must be > 0" }
         require(loss == null || loss.devices < devices) { "loss.devices must be less than devices" }
+        require(outages.isEmpty() && episodes == null || probeMode == ProbeMode.SYNTHETIC) {
+            "outages and episodes need probeMode: synthetic"
+        }
     }
+
+    /** Нужны коды ресторанов и управляемые связи (пропажа и возврат устройств во время прогона). */
+    val hasDisruptions: Boolean
+        get() = outages.isNotEmpty() || episodes != null || faults.any { it.type == DeviceFaultType.MASS_RECONNECT }
 
     companion object {
         const val DEFAULT_SEED = 42L
@@ -83,7 +105,52 @@ data class Scenario(
         const val DEFAULT_DURATION_SEC = 240
         const val DEFAULT_JITTER = 0.05
         const val DEFAULT_TIMEZONE = "Europe/Moscow"
+        private const val SYNTHETIC_INTERVAL_SEC = 15
+        private const val SYNTHETIC_TIMEOUT_MS = 5_000L
+        private const val SYNTHETIC_FAILS = 3
+
+        /** `api` и эталон `ref` каждые 15 с, K = 3: «недоступна» через ≈ 45 с (минимум стенда — 5 с). */
+        val DEFAULT_SYNTHETIC_TARGETS = listOf(
+            ProbeTarget(
+                "api", "http", "synthetic://api", SYNTHETIC_INTERVAL_SEC, SYNTHETIC_TIMEOUT_MS, SYNTHETIC_FAILS,
+            ),
+            ProbeTarget(
+                "ref", "http", "synthetic://ref", SYNTHETIC_INTERVAL_SEC, SYNTHETIC_TIMEOUT_MS, SYNTHETIC_FAILS,
+                reference = true,
+            ),
+        )
         private const val MAX_JITTER = 0.5
         private val NAME = Regex("^[A-Za-z0-9._-]{1,64}$")
+    }
+}
+
+/** Раунды генератора эпизодов точности (реш. 428). */
+data class EpisodePlan(
+    val rounds: Int,
+    val roundSec: Int = EpisodeGenerator.DEFAULT_ROUND_SEC,
+    val activeFromSec: Int = EpisodeGenerator.DEFAULT_ACTIVE_FROM_SEC,
+    val activeSec: Int = EpisodeGenerator.DEFAULT_ACTIVE_SEC,
+    val globalShare: Double = EpisodeGenerator.DEFAULT_GLOBAL_SHARE,
+) {
+    init {
+        require(rounds >= 1) { "episodes.rounds must be >= 1" }
+        require(globalShare in 0.0..1.0) { "episodes.globalShare must be in 0..1" }
+    }
+}
+
+/** Парк ресторанов прогона: коды `<prefix>-01…<prefix>-NN`, у каждого [perRestaurant] устройств (реш. 428). */
+data class FleetSpec(val prefix: String, val restaurants: Int, val perRestaurant: Int = DEFAULT_PER_RESTAURANT) {
+    init {
+        require(Regex("^[A-Za-z0-9]{1,16}$").matches(prefix)) { "fleet.prefix must be 1..16 letters or digits" }
+        require(restaurants in 1..MAX_RESTAURANTS && perRestaurant >= 1) { "invalid fleet size" }
+    }
+
+    val codes: List<String> get() = (1..restaurants).map { "%s-%02d".format(prefix, it) }
+
+    val devices: Int get() = restaurants * perRestaurant
+
+    private companion object {
+        const val DEFAULT_PER_RESTAURANT = 6
+        const val MAX_RESTAURANTS = 99
     }
 }

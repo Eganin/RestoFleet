@@ -1,5 +1,7 @@
 package ru.restofleet.server.simulator.domain.usecase
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -13,10 +15,11 @@ import ru.restofleet.server.simulator.domain.port.DeviceConnector
 import ru.restofleet.server.simulator.domain.port.ResultSink
 import ru.restofleet.server.simulator.domain.port.Ticker
 import ru.restofleet.server.simulator.domain.port.TrafficMeter
+import ru.restofleet.server.simulator.domain.port.TruthSink
 import ru.restofleet.server.simulator.domain.runtime.CommandReceipts
 import ru.restofleet.server.simulator.domain.runtime.DeviceRunner
-import ru.restofleet.server.simulator.domain.runtime.ExperimentRun
 import ru.restofleet.server.simulator.domain.runtime.DeviceTiming
+import ru.restofleet.server.simulator.domain.runtime.ExperimentRun
 import ru.restofleet.server.simulator.domain.runtime.RunMetrics
 import ru.restofleet.server.simulator.domain.runtime.minus
 import ru.restofleet.shared.kernel.Clock
@@ -40,21 +43,19 @@ class RunExperiment(
     private val receipts: CommandReceipts,
     private val traffic: TrafficMeter,
     private val sink: ResultSink,
+    private val truth: TruthSink,
     private val clock: Clock,
     private val ticker: Ticker,
 ) {
     suspend operator fun invoke(scenario: Scenario, credentials: List<DeviceCredentials>): RunReport = coroutineScope {
         val devices = credentials.forRun(scenario.devices)
-        val victims = scenario.loss
-            ?.let { loss -> devices.takeLast(loss.devices).map { it.deviceId }.toSet() }
-            .orEmpty()
+        val victims = victimsOf(scenario, devices)
         val started = clock.nowMillis()
         val run = ExperimentRun(
             scenario, started, connector, control, runner, metrics, receipts, traffic, clock, ticker,
         )
         val sampler = launch { run.sampleTimeline() }
-
-        devices.forEachIndexed { index, device -> run.start(this, index, device, device.deviceId in victims) }
+        val disruptions = startDevices(run, devices, victims, scenario, started)
         val rampEnd = clock.nowMillis()
         run.phase = ExperimentRun.PHASE_WARMUP
         // R-4: вход измерителя — в прогреве, иначе он попадает в задержку первой команды окна
@@ -80,6 +81,7 @@ class RunExperiment(
         val detections = scenario.loss?.let { loss -> run.measureLoss(loss, victims) }.orEmpty()
 
         run.phase = ExperimentRun.PHASE_STOP
+        disruptions?.cancelAndJoin()
         run.stopAll()
         connector.shutdown()
         sampler.cancelAndJoin()
@@ -108,6 +110,26 @@ class RunExperiment(
         )
         sink.run(report)
         report
+    }
+
+    /** Устройства замера пропажи — последние K прогона. */
+    private fun victimsOf(scenario: Scenario, devices: List<DeviceCredentials>): Set<String> =
+        scenario.loss?.let { loss -> devices.takeLast(loss.devices).map { it.deviceId }.toSet() }.orEmpty()
+
+    /**
+     * Эталон (до запуска устройств: оборванный прогон оставляет разметку того, что успел), разгон устройств и драйвер
+     * отказов (FR-SM-04, 05), если они есть в сценарии.
+     */
+    private suspend fun CoroutineScope.startDevices(
+        run: ExperimentRun,
+        devices: List<DeviceCredentials>,
+        victims: Set<String>,
+        scenario: Scenario,
+        started: Long,
+    ): Job? {
+        run.prepareDisruptions(devices).takeIf { it.isNotEmpty() }?.let { truth.write("${scenario.name}-$started", it) }
+        devices.forEachIndexed { index, device -> run.start(this, index, device, device.deviceId in victims) }
+        return if (scenario.hasDisruptions) launch { run.driveDisruptions(this) } else null
     }
 
     private companion object {

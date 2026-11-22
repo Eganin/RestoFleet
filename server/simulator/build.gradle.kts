@@ -49,13 +49,27 @@ dependencies {
 kover {
     currentProject {
         createVariant("ci") { add("jvm") }
+        // Домен симулятора — отдельный вариант (R-24, план 4.4): в Kover 0.9 фильтры задаются на уровне варианта
+        createVariant("domain") { add("jvm") }
     }
     reports {
         verify {
             rule { minBound(80) }
         }
+        variant("domain") {
+            filters {
+                includes { packages("ru.restofleet.server.simulator.domain") }
+            }
+            verify {
+                rule("Домен симулятора: строки ≥ 90 %") { minBound(90) }
+            }
+        }
     }
 }
+
+// R-24: порог домена проверяется вместе с гейтом (`check` и `koverVerifyCi`)
+tasks.named("check") { dependsOn("koverVerifyDomain") }
+tasks.matching { it.name == "koverVerifyCi" }.configureEach { dependsOn("koverVerifyDomain") }
 
 detekt {
     buildUponDefaultConfig = true
@@ -70,4 +84,7 @@ tasks.withType<Test>().configureEach {
     val scenarios = rootProject.layout.projectDirectory.dir("tools/experiments/scenarios")
     inputs.dir(scenarios).withPropertyName("experimentScenarios")
     systemProperty("scenariosDir", scenarios.asFile.absolutePath)
+    val incidentScenarios = rootProject.layout.projectDirectory.dir("tools/incidents/scenarios")
+    inputs.dir(incidentScenarios).withPropertyName("incidentScenarios")
+    systemProperty("incidentScenariosDir", incidentScenarios.asFile.absolutePath)
 }

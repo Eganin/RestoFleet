@@ -24,6 +24,7 @@ import ru.restofleet.server.simulator.support.FakeControl
 import ru.restofleet.server.simulator.support.FakeProbes
 import ru.restofleet.server.simulator.support.FakeSink
 import ru.restofleet.server.simulator.support.FakeTraffic
+import ru.restofleet.server.simulator.support.FakeTruth
 import ru.restofleet.server.simulator.support.creds
 import kotlin.test.assertFailsWith
 
@@ -38,7 +39,7 @@ class RunExperimentTest {
         val clock = { testScheduler.currentTime }
         return RunExperiment(
             connector, control, DeviceRunner(clock, FakeProbes(), metrics, receipts), metrics, receipts, FakeTraffic(),
-            sink, clock, { testScheduler.currentTime * 1_000_000 },
+            sink, FakeTruth(), clock, { testScheduler.currentTime * 1_000_000 },
         )
     }
 

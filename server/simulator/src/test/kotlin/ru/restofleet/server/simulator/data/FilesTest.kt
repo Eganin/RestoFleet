@@ -1,5 +1,7 @@
 package ru.restofleet.server.simulator.data
 
+import ru.restofleet.server.simulator.domain.synthetic.TruthRow
+import ru.restofleet.server.simulator.data.csv.CsvTruthSink
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
@@ -168,5 +170,24 @@ class FilesTest {
         assertThat(InterfaceTrafficMeter.sameSubnet(ip("10.0.0.1"), ip("10.0.0.1"), 0)).isFalse()
         assertThat(InterfaceTrafficMeter.interfaceFor("localhost")).isNull()
         assertThat(InterfaceTrafficMeter.interfaceFor("no-such-host.invalid")).isNull()
+    }
+
+    @Test
+    fun truthIsWrittenAsCsvWithOwnerOnlyPermissions() {
+        val dir = temp.root.toPath().resolve("sim")
+        CsvTruthSink(dir).write(
+            "s8-a-1",
+            listOf(
+                TruthRow("s8-a", "S8-01", null, "backend_global", 10, 20),
+                TruthRow("s8-a", "S8-02", "d-7", "device", 10, 20),
+            ),
+        )
+        val file = dir.resolve("truth-s8-a-1.csv")
+        assertThat(Files.readAllLines(file)).containsExactly(
+            "scenario,restaurant,device,expected_class,from,to",
+            "s8-a,S8-01,,backend_global,10,20",
+            "s8-a,S8-02,d-7,device,10,20",
+        ).inOrder()
+        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(file))).isEqualTo("rw-------")
     }
 }

@@ -178,4 +178,13 @@ class SimulatorAppTest {
 
     private fun json(code: Int, body: String) =
         MockResponse.Builder().code(code).addHeader("Content-Type", "application/json").body(body).build()
+
+    @Test
+    fun prepareCommandAndTruthDirAreParsed() {
+        val options = CliOptions.parse(listOf("prepare", "--scenario", "/s/a.yaml", "--truth-dir", "/tmp/sim"))
+        assertThat(options.command).isEqualTo(Command.PREPARE)
+        assertThat(options.truthDir.toString()).isEqualTo("/tmp/sim")
+        assertThat(CliOptions.parse(listOf("run", "--scenario", "a")).truthDir.toString())
+            .isEqualTo("/var/lib/simulator")
+    }
 }

@@ -241,4 +241,27 @@ class RestClientsTest {
         ts = seq, seq = seq, batteryLevel = 50, charging = false, plugged = "none", batteryTempC = 30.0,
         thermalStatus = "NONE", rssi = -60, freeMb = 1, availMb = 1, uptimeSec = 1, foregroundApp = null,
     )
+
+    @Test
+    fun restaurantCodesAndEnsureRestaurantCreatesOnlyMissing() = runBlocking<Unit> {
+        val api = OkHttpControlApi(client, base(), "admin") { "pw" }
+        loginOk()
+        respond(200, """{"items":[{"id":"r-1","code":"S8-01"},{"id":"r-2"}]}""")
+        assertThat(api.restaurantCodes()).containsExactly("r-1", "S8-01")
+
+        respond(200, """{"items":[{"id":"r-1","code":"S8-01"}]}""")
+        assertThat(api.ensureRestaurant("S8-01", "x")).isEqualTo("r-1")
+
+        respond(200, """{"items":[{"id":"r-1","code":"S8-01"}]}""")
+        respond(201, """{"id":"r-9","code":"S8-02"}""")
+        assertThat(api.ensureRestaurant("S8-02", "Симулятор S8-02")).isEqualTo("r-9")
+        repeat(4) { server.takeRequest() }
+        val created = server.takeRequest()
+        assertThat(created.url.encodedPath).isEqualTo("/api/v1/restaurants")
+        assertThat(body(created.body!!.utf8())["code"]!!.jsonPrimitive.content).isEqualTo("S8-02")
+
+        respond(200, """{"items":[]}""")
+        respond(409, """{"code":"conflict"}""")
+        assertThat(runCatching { api.ensureRestaurant("S8-03", "x") }.isFailure).isTrue()
+    }
 }

@@ -1,5 +1,8 @@
 package ru.restofleet.server.simulator.domain.device
 
+import ru.restofleet.server.simulator.domain.fault.FaultEffects
+import ru.restofleet.server.simulator.domain.fault.FaultPlan
+import ru.restofleet.server.simulator.domain.fault.ForegroundTracker
 import ru.restofleet.server.simulator.domain.model.CommandReply
 import ru.restofleet.server.simulator.domain.model.DesiredUpdate
 import ru.restofleet.server.simulator.domain.model.DeviceConfig
@@ -54,6 +57,10 @@ class VirtualDevice(
     startMillis: Long,
     initialConfig: DeviceConfig = DeviceConfig(),
     private val schedule: ProbeSchedule = ProbeSchedule.forStand(),
+    /** Отказы устройства из сценария (FR-SM-04). */
+    private val faults: FaultPlan = FaultPlan.NONE,
+    /** Режим `synthetic`: цели проверок задаёт сценарий, `desired.probes` их не заменяет (FR-SM-05). */
+    private val fixedProbes: List<ProbeTarget>? = null,
 ) {
     var config: DeviceConfig = initialConfig
         private set
@@ -63,6 +70,7 @@ class VirtualDevice(
     private var lastTickMillis = startMillis
     private val bootMillis = startMillis
     private val thresholds = ThresholdTracker()
+    private val foreground = ForegroundTracker(profile.foregroundApp)
     private val processed = LinkedHashSet<String>()
     private val machines = HashMap<String, ProbeStateMachine>()
     private val lastProbeRun = HashMap<String, Long>()
@@ -74,7 +82,7 @@ class VirtualDevice(
         lastTickMillis = maxOf(lastTickMillis, now)
         state = profile.next(state, dayClock.hour(now), simDtSec, random)
         val thermal = Thermal.code(state.tempC)
-        val sample = TelemetrySample(
+        val raw = TelemetrySample(
             ts = now,
             seq = ++seq,
             batteryLevel = state.batteryPct.roundToInt(),
@@ -88,8 +96,14 @@ class VirtualDevice(
             uptimeSec = (now - bootMillis).coerceAtLeast(0L) / MS_IN_SEC,
             foregroundApp = profile.foregroundApp,
         )
-        return Tick(sample, thresholds.evaluate(sample, config.thresholds))
+        val sample = FaultEffects.apply(raw, faults.activeAt(now))
+        val events = thresholds.evaluate(sample, config.thresholds) +
+            foreground.evaluate(sample.foregroundApp, now, config.thresholds.fgAbsentMin)
+        return Tick(sample, events)
     }
+
+    /** Цели проверок: из сценария в режиме `synthetic`, иначе из `desired`. */
+    val probeTargets: List<ProbeTarget> get() = fixedProbes ?: config.probes
 
     /** Пришёл `desired`: `null` — версия старее применённой; иначе `reported` для публикации (ТЗ 7.2). */
     fun applyDesired(update: DesiredUpdate, now: Long): ReportedShadow? =
@@ -107,7 +121,7 @@ class VirtualDevice(
                     watchedApps = checked.watchedApps,
                     probes = checked.probes,
                 )
-                machines.keys.retainAll(config.probes.map { it.id }.toSet())
+                machines.keys.retainAll(probeTargets.map { it.id }.toSet())
                 ReportedShadow(config, update.version, now, checked.errors)
             }
         }
@@ -132,7 +146,7 @@ class VirtualDevice(
             }
             cmd.type == LAUNCH_APP -> done(cmd, ReplyStatus.SUCCEEDED, now)
             cmd.type == RUN_PROBE -> runProbe(cmd, now)
-            cmd.type == COLLECT_DIAGNOSTICS -> CommandAction.Diagnostics(config.probes)
+            cmd.type == COLLECT_DIAGNOSTICS -> CommandAction.Diagnostics(probeTargets)
             cmd.type == BEEP -> done(cmd, ReplyStatus.UNSUPPORTED, now, reason = "not_available")
             cmd.type in DEVICE_OWNER_COMMANDS ->
                 done(cmd, ReplyStatus.UNSUPPORTED, now, reason = "requires_device_owner")
@@ -142,7 +156,7 @@ class VirtualDevice(
 
     private fun runProbe(cmd: IncomingCommand, now: Long): CommandAction {
         val id = cmd.params["target"]
-        val target = config.probes.firstOrNull { it.id == id }
+        val target = probeTargets.firstOrNull { it.id == id }
         return when {
             id.isNullOrBlank() -> done(cmd, ReplyStatus.UNSUPPORTED, now, reason = "invalid_target")
             target == null -> done(cmd, ReplyStatus.FAILED, now, reason = "unknown_target")
@@ -151,7 +165,7 @@ class VirtualDevice(
     }
 
     /** Цели, которым пора на плановую проверку (не чаще [ProbeSchedule]); отмечает их запуск. */
-    fun dueProbes(now: Long): List<ProbeTarget> = config.probes.filter { target ->
+    fun dueProbes(now: Long): List<ProbeTarget> = probeTargets.filter { target ->
         val due = schedule.nextRunAt(lastProbeRun[target.id], target.intervalSec, now) <= now
         if (due) lastProbeRun[target.id] = now
         due
