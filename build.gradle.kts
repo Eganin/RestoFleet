@@ -33,6 +33,17 @@ dependencies {
 
     // console — модули консоли (этап П); строки в этом блоке добавляет поток B (реш. 407)
     kover(projects.console.core.mvi)
+    kover(projects.console.core.common)
+    kover(projects.console.core.decompose)
+    kover(projects.console.core.storage)
+    kover(projects.console.core.network)
+    kover(projects.console.core.designsystem)
+    kover(projects.console.core.ui)
+    kover(projects.console.root)
+    kover(projects.console.feature.auth.authDomain)
+    kover(projects.console.feature.auth.authData)
+    kover(projects.console.feature.auth.authUi)
+    kover(projects.console.feature.auth.authComponent)
     // end console
 }
 

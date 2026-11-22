@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Только debug: доверие к CA стенда. Файл xml/network_security_config генерирует generate<Variant>StandTrust. -->
+    <application android:networkSecurityConfig="@xml/network_security_config" />
+</manifest>

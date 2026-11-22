@@ -48,6 +48,7 @@ kover {
 
 detekt {
     buildUponDefaultConfig = true
+    config.setFrom(rootProject.file("config/detekt/detekt.yml"), rootProject.file("console/config/detekt.yml"))
 }
 
 // В KMP анализ идёт по source set'ам; `detekt` собирает их все (CI вызывает именно его)

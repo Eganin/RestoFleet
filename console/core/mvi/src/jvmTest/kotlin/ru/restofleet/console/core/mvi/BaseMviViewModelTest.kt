@@ -4,8 +4,14 @@ import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import ru.restofleet.console.core.mvi.contract.MviAction
@@ -99,5 +105,25 @@ class BaseMviViewModelTest {
         vm.onDestroy()
 
         assertThat(scope.isActive).isFalse()
+    }
+
+    @Test
+    fun `default scope survives an unhandled exception and keeps working`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        try {
+            val seen = mutableListOf<Throwable>()
+            val scope = defaultViewModelScope { seen += it }
+            var ran = false
+
+            scope.launch { error("boom") }
+            scope.launch { ran = true }
+
+            assertThat(seen.map { it.message }).containsExactly("boom")
+            assertThat(ran).isTrue()
+            assertThat(scope.isActive).isTrue()
+            scope.cancel()
+        } finally {
+            Dispatchers.resetMain()
+        }
     }
 }

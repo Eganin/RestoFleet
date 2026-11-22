@@ -1,0 +1,20 @@
+# Дополнение к config/detekt/detekt.yml для модулей консоли (подключается в build.gradle.kts модуля).
+# В тестах длинные строки, литералы и много тестовых функций в классе допустимы.
+style:
+  MaxLineLength:
+    excludes: ['**/jvmTest/**', '**/test/**']
+  MagicNumber:
+    excludes: ['**/jvmTest/**', '**/test/**']
+complexity:
+  TooManyFunctions:
+    excludes: ['**/jvmTest/**', '**/test/**']
+  LongMethod:
+    excludes: ['**/jvmTest/**', '**/test/**']
+  LargeClass:
+    excludes: ['**/jvmTest/**', '**/test/**']
+  LongParameterList:
+    allowedConstructorParameters: 10
+    allowedFunctionParameters: 8
+    ignoreDefaultParameters: true
+    ignoreAnnotated:
+      - 'Composable'
