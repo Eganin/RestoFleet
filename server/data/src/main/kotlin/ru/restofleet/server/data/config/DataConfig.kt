@@ -78,8 +78,16 @@ data class IngestConfig(
     val retryMaxMs: Long = 30_000,
     /** Сообщения больше этого размера не разбираются (ack + счётчик). */
     val maxPayloadBytes: Int = DEFAULT_MAX_PAYLOAD_BYTES,
+    /**
+     * Предел очереди для QoS 0 (остаток R-1/R-2): живая телеметрия при стоящей БД сверх него отбрасывается со
+     * счётчиком `overflow`. QoS 1 не ограничивается здесь: его держит Receive Maximum брокеру (P10).
+     */
+    val maxQueuedQos0: Int = DEFAULT_MAX_QUEUED_QOS0,
 ) {
     companion object {
         const val DEFAULT_MAX_PAYLOAD_BYTES: Int = 256 * 1024
+
+        /** ≈ 2 мин живой телеметрии 5 000 устройств (раз в 30 с), ≈ 20 МБ при 1 КБ (реш. 468). */
+        const val DEFAULT_MAX_QUEUED_QOS0: Int = 20_000
     }
 }

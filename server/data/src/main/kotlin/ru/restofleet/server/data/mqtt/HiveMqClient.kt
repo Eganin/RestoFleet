@@ -46,6 +46,14 @@ class HiveMqClient(private val config: MqttConfig, trust: TrustManagerFactory?) 
 
     private val connectMessage: Mqtt5Connect = connectMessage(config)
 
+    private val resubscription = Resubscription(
+        subscribe = { filters ->
+            client.subscribe(subscribeRequest(filters)).thenApply { ack -> ack.reasonCodes.count { it.isError } }
+        },
+        connected = { client.state.isConnected },
+        onActive = { subscriptionsActive = true },
+    )
+
     private val client: Mqtt5AsyncClient = Mqtt5Client.builder()
         .identifier(config.clientId)
         .serverHost(config.host)
@@ -122,21 +130,10 @@ class HiveMqClient(private val config: MqttConfig, trust: TrustManagerFactory?) 
     private fun onConnected(context: com.hivemq.client.mqtt.lifecycle.MqttClientConnectedContext) {
         val sessionPresent = (context as? Mqtt5ClientConnectedContext)?.connAck?.isSessionPresent == true
         log.info { "MQTT connected, session present: $sessionPresent" }
-        val filters = subscriptions
-        if (filters.isEmpty()) return
         // Независимо от session present (V-1): брокер мог восстановить сессию без shared-подписок. Без ожидания —
-        // это колбэк потока HiveMQ; до SUBACK [isSubscribed] = false, и `/health` показывает брокер неготовым
-        client.subscribe(subscribeRequest(filters)).whenComplete { ack, error ->
-            val rejected = ack?.reasonCodes?.count { it.isError } ?: 0
-            when {
-                error != null -> log.error { "resubscribe failed: ${error.javaClass.simpleName}" }
-                rejected > 0 -> log.error { "resubscribe: SUBACK rejected $rejected of ${filters.size} filters" }
-                else -> {
-                    subscriptionsActive = true
-                    log.info { "MQTT resubscribed ${filters.size} filters" }
-                }
-            }
-        }
+        // это колбэк потока HiveMQ; до SUBACK [isSubscribed] = false, и `/health` показывает брокер неготовым.
+        // Отказ SUBACK повторяется по таймеру на том же соединении (остаток V-1, реш. 468)
+        resubscription.onConnected(subscriptions)
     }
 
     private fun subscribeRequest(filters: List<String>): Mqtt5Subscribe = Mqtt5Subscribe.builder()
@@ -157,7 +154,7 @@ class HiveMqClient(private val config: MqttConfig, trust: TrustManagerFactory?) 
             // Без подтверждения брокер передоставит сообщение при следующем подключении
             log.warn { "no ingest handler: message on $topic left unacknowledged" }
         } else {
-            handler(InboundMessage(topic, publish.payloadAsBytes) { acknowledge(publish) })
+            handler(InboundMessage(topic, publish.payloadAsBytes, publish.qos.code) { acknowledge(publish) })
         }
     }
 

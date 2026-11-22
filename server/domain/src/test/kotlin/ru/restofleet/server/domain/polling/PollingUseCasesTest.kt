@@ -69,6 +69,16 @@ class PollingUseCasesTest {
         assertThat(w.cache.entries).isEmpty()
     }
 
+    // R-7: неизвестный deviceId проходит ту же bcrypt-проверку, фиктивный хэш считается один раз
+    @Test
+    fun unknownDeviceCostsOneBcryptLikeAKnownOne() = runTest {
+        assertThat(auth("d-unknown", "secret")).isEqualTo(Outcome.Failure(ServerError.Unauthorized))
+        assertThat(auth("d-other", "secret")).isEqualTo(Outcome.Failure(ServerError.Unauthorized))
+
+        assertThat(w.hasher.verifies).isEqualTo(2)
+        assertThat(w.hasher.hashes).isEqualTo(1)
+    }
+
     @Test
     fun decommissionCommittedDuringBcryptIsNeitherAuthenticatedNorCached() = runTest {
         w.device()

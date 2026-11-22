@@ -45,6 +45,38 @@ class IngestPipelineTest {
     ) =
         IngestPipeline(processor, config, metrics, isTransient, timeSource = testScheduler.timeSource)
 
+    // Остаток R-1/R-2 (реш. 426): живая телеметрия QoS 0 при стоящей БД не копится в памяти без предела
+    @Test
+    fun `qos 0 over the queue limit is dropped with a counter, qos 1 is always queued`() = runTest {
+        val limited = IngestPipeline(
+            Recorder(), config.copy(maxQueuedQos0 = 2), metrics, { false }, timeSource = testScheduler.timeSource,
+        )
+        val live = (1..4).map { n ->
+            val acks = AtomicInteger()
+            acks to InboundMessage("t", "q0-$n".toByteArray(), qos = 0) { acks.incrementAndGet() }
+        }
+        val buffered = (1..3).map { Msg("q1-$it") }
+
+        live.forEach { limited.offer(it.second) }
+        buffered.forEach { limited.offer(it.inbound) }
+
+        assertThat(metrics.overflow.get()).isEqualTo(2)
+        // Отброшенные QoS 0 подтверждены сразу (для QoS 0 это ничего не шлёт брокеру), остальные ждут обработки
+        assertThat(live.map { it.first.get() }).containsExactly(0, 0, 1, 1).inOrder()
+        assertThat(metrics.received.get()).isEqualTo(7)
+
+        val job = launch { limited.run() }
+        runCurrent()
+        advanceTimeBy(1_000)
+        runCurrent()
+        // Очередь разобрана — предел снова свободен
+        limited.offer(InboundMessage("t", "q0-5".toByteArray(), qos = 0) {})
+        limited.offer(InboundMessage("t", "q0-6".toByteArray(), qos = 0) {})
+        assertThat(metrics.overflow.get()).isEqualTo(2)
+        assertThat(buffered.map { it.acks.get() }).containsExactly(1, 1, 1)
+        job.cancel()
+    }
+
     @Test
     fun `batch closes at batchSize and the rest waits for its own window`() = runTest {
         val recorder = Recorder()

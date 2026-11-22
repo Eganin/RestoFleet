@@ -54,11 +54,20 @@ internal class BrokerAclAndPublisherTest : BrokerTest() {
         val toDevice = assertFailsWith<Mqtt5PubAckException> {
             device.publishQos1(Topics.cmdReq(other), """{"cmdId":"c-x","type":"reboot"}""")
         }
+        // R-11 (P5): писать в свои `shadow/desired` и `cmd/req` может только бэкенд
+        val ownDesired = assertFailsWith<Mqtt5PubAckException> {
+            device.publishQos1(Topics.shadowDesired(me), """{"version":99,"state":{}}""", retain = true)
+        }
+        val ownCommand = assertFailsWith<Mqtt5PubAckException> {
+            device.publishQos1(Topics.cmdReq(me), """{"cmdId":"c-self","type":"reboot"}""")
+        }
 
         assertThat(own.error.isPresent).isFalse()
         assertThat(received.poll(5, TimeUnit.SECONDS)!!.topic).isEqualTo(Topics.telemetry(me))
         assertThat(foreign.mqttMessage.reasonCode).isEqualTo(Mqtt5PubAckReasonCode.NOT_AUTHORIZED)
         assertThat(toDevice.mqttMessage.reasonCode).isEqualTo(Mqtt5PubAckReasonCode.NOT_AUTHORIZED)
+        assertThat(ownDesired.mqttMessage.reasonCode).isEqualTo(Mqtt5PubAckReasonCode.NOT_AUTHORIZED)
+        assertThat(ownCommand.mqttMessage.reasonCode).isEqualTo(Mqtt5PubAckReasonCode.NOT_AUTHORIZED)
         assertThat(received.poll(1_500, TimeUnit.MILLISECONDS)).isNull()
     }
 

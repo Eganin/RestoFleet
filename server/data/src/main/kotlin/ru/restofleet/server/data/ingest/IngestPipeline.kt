@@ -12,6 +12,7 @@ import kotlinx.coroutines.selects.select
 import ru.restofleet.server.data.config.IngestConfig
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.TimeSource
 
 /**
@@ -22,7 +23,9 @@ import kotlin.time.TimeSource
  * разбирается по одному; сообщение, которое падает само по себе, подтверждается и считается «ядовитым» (иначе оно
  * блокировало бы поток навсегда; реш. 235).
  *
- * Окно пачки отмеряет [timeSource] (в тестах — виртуальное время).
+ * Сообщений QoS 0 в очереди не больше [IngestConfig.maxQueuedQos0]: лишние подтверждаются и отбрасываются со счётчиком
+ * `overflow` (остаток R-1/R-2) — при стоящей БД живая телеметрия не съедает память. Окно пачки отмеряет [timeSource]
+ * (в тестах — виртуальное время).
  */
 class IngestPipeline(
     private val processor: InboundProcessor,
@@ -33,12 +36,22 @@ class IngestPipeline(
 ) {
     private val log = KotlinLogging.logger {}
     private val queue = Channel<InboundMessage>(Channel.UNLIMITED)
+    private val queuedQos0 = AtomicInteger()
 
     /** Из потока HiveMQ: не блокирует. */
     fun offer(message: InboundMessage) {
         metrics.received.incrementAndGet()
+        if (message.qos == 0 && queuedQos0.incrementAndGet() > config.maxQueuedQos0) {
+            queuedQos0.decrementAndGet()
+            metrics.overflow.incrementAndGet()
+            message.ack()
+            return
+        }
         queue.trySend(message)
     }
+
+    private fun taken(message: InboundMessage): InboundMessage =
+        message.also { if (it.qos == 0) queuedQos0.decrementAndGet() }
 
     /** Цикл обработки; завершается отменой корутины (неподтверждённая пачка остаётся у брокера). */
     suspend fun run() {
@@ -57,7 +70,7 @@ class IngestPipeline(
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     internal suspend fun nextBatch(): List<InboundMessage> {
-        val batch = mutableListOf(queue.receive())
+        val batch = mutableListOf(taken(queue.receive()))
         val deadline = timeSource.markNow() + config.batchWindowMs.milliseconds
         while (batch.size < config.batchSize) {
             val remaining = -deadline.elapsedNow()
@@ -71,7 +84,7 @@ class IngestPipeline(
                     null
                 }
             if (next == null) break
-            batch += next
+            batch += taken(next)
         }
         return batch
     }

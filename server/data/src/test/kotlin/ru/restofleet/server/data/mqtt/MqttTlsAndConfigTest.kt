@@ -70,7 +70,7 @@ class MqttTlsAndConfigTest {
 
         assertThat(metrics.snapshot()).containsAtLeast("received", 5L, "poison", 1L, "undecodable", 0L)
         assertThat(metrics.snapshot().keys).containsExactly(
-            "received", "batches", "applied", "ignored", "undecodable", "dropped", "retries", "poison",
+            "received", "batches", "applied", "ignored", "undecodable", "dropped", "retries", "poison", "overflow",
         )
     }
 }

@@ -13,6 +13,9 @@ class IngestMetrics {
     val retries = AtomicLong()
     val poison = AtomicLong()
 
+    /** QoS 0, отброшенные сверх предела очереди (остаток R-1/R-2). */
+    val overflow = AtomicLong()
+
     fun snapshot(): Map<String, Long> = mapOf(
         "received" to received.get(),
         "batches" to batches.get(),
@@ -22,5 +25,6 @@ class IngestMetrics {
         "dropped" to dropped.get(),
         "retries" to retries.get(),
         "poison" to poison.get(),
+        "overflow" to overflow.get(),
     )
 }
