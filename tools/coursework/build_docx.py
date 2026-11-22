@@ -4,10 +4,14 @@
 Кроме сборки проверяет записку (рисунки, таблицы, ссылки на них, источники, [[TODO]], оформление)
 и печатает отчёт в stdout.
 
-Запуск (python-docx — из venv вне репозитория, см. tools/coursework/README.md):
+Запуск (python-docx и PyYAML — из venv вне репозитория, см. tools/coursework/README.md):
   /tmp/rf-venv/bin/python -I tools/coursework/build_docx.py            # сборка + отчёт
   /tmp/rf-venv/bin/python -I tools/coursework/build_docx.py --check    # только отчёт, без docx
   ... --strict  — код возврата 1, если в отчёте есть ошибки
+  ... --title FILE --work-type ТЕКСТ --topic ТЕКСТ --src DIR --out FILE — другой документ тем же генератором
+
+Титульный лист: реквизиты из tools/coursework/title.local.yaml (в .gitignore, образец — title.example.yaml),
+без файла — заглушки в квадратных скобках (решение 322).
 """
 import argparse
 import re
@@ -25,7 +29,25 @@ OUT = SRC / "RestoFleet-coursework.docx"
 
 TOPIC = ("Разработка системы мониторинга и удалённого управления Android-устройствами "
          "на основе протокола MQTT")
+WORK_TYPE = "КУРСОВАЯ РАБОТА"
 YEAR = "2026"
+
+# Титульный лист (решение 322). Реальные реквизиты — только в title.local.yaml (.gitignore: репозиторий публичный),
+# образец с этими же заглушками — title.example.yaml. Пустая строка в файле убирает строку титула.
+TITLE_LOCAL = Path(__file__).resolve().parent / "title.local.yaml"
+TITLE_DEFAULTS = {
+    "ministry": "[Наименование министерства]",
+    "university": "[Наименование вуза]",
+    "institute": "[Институт/факультет]",
+    "department": "[Кафедра]",
+    "discipline_label": "по дисциплине",
+    "discipline": "[Дисциплина]",
+    "student": "[ФИО студента]",
+    "group": "[группа]",
+    "supervisor": "[ФИО, должность]",
+    "city": "[Город]",
+    "year": YEAR,
+}
 
 # Геометрия страницы, мм (решение 217)
 PAGE_W, PAGE_H = 210, 297
@@ -38,6 +60,10 @@ CODE_PT = 10
 CODE_LINE_CHARS = int(TEXT_W_MM / 25.4 * 72 / (CODE_PT * 0.6))  # Courier New: ширина знака 0,6 кегля
 CODE_MAX_LINES = 12                                 # README: «короткие (до ~10 строк)»
 CHARS_PER_PAGE = 1800
+# Строка таблицы не разрывается между страницами (w:cantSplit), если по оценке в ней не больше стольких строк
+# текста (12 pt, одинарный интервал: ≈ 1/3 полосы); более высокие строки Word переносит, иначе на странице
+# остаётся большой пробел (решение 323)
+ROW_KEEP_MAX_LINES = 15
 
 STRUCTURAL = {"введение", "заключение", "список использованных источников", "содержание",
               "список сокращений и обозначений", "термины и определения", "реферат"}
@@ -450,9 +476,48 @@ def check_layout(docs, report):
                                                  f"знаков > {CODE_LINE_CHARS} — Word перенесёт её", "warn")
 
 
+def load_title(path, report):
+    """Реквизиты титула: заглушки TITLE_DEFAULTS, поверх — значения из YAML-файла, если он есть.
+
+    В отчёт идут только имена полей, не значения: в файле персональные данные.
+    """
+    title = dict(TITLE_DEFAULTS)
+    shown = path.relative_to(ROOT) if path.is_relative_to(ROOT) else path
+    if not path.exists():
+        report.add("Титульный лист", f"{shown} нет — заглушки в квадратных скобках "
+                                     f"(образец — tools/coursework/title.example.yaml)")
+        return title
+    try:
+        import yaml
+    except ImportError:
+        report.add("Титульный лист", "нет PyYAML для чтения титула: /tmp/rf-venv/bin/pip install PyYAML", "error")
+        return title
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as e:
+        mark = getattr(e, "problem_mark", None)
+        where = f", строка {mark.line + 1}" if mark is not None else ""
+        report.add("Титульный лист", f"{shown}: не YAML{where}", "error")
+        return title
+    if not isinstance(data, dict):
+        report.add("Титульный лист", f"{shown}: ожидался словарь «поле: значение»", "error")
+        return title
+    for key, value in data.items():
+        if key not in TITLE_DEFAULTS:
+            report.add("Титульный лист", f"{shown}: неизвестное поле «{key}» (допустимы: "
+                                         f"{', '.join(TITLE_DEFAULTS)})", "error")
+        elif value is None or isinstance(value, (dict, list, bool)):
+            report.add("Титульный лист", f"{shown}: поле «{key}» — нужна строка", "error")
+        else:
+            title[key] = str(value).strip()
+    left = [k for k, v in title.items() if v.startswith("[")]
+    report.add("Титульный лист", f"реквизиты из {shown}; заглушки остались: {', '.join(left) or 'нет'}")
+    return title
+
+
 # ---------- docx: низкоуровневые помощники ----------
 
-def build_docx(docs, figures, tables, out_path, report):
+def build_docx(docs, figures, tables, out_path, report, *, topic=TOPIC, work_type=WORK_TYPE, title=None):
     from docx import Document
     from docx.enum.style import WD_STYLE_TYPE
     from docx.enum.table import WD_TABLE_ALIGNMENT
@@ -674,7 +739,8 @@ def build_docx(docs, figures, tables, out_path, report):
             cs.set(qn("w:val"), "15")
 
     cp = doc.core_properties
-    cp.title, cp.subject, cp.author, cp.last_modified_by = TOPIC, "Курсовая работа", "", ""
+    # автор не пишется: реквизиты титула — персональные данные, свойства файла видны при передаче docx
+    cp.title, cp.subject, cp.author, cp.last_modified_by = topic, work_type.capitalize(), "", ""
     cp.language, cp.comments, cp.keywords = "ru-RU", "", "MQTT, IoT, Android"
 
     # --- inline-разметка ---
@@ -701,22 +767,28 @@ def build_docx(docs, figures, tables, out_path, report):
             add_runs(p, text, **kw)
         return p
 
-    # --- титульный лист (только поля-заглушки, решение 217) ---
-    for line in ("[Наименование министерства]", "[Наименование вуза]", "[Институт/факультет]", "[Кафедра]"):
-        paragraph("RF Title", line)
-    p = paragraph("RF Title", "КУРСОВАЯ РАБОТА", bold=True, size=16)
+    # --- титульный лист: реквизиты из title.local.yaml или заглушки (решения 217, 322) ---
+    t = dict(TITLE_DEFAULTS, **(title or {}))
+    for key in ("ministry", "university", "institute", "department"):
+        if t[key]:
+            paragraph("RF Title", t[key])
+    p = paragraph("RF Title", work_type, bold=True, size=16)
     p.paragraph_format.space_before = Pt(170)
     p.paragraph_format.space_after = Pt(12)
-    paragraph("RF Title", "по дисциплине [Дисциплина]").paragraph_format.space_after = Pt(12)
-    paragraph("RF Title", f"на тему «{TOPIC}»", bold=True)
-    for k, line in enumerate(("[Студент: ФИО, группа]", "[Руководитель: ФИО, должность]")):
+    line = f"{t['discipline_label']} {t['discipline']}".strip()
+    if line:
+        paragraph("RF Title", line).paragraph_format.space_after = Pt(12)
+    paragraph("RF Title", f"на тему «{topic}»", bold=True)
+    people = [f"Студент: {t['student']}" + (f", группа {t['group']}" if t["group"] else ""),
+              f"Руководитель: {t['supervisor']}"]
+    for k, line in enumerate(people):
         p = paragraph("RF Title", line)
         p.alignment = WD_ALIGN_PARAGRAPH.LEFT
         p.paragraph_format.left_indent = Cm(8.5)
         p.paragraph_format.line_spacing = 1.5
         if k == 0:
             p.paragraph_format.space_before = Pt(150)
-    p = paragraph("RF Title", f"[Город] {YEAR}")
+    p = paragraph("RF Title", " ".join(x for x in (t["city"], t["year"]) if x))
     put(p._p.get_or_add_pPr(), "framePr", PPR_ORDER, w=TEXT_W_TWIPS, wrap="around", vAnchor="margin",
         hAnchor="margin", xAlign="center", yAlign="bottom")
 
@@ -808,6 +880,17 @@ def build_docx(docs, figures, tables, out_path, report):
         widths[-1] += total - sum(widths)
         return widths
 
+    def row_lines(row, widths):
+        """Оценка высоты строки таблицы в строках текста 12 pt: самая высокая ячейка, ≈ 115 twips на знак
+        Times и ≈ 145 на знак кода, поля ячейки ≈ 216 twips, запас 15 % на перенос по словам."""
+        lines = 1
+        for cell, w in zip(row, widths):
+            code = sum(len(span) - 2 for span in CODE_SPAN_RE.findall(cell))
+            text = len(plain_text(CODE_SPAN_RE.sub("", cell)))
+            need = (text * 115 + code * 145) * 1.15
+            lines = max(lines, -(-int(need) // max(1, w - 216)))
+        return lines
+
     def add_table(b):
         cap = b.caption.text if b.caption else ""
         body_par("RF Table Caption", f"Таблица {b.num} — {cap}" if cap else f"Таблица {b.num}")
@@ -824,7 +907,12 @@ def build_docx(docs, figures, tables, out_path, report):
             gc.set(qn("w:w"), str(w))
         for r_i, row in enumerate([b.header] + b.rows):
             tr = table.rows[r_i]
-            trpr = tr._tr.get_or_add_trPr()
+            trpr = tr._tr.get_or_add_trPr()        # CT_TrPr — xsd:choice, порядок дочерних не важен
+            if r_i == 0 or row_lines(row, widths) <= ROW_KEEP_MAX_LINES:
+                trpr.append(OxmlElement("w:cantSplit"))      # строка целиком на одной странице
+                counts["row_kept"] += 1
+            else:
+                counts["row_split"] += 1
             if r_i == 0:
                 trpr.append(OxmlElement("w:tblHeader"))      # шапка повторяется на новой странице
             for c in range(cols):
@@ -880,7 +968,8 @@ def build_docx(docs, figures, tables, out_path, report):
                 p.paragraph_format.space_after = Pt(6)
         pending_gap[0] = False
 
-    counts = {"heading": [0, 0, 0, 0], "table": 0, "figure": 0, "picture": 0, "placeholder": 0, "code": 0}
+    counts = {"heading": [0, 0, 0, 0], "table": 0, "figure": 0, "picture": 0, "placeholder": 0, "code": 0,
+              "row_kept": 0, "row_split": 0}
     for name, blocks in docs:
         sources_mode = False
         for b in blocks:
@@ -930,6 +1019,9 @@ def build_docx(docs, figures, tables, out_path, report):
     report.add("Сборка", f"заголовков: 1-го уровня — {h[1]}, 2-го — {h[2]}, 3-го — {h[3]}; таблиц — "
                          f"{counts['table']}; рисунков — {counts['figure']} (картинок {counts['picture']}, "
                          f"рамок {counts['placeholder']}); листингов — {counts['code']}")
+    report.add("Сборка", f"строки таблиц: шапка повторяется на каждой странице (tblHeader) у {counts['table']} "
+                         f"таблиц; не разрываются (cantSplit) — {counts['row_kept']}, могут переноситься "
+                         f"(выше {ROW_KEEP_MAX_LINES} строк текста по оценке) — {counts['row_split']}")
     return counts
 
 
@@ -1005,6 +1097,11 @@ def main():
     ap.add_argument("--out", type=Path, default=None, help=f"путь к docx (по умолчанию {OUT.relative_to(ROOT)})")
     ap.add_argument("--src", type=Path, default=SRC, help="каталог исходников (по умолчанию docs/coursework)")
     ap.add_argument("--strict", action="store_true", help="код возврата 1 при ошибках в отчёте")
+    ap.add_argument("--title", type=Path, default=TITLE_LOCAL,
+                    help=f"YAML с реквизитами титула (по умолчанию {TITLE_LOCAL.relative_to(ROOT)}; нет файла — "
+                         f"заглушки)")
+    ap.add_argument("--work-type", default=WORK_TYPE, help=f"вид работы на титуле (по умолчанию «{WORK_TYPE}»)")
+    ap.add_argument("--topic", default=TOPIC, help="тема работы (по умолчанию — тема курсовой)")
     args = ap.parse_args()
     SRC, IMG = args.src.resolve(), args.src.resolve() / "img"
     out = args.out or SRC / OUT.name
@@ -1033,18 +1130,21 @@ def main():
     check_todos(files, report)
     check_layout(docs, report)
     check_volume(docs, report)
+    title = load_title(args.title.resolve(), report)
 
     if not args.check:
         try:
-            build_docx(docs, figures, tables, out.resolve(), report)
+            build_docx(docs, figures, tables, out.resolve(), report, topic=args.topic.strip(),
+                       work_type=args.work_type.strip(), title=title)
         except ImportError:
             report.add("Сборка", "нет python-docx: /tmp/rf-venv/bin/pip install python-docx", "error")
         report.add("Оформление", "содержание и номера страниц в нём — поле TOC: Word обновит его при открытии "
-                                 "(запрос «Обновить поля»), иначе — F9 по содержанию")
+                                 "(w:updateFields: запрос «Обновить поля» при открытии), иначе — F9 по содержанию")
         report.add("Оформление", "переносы включены (autoHyphenation), расставляет их Word при вёрстке")
         report.add("Оформление", "«Продолжение таблицы N.M» над перенесённой частью таблицы (ГОСТ 7.32) "
-                                 "python-docx не ставит: страницы известны только Word — проверить при "
-                                 "финальной вёрстке; шапка таблиц повторяется автоматически")
+                                 "генератор не ставит: место разрыва страницы известно только после вёрстки "
+                                 "в Word (решение 324) — вписать при финальной вёрстке; шапка таблиц "
+                                 "повторяется автоматически")
     report.print()
     return 1 if args.strict and report.errors else 0
 

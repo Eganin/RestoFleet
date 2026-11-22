@@ -24,3 +24,5 @@ docs/coursework/RestoFleet-coursework.docx
 docs/coursework/*.pdf
 # Python bytecode of experiment tools
 tools/experiments/__pycache__/
+# Coursework title page with real personal data (decision 322); the template is tools/coursework/title.example.yaml
+tools/coursework/*.local.yaml
