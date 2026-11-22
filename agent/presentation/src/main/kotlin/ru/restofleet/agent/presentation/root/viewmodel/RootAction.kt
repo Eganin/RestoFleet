@@ -8,4 +8,5 @@ sealed interface RootAction : MviAction {
     data object LabOpened : RootAction
     data object LabClosed : RootAction
     data object SetupCompleted : RootAction
+    data object SetupRequested : RootAction
 }

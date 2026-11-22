@@ -115,6 +115,8 @@
     <string name="status_outbox">Буфер (outbox)</string>
     <string name="status_version">Версия агента</string>
     <string name="status_not_registered">Учётки нет: пройдите настройку</string>
+    <string name="status_open_setup">Пройти настройку</string>
+    <string name="value_restaurant">%1$s · %2$s</string>
     <string name="status_registration_unavailable">Учётка временно недоступна (Keystore), повтор подключения идёт сам</string>
     <string name="status_no_probes">Проверок пока нет: цели задаются тенью</string>
     <string name="status_probe_up">доступна</string>

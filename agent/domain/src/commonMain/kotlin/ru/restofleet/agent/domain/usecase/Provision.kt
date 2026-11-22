@@ -1,7 +1,9 @@
 package ru.restofleet.agent.domain.usecase
 
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import ru.restofleet.agent.domain.capability.Capabilities
 import ru.restofleet.agent.domain.error.ProvisionError
 import ru.restofleet.agent.domain.model.ProvisionedDevice
@@ -20,7 +22,8 @@ import kotlin.coroutines.cancellation.CancellationException
  * перезапускает MQTT-сессию). Если прежняя учётка — другого устройства (или её не прочитать), до записи новой [reset]
  * стирает тень, outbox и журнал команд прежнего (R-3, реш. 304); данные, накопленные до первой регистрации, остаются —
  * это то же физическое устройство. Отказы — [ProvisionError] без введённых значений; исключение порта — `failed` с
- * классом (канон 78), сбой сброса или записи — `storage_failed` (код уже погашен). Настоящая отмена и `Error`
+ * классом (канон 78), сбой сброса или записи — `storage_failed` (код уже погашен). Запись учётки после ответа
+ * бэкенда идёт под `NonCancellable` (R-12): отмена мастера в этот момент её не обрывает. Настоящая отмена и `Error`
  * пробрасываются.
  */
 class Provision(
@@ -36,7 +39,8 @@ class Provision(
             trimmed.isEmpty() -> Outcome.Failure(ProvisionError.EmptyCode)
             else -> when (val answer = isolated { api.provision(url, trimmed) }) {
                 is Outcome.Failure -> answer
-                is Outcome.Success -> persist(answer.value)
+                // R-12: код уже погашен — уход с мастера не должен оставить на сервере устройство-сироту
+                is Outcome.Success -> withContext(NonCancellable) { persist(answer.value) }
             }
         }
     }
@@ -49,6 +53,8 @@ class Provision(
             password = device.password,
             role = device.role,
             restaurantId = device.restaurantId,
+            restaurantCode = device.restaurantCode,
+            restaurantName = device.restaurantName,
         )
         val stored = isolated(onFailure = { ProvisionError.StorageFailed }) {
             if (belongsToAnotherDevice(device)) reset.clear()
@@ -58,7 +64,10 @@ class Provision(
         return when (stored) {
             is Outcome.Failure -> stored
             is Outcome.Success -> Outcome.Success(
-                Registration(device.deviceId, device.role, device.restaurantId, device.brokerHost, device.brokerPort),
+                Registration(
+                    device.deviceId, device.role, device.restaurantId, device.brokerHost, device.brokerPort,
+                    device.restaurantCode, device.restaurantName,
+                ),
             )
         }
     }

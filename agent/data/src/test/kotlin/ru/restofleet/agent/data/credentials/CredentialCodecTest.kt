@@ -34,7 +34,8 @@ class CredentialCodecTest {
 
     @Test
     fun unknownVersionIsMalformed() {
-        assertThat(CredentialCodec.decode(record(version = 3))).isNull()
+        assertThat(CredentialCodec.decode(record(version = 4))).isNull()
+        assertThat(CredentialCodec.decode(record(version = 0))).isNull()
     }
 
     @Test
@@ -42,6 +43,20 @@ class CredentialCodecTest {
         val s = settings().copy(role = DeviceRole.ASSEMBLY, restaurantId = "4b1c-r")
 
         assertThat(CredentialCodec.decode(CredentialCodec.encode(s))).isEqualTo(s)
+    }
+
+    // V-5: код и название ресторана хранятся с учёткой; запись агента К (версия 2) читается без них
+    @Test
+    fun restaurantCodeAndNameSurviveTheRoundTripAndVersionTwoIsStillRead() {
+        val s = settings().copy(
+            role = DeviceRole.KITCHEN, restaurantId = "r-1", restaurantCode = "MSK-001", restaurantName = "Тверская, 1",
+        )
+        assertThat(CredentialCodec.decode(CredentialCodec.encode(s))).isEqualTo(s)
+
+        val coursework = CredentialCodec.decode(record(version = 2, role = "kitchen", restaurantId = "r-1"))
+        assertThat(coursework!!.restaurantId).isEqualTo("r-1")
+        assertThat(coursework.restaurantCode).isNull()
+        assertThat(coursework.restaurantName).isNull()
     }
 
     @Test

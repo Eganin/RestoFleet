@@ -19,6 +19,7 @@ import ru.restofleet.server.domain.provisioning.ProvisioningCode
 import ru.restofleet.server.domain.provisioning.ProvisioningSettings
 import ru.restofleet.server.domain.provisioning.ProvisioningToken
 import ru.restofleet.server.domain.provisioning.TokenRepository
+import ru.restofleet.server.domain.restaurant.RestaurantRepository
 import ru.restofleet.server.domain.shadow.Shadow
 import ru.restofleet.server.domain.shadow.ShadowRepository
 import ru.restofleet.shared.kernel.Clock
@@ -30,7 +31,8 @@ import ru.restofleet.shared.kernel.Outcome
  * Обмен кода на учётку (FR-BE-02, FR-AG-10; реш. 210, 236). Одна транзакция:
  * 1. атомарное погашение кода ([TokenRepository.redeem]); неудача — [ServerError.TokenInvalid] /
  *    [ServerError.TokenUsed] / [ServerError.TokenExpired];
- * 2. устройство (`provisioned`, роль и ресторан из кода), bcrypt-хэш пароля (32 байта), тень с `desired` по умолчанию;
+ * 2. устройство (`provisioned`, роль и ресторан из кода), bcrypt-хэш пароля (32 байта), тень с `desired` по умолчанию
+ *    для роли (реш. 425, 463); в ответ — ещё код и название ресторана (V-5);
  * 3. клиент DynSec `clientid = deviceId` с ролью `device`.
  *
  * Отказ брокера на шаге 3 откатывает транзакцию: код не погашен, устройства нет — агент может повторить. Если брокер
@@ -40,6 +42,7 @@ import ru.restofleet.shared.kernel.Outcome
  */
 class ProvisionDevice(
     private val tokens: TokenRepository,
+    private val restaurants: RestaurantRepository,
     private val devices: DeviceRepository,
     private val credentials: CredentialRepository,
     private val shadows: ShadowRepository,
@@ -74,10 +77,13 @@ class ProvisionDevice(
                     is Outcome.Failure -> created
                     is Outcome.Success -> {
                         brokerClient = device.id
-                        Outcome.Success(
-                            ProvisionedDevice(device.id, password, token.restaurantId, token.role, settings.broker) to
-                                shadow,
+                        // V-5: код и название — для мастера и статуса агента (ресторан мог быть удалён — без них)
+                        val restaurant = restaurants.findById(token.restaurantId)
+                        val provisioned = ProvisionedDevice(
+                            device.id, password, token.restaurantId, token.role, settings.broker,
+                            restaurant?.code, restaurant?.name,
                         )
+                        Outcome.Success(provisioned to shadow)
                     }
                 }
             }

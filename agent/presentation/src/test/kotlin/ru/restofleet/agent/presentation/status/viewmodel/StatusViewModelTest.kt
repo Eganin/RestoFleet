@@ -103,6 +103,10 @@ class StatusViewModelTest {
                 override fun openLab() {
                     navigation += "lab"
                 }
+
+                override fun openSetup() {
+                    navigation += "setup"
+                }
             },
             labAvailable = labAvailable,
             io = dispatcher,
@@ -145,6 +149,7 @@ class StatusViewModelTest {
             StringSpec(R.string.value_raw, listOf("r-2")),
         ).inOrder()
         assertThat(ui.registrationNote).isNull()
+        assertThat(ui.canOpenSetup).isFalse()
         assertThat(ui.device.map { it.value }).containsExactly(
             StringSpec(R.string.status_mode_device_owner),
             StringSpec(R.string.value_raw, listOf("2")),
@@ -255,6 +260,55 @@ class StatusViewModelTest {
         f.vm.onIntent(User.Refresh)
         runCurrent()
         assertThat(f.ui().registrationNote).isEqualTo(StringSpec(R.string.status_registration_unavailable))
+        f.scope.cancel()
+    }
+
+    // V-5: ресторан — кодом и названием; только код — код; без них — идентификатор
+    @Test
+    fun restaurantIsShownByCodeAndName() = runTest {
+        val base = BrokerSettings("10.0.2.2", 8883, DeviceId.parse("d-3")!!, "pw", DeviceRole.KITCHEN, "r-2")
+        val f = Fixture(this, credentials = { base.copy(restaurantCode = "MSK-001", restaurantName = "Тверская, 1") })
+        runCurrent()
+        assertThat(f.ui().registration.last().value)
+            .isEqualTo(StringSpec(R.string.value_restaurant, listOf("MSK-001", "Тверская, 1")))
+
+        f.credentials = { base.copy(restaurantCode = "MSK-001") }
+        f.vm.onIntent(User.Refresh)
+        runCurrent()
+        assertThat(f.ui().registration.last().value).isEqualTo(StringSpec(R.string.value_raw, listOf("MSK-001")))
+
+        f.credentials = { base.copy(restaurantId = null) }
+        f.vm.onIntent(User.Refresh)
+        runCurrent()
+        assertThat(f.ui().registration.last().value).isEqualTo(StringSpec(R.string.value_none))
+        f.scope.cancel()
+    }
+
+    // R-13: учётки не оказалось (после сбоя Keystore) — статус ведёт в мастер; при рабочей учётке — нет
+    @Test
+    fun missingCredentialsOfferTheWizard() = runTest {
+        val f = Fixture(this, credentials = { null })
+        runCurrent()
+        assertThat(f.ui().canOpenSetup).isTrue()
+        f.vm.onIntent(User.OpenSetup)
+        assertThat(f.navigation).containsExactly("setup")
+
+        f.credentials = { throw IOException("keystore") }
+        f.vm.onIntent(User.Refresh)
+        runCurrent()
+        assertThat(f.ui().canOpenSetup).isFalse()
+        f.vm.onIntent(User.OpenSetup)
+        assertThat(f.navigation).containsExactly("setup")
+        f.scope.cancel()
+    }
+
+    @Test
+    fun registeredDeviceDoesNotOfferTheWizard() = runTest {
+        val f = Fixture(this)
+        runCurrent()
+        assertThat(f.ui().canOpenSetup).isFalse()
+        f.vm.onIntent(User.OpenSetup)
+        assertThat(f.navigation).isEmpty()
         f.scope.cancel()
     }
 

@@ -1,12 +1,12 @@
 package ru.restofleet.agent.data.di
 
 import android.os.Build
-import okhttp3.OkHttpClient
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.Module
 import org.koin.dsl.module
 import ru.restofleet.agent.data.outbox.LocalDeviceDataReset
 import ru.restofleet.agent.data.provisioning.OkHttpProvisioningApi
+import ru.restofleet.agent.data.provisioning.provisioningHttpClient
 import ru.restofleet.agent.domain.port.DeviceDataReset
 import ru.restofleet.agent.domain.port.ProvisioningApi
 import ru.restofleet.agent.domain.usecase.GetAgentStatus
@@ -14,10 +14,7 @@ import ru.restofleet.agent.domain.usecase.GetPermissions
 import ru.restofleet.agent.domain.usecase.GetRegistration
 import ru.restofleet.agent.domain.usecase.Provision
 import ru.restofleet.shared.protocol.dto.DeviceInfoDto
-import java.time.Duration
 
-private const val CONNECT_TIMEOUT_SEC = 10L
-private const val CALL_TIMEOUT_SEC = 30L
 private const val MAX_NAME = 100
 private const val MAX_OS_VERSION = 32
 private const val MAX_AGENT_VERSION = 64
@@ -34,14 +31,8 @@ val provisioningModule: Module = module {
         val context = androidContext()
         val version = context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
         OkHttpProvisioningApi(
-            // Код одноразовый: без повторов при обрыве и без редиректов
-            baseClient = OkHttpClient.Builder()
-                .connectTimeout(Duration.ofSeconds(CONNECT_TIMEOUT_SEC))
-                .callTimeout(Duration.ofSeconds(CALL_TIMEOUT_SEC))
-                .retryOnConnectionFailure(false)
-                .followRedirects(false)
-                .followSslRedirects(false)
-                .build(),
+            // Код одноразовый: без повторов при обрыве и без редиректов (R-17)
+            baseClient = provisioningHttpClient(),
             trust = get(),
             device = DeviceInfoDto(
                 model = Build.MODEL.orEmpty().take(MAX_NAME),

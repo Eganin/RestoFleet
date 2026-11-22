@@ -33,6 +33,7 @@ class StatusUiStateMapper {
             permissions = permissionRows(status?.granted),
             probes = status?.probes.orEmpty().map(::probeRow),
             labAvailable = session.labAvailable,
+            canOpenSetup = status?.registration == RegistrationState.NotRegistered,
         )
     }
 

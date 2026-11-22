@@ -31,6 +31,12 @@ class RootReducer : Reducer<RootAction, RootSession> {
         } else {
             state
         }
+        // R-13: учётки не оказалось после старта (Keystore был недоступен) — мастер со статуса
+        RootAction.SetupRequested -> if (state.screen == AgentScreen.STATUS) {
+            state.copy(screen = AgentScreen.SETUP)
+        } else {
+            state
+        }
     }
 
     private fun startScreen(registration: RegistrationState): AgentScreen = when (registration) {

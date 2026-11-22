@@ -6,4 +6,7 @@ import ru.restofleet.agent.presentation.common.SettingsTarget
 interface IStatusRouter {
     fun openSettings(target: SettingsTarget)
     fun openLab()
+
+    /** Учётки нет (R-13: например, Keystore её не вернул и запись стёрта) — в мастер регистрации. */
+    fun openSetup()
 }

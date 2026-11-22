@@ -49,6 +49,8 @@ class AgentRouterTest {
         root.onIntent(ru.restofleet.agent.presentation.root.viewmodel.RootIntent.User.Back)
         router.openStatus()
         assertThat(root.uiState.value.screen).isEqualTo(AgentScreen.STATUS)
+        router.openSetup()
+        assertThat(root.uiState.value.screen).isEqualTo(AgentScreen.SETUP)
     }
 
     @Test

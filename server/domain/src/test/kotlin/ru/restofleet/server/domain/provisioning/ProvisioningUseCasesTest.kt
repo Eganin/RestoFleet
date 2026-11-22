@@ -23,8 +23,8 @@ class ProvisioningUseCasesTest {
         w.tokens, w.restaurants, w.secrets, w.digest, w.provisioningSettings, w.tx, w.ids, w.clock,
     )
     private val provision = ProvisionDevice(
-        w.tokens, w.devices, w.credentials, w.shadows, w.broker, w.publisher, w.hasher, w.secrets, w.digest,
-        w.provisioningSettings, w.tx, w.ids, w.clock,
+        w.tokens, w.restaurants, w.devices, w.credentials, w.shadows, w.broker, w.publisher, w.hasher, w.secrets,
+        w.digest, w.provisioningSettings, w.tx, w.ids, w.clock,
     )
 
     private fun request(code: String) = ProvisionRequest(code, World.INFO, "1.2.0")
@@ -77,6 +77,9 @@ class ProvisioningUseCasesTest {
         assertThat(result.role).isEqualTo(DeviceRole.HALL)
         assertThat(result.restaurantId).isEqualTo(RestaurantId("r-1"))
         assertThat(result.broker).isEqualTo(w.provisioningSettings.broker)
+        // V-5: мастер агента показывает код и название, а не UUID
+        assertThat(result.restaurantCode).isEqualTo("MSK-001")
+        assertThat(result.restaurantName).isEqualTo("Ресторан MSK-001")
         assertThat(result.toString()).doesNotContain(result.password)
 
         val device = w.db.state.devices.getValue(id)
@@ -162,8 +165,8 @@ class ProvisioningUseCasesTest {
         val kitchen = ShadowDocument(DefaultDesired.document.fields + ("watchedApps" to apps))
         val settings = w.provisioningSettings.copy(desired = DesiredDefaults(mapOf(DeviceRole.HALL to kitchen)))
         val byRole = ProvisionDevice(
-            w.tokens, w.devices, w.credentials, w.shadows, w.broker, w.publisher, w.hasher, w.secrets, w.digest,
-            settings, w.tx, w.ids, w.clock,
+            w.tokens, w.restaurants, w.devices, w.credentials, w.shadows, w.broker, w.publisher, w.hasher, w.secrets,
+            w.digest, settings, w.tx, w.ids, w.clock,
         )
         issueOne()
         val device = (byRole(request("CODE1")) as Outcome.Success).value

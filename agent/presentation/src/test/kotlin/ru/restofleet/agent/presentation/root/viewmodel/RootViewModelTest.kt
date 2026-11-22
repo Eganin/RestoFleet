@@ -100,6 +100,19 @@ class RootViewModelTest {
         assertThat(vm.uiState.value.handlesBack).isFalse()
     }
 
+    // R-13: статус открыт при недоступном Keystore, позже учётки не оказалось — мастер по запросу статуса
+    @Test
+    fun statusLeadsToTheWizardWhenSetupIsRequired() = runTest {
+        val vm = viewModel { throw IOException("keystore") }
+        runCurrent()
+        assertThat(vm.uiState.value.screen).isEqualTo(AgentScreen.STATUS)
+
+        vm.onIntent(External.SetupRequired)
+
+        assertThat(vm.uiState.value.screen).isEqualTo(AgentScreen.SETUP)
+        assertThat(RootReducer().reduce(RootAction.SetupRequested, RootSession())).isEqualTo(RootSession())
+    }
+
     @Test
     fun labOpenedFromTheWizardReturnsToTheWizard() = runTest {
         val vm = viewModel { null }

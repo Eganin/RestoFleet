@@ -22,9 +22,13 @@ data class ProvisionResponseDto(
     val restaurantId: String,
     val role: String,
     val mqtt: MqttEndpointDto,
+    /** Код и название ресторана для мастера и статуса агента (V-5, П); агент К их не читает. */
+    val restaurantCode: String? = null,
+    val restaurantName: String? = null,
 ) {
     override fun toString(): String =
-        "ProvisionResponseDto(deviceId=$deviceId, password=***, restaurantId=$restaurantId, role=$role, mqtt=$mqtt)"
+        "ProvisionResponseDto(deviceId=$deviceId, password=***, restaurantId=$restaurantId, role=$role, mqtt=$mqtt, " +
+            "restaurantCode=$restaurantCode)"
 }
 
 /** Адрес брокера для агента (TLS 8883). */

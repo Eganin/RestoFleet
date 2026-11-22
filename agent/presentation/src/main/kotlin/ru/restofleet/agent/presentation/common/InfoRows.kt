@@ -26,12 +26,27 @@ internal fun DeviceRole?.toStringSpec(): StringSpec = StringSpec(
     },
 )
 
-/** Строки регистрации без секрета: устройство, роль, ресторан (у учётки `DEV_CONFIG` его нет — прочерк). */
+/**
+ * Строки регистрации без секрета: устройство, роль, ресторан — код и название (V-5); без них (учётка агента К) —
+ * идентификатор, у учётки `DEV_CONFIG` — прочерк.
+ */
 internal fun Registration.toRows(): List<InfoRow> = listOf(
     InfoRow(StringSpec(R.string.label_device_id), raw(deviceId.value)),
     InfoRow(StringSpec(R.string.label_role), role.toStringSpec()),
-    InfoRow(StringSpec(R.string.label_restaurant), restaurantId?.let(::raw) ?: StringSpec(R.string.value_none)),
+    InfoRow(StringSpec(R.string.label_restaurant), restaurantLabel()),
 )
+
+private fun Registration.restaurantLabel(): StringSpec {
+    val code = restaurantCode
+    val name = restaurantName
+    val id = restaurantId
+    return when {
+        code != null && name != null -> StringSpec(R.string.value_restaurant, listOf(code, name))
+        code != null -> raw(code)
+        id != null -> raw(id)
+        else -> StringSpec(R.string.value_none)
+    }
+}
 
 /** Три разрешения мастера (FR-AG-04); [granted] = `null` — ещё не прочитаны или источник упал. */
 internal fun permissionRows(granted: Set<Permission>?): List<PermissionRow> =

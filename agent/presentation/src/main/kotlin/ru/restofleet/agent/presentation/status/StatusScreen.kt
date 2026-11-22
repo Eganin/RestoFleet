@@ -57,6 +57,9 @@ fun StatusScreen(uiState: StatusUiState, onIntent: (StatusIntent) -> Unit) {
         }
         Section(R.string.status_section_device) {
             uiState.registrationNote?.let { Text(it.text(), style = MaterialTheme.typography.bodyMedium) }
+            if (uiState.canOpenSetup) {
+                TextButton(onClick = { onIntent(User.OpenSetup) }) { Text(stringResource(R.string.status_open_setup)) }
+            }
             uiState.registration.forEach { InfoRowView(it) }
             uiState.device.forEach { InfoRowView(it) }
         }

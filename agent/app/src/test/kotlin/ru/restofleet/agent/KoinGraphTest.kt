@@ -225,6 +225,8 @@ class KoinGraphTest {
             override fun openSettings(target: SettingsTarget) = Unit
             override fun openStatus() = Unit
             override fun openLab() = Unit
+
+            override fun openSetup() = Unit
         }
 
         assertThat(koin.get<RunProbes>()).isNotNull()

@@ -2,12 +2,16 @@ package ru.restofleet.agent.domain.usecase
 
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import ru.restofleet.agent.domain.error.ProvisionError
 import ru.restofleet.agent.domain.model.DeviceRole
 import ru.restofleet.agent.domain.model.ProvisionedDevice
 import ru.restofleet.agent.domain.model.Registration
+import ru.restofleet.agent.domain.model.RegistrationState
 import ru.restofleet.agent.domain.port.BrokerSettings
 import ru.restofleet.agent.domain.port.CredentialStore
 import ru.restofleet.agent.domain.port.DeviceDataReset
@@ -34,12 +38,14 @@ class ProvisionTest {
     }
     private val saved = mutableListOf<BrokerSettings>()
     private var saveFailure: Exception? = null
+    private var saveGate: CompletableDeferred<Unit>? = null
     private var loadFailure: Exception? = null
 
     /** Порядок побочных эффектов: сброс данных прежнего устройства и запись учётки. */
     private val effects = mutableListOf<String>()
     private val store = object : CredentialStore {
         override suspend fun save(s: BrokerSettings) {
+            saveGate?.await()
             saveFailure?.let { throw it }
             saved += s
             effects += "save ${s.deviceId.value}"
@@ -166,6 +172,35 @@ class ProvisionTest {
 
         assertThat(sut("https://h", "c")).isEqualTo(Outcome.Failure(ProvisionError.StorageFailed))
         assertThat(saved.map { it.deviceId.value }).containsExactly("dev-emu-36")
+    }
+
+    // V-5: код и название ресторана доходят до учётки и регистрации
+    @Test
+    fun restaurantCodeAndNameAreStoredWithTheCredentials() = runTest {
+        answer = Outcome.Success(device.copy(restaurantCode = "MSK-001", restaurantName = "Тверская, 1"))
+
+        val registration = (sut("https://h", "c") as Outcome.Success).value
+
+        assertThat(registration.restaurantCode).isEqualTo("MSK-001")
+        assertThat(registration.restaurantName).isEqualTo("Тверская, 1")
+        assertThat(saved.single().restaurantCode).isEqualTo("MSK-001")
+        assertThat(GetRegistration(store)()).isEqualTo(RegistrationState.Registered(registration))
+    }
+
+    // R-12: мастер закрыли после ответа 201 — учётка всё равно записана, устройство на сервере не осиротело
+    @Test
+    fun cancellingAfterTheBackendAnsweredStillStoresTheCredentials() = runTest {
+        val gate = CompletableDeferred<Unit>().also { saveGate = it }
+        val wizard = launch { sut("https://h", "c") }
+        runCurrent()
+        assertThat(saved).isEmpty()
+
+        wizard.cancel()
+        gate.complete(Unit)
+        runCurrent()
+
+        assertThat(wizard.isCancelled).isTrue()
+        assertThat(saved.single().deviceId.value).isEqualTo("d-1f2e")
     }
 
     @Test

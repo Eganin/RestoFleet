@@ -29,4 +29,6 @@ class AgentRouter(
     override fun openStatus() = root.onIntent(RootIntent.External.SetupCompleted)
 
     override fun openLab() = root.onIntent(RootIntent.User.OpenLab)
+
+    override fun openSetup() = root.onIntent(RootIntent.External.SetupRequired)
 }

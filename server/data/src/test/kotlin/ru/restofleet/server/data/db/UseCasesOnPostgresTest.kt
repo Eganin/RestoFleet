@@ -48,7 +48,7 @@ internal class UseCasesOnPostgresTest : PostgresTest() {
         tokens, restaurants, secrets, Sha256Digest, settings, TestDatabase.tx, ids, clock,
     )
     private val provision = ProvisionDevice(
-        tokens, devices, credentials, shadows, broker, broker, hasher, secrets, Sha256Digest, settings,
+        tokens, restaurants, devices, credentials, shadows, broker, broker, hasher, secrets, Sha256Digest, settings,
         TestDatabase.tx, ids, clock,
     )
     private val info = DeviceInfo("Pixel 9a", "Google", "16", 36)

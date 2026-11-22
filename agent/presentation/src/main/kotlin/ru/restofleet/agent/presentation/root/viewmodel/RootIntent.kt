@@ -14,5 +14,8 @@ sealed interface RootIntent : MviIntent {
     sealed interface External : RootIntent {
         /** Мастер завершён: учётка сохранена. */
         data object SetupCompleted : External
+
+        /** Экран статуса: учётки нет, нужна регистрация (R-13). */
+        data object SetupRequired : External
     }
 }

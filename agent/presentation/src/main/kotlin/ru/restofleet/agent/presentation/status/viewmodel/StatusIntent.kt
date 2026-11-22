@@ -8,6 +8,9 @@ sealed interface StatusIntent : MviIntent {
         data object Refresh : User
         data class OpenSettings(val target: SettingsTarget) : User
         data object OpenLab : User
+
+        /** Пройти регистрацию: доступно, только когда учётки нет (R-13). */
+        data object OpenSetup : User
     }
 
     sealed interface External : StatusIntent {

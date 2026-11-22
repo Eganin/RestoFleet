@@ -95,4 +95,6 @@ private fun ProvisionedDevice.toDto() = ProvisionResponseDto(
     restaurantId = restaurantId.value,
     role = role.code,
     mqtt = MqttEndpointDto(broker.host, broker.port),
+    restaurantCode = restaurantCode,
+    restaurantName = restaurantName,
 )

@@ -12,6 +12,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
+import ru.restofleet.agent.domain.model.RegistrationState
 import ru.restofleet.agent.domain.usecase.GetAgentStatus
 import ru.restofleet.agent.presentation.common.guarded
 import ru.restofleet.agent.presentation.status.api.IStatusRouter
@@ -50,6 +51,7 @@ class StatusViewModel(
             User.Refresh -> scope.launch { load() }
             is User.OpenSettings -> router.openSettings(intent.target)
             User.OpenLab -> if (state.labAvailable) router.openLab()
+            User.OpenSetup -> if (state.status?.registration == RegistrationState.NotRegistered) router.openSetup()
             External.Shown -> if (polling?.isActive != true) {
                 polling = scope.launch {
                     while (isActive) {

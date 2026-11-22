@@ -3,5 +3,7 @@
   "password": "EXAMPLE-not-a-real-secret-0000000000000",
   "restaurantId": "r-msk-001",
   "role": "kitchen",
-  "mqtt": { "host": "10.0.2.2", "port": 8883 }
+  "mqtt": { "host": "10.0.2.2", "port": 8883 },
+  "restaurantCode": "MSK-001",
+  "restaurantName": "Тверская, 1"
 }

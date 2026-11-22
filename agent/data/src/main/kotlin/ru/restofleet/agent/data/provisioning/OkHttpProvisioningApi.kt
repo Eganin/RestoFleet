@@ -98,11 +98,19 @@ class OkHttpProvisioningApi(
         val valid = id != null && role != null && HOST.matches(dto.mqtt.host) && dto.mqtt.port in PORTS &&
             dto.password.isNotEmpty() && dto.restaurantId.isNotBlank()
         return if (valid) {
-            Outcome.Success(ProvisionedDevice(id, dto.password, dto.restaurantId, role, dto.mqtt.host, dto.mqtt.port))
+            Outcome.Success(
+                ProvisionedDevice(
+                    id, dto.password, dto.restaurantId, role, dto.mqtt.host, dto.mqtt.port,
+                    // V-5: необязательные; пустые и слишком длинные — как отсутствующие (показ, не идентификатор)
+                    dto.restaurantCode.display(MAX_CODE), dto.restaurantName.display(MAX_NAME),
+                ),
+            )
         } else {
             Outcome.Failure(ProvisionError.InvalidResponse)
         }
     }
+
+    private fun String?.display(max: Int): String? = this?.trim()?.takeIf { it.isNotEmpty() && it.length <= max }
 
     private fun refusal(response: Response): ProvisionError {
         val serverCode = errorCode(response)
@@ -164,6 +172,10 @@ class OkHttpProvisioningApi(
         const val HTTP_SERVER_ERROR = 500
         const val TIMEOUT = "timeout"
         const val MAX_CAUSE_DEPTH = 8
+
+        /** Пределы показа кода и названия ресторана (V-5): у бэкенда 32 и 200 символов. */
+        const val MAX_CODE = 32
+        const val MAX_NAME = 200
         val UNAVAILABLE = setOf("broker_unavailable", "unavailable")
         val PORTS = 1..65_535
         val HOST = Regex("^[A-Za-z0-9._:-]{1,253}$")

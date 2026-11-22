@@ -43,6 +43,7 @@ class RootViewModel(
             User.OpenLab -> reduce(RootAction.LabOpened)
             User.Back -> reduce(RootAction.LabClosed)
             External.SetupCompleted -> reduce(RootAction.SetupCompleted)
+            External.SetupRequired -> reduce(RootAction.SetupRequested)
         }
     }
 

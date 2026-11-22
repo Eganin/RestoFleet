@@ -126,6 +126,40 @@ class OkHttpProvisioningApiTest {
         assertThat(provision(url = url)).isEqualTo(Outcome.Failure(ProvisionError.NoNetwork))
     }
 
+    // V-5: код и название ресторана — необязательные; пустые и длинные считаются отсутствующими
+    @Test
+    fun restaurantCodeAndNameAreTakenWhenPresent() {
+        val body = okBody.replace(""""extra":1""", """"restaurantCode":"MSK-001","restaurantName":" Тверская, 1 """")
+        respond(201, body)
+        val device = (provision() as Outcome.Success).value
+        assertThat(device.restaurantCode).isEqualTo("MSK-001")
+        assertThat(device.restaurantName).isEqualTo("Тверская, 1")
+
+        respond(201, okBody.replace(""""extra":1""", """"restaurantCode":" ","restaurantName":"${"x".repeat(201)}""""))
+        val blank = (provision() as Outcome.Success).value
+        assertThat(blank.restaurantCode).isNull()
+        assertThat(blank.restaurantName).isNull()
+    }
+
+    // R-17: одноразовый код не повторяется при обрыве и не уходит по редиректу
+    @Test
+    fun provisioningClientNeitherRetriesNorFollowsRedirects() {
+        val production = provisioningHttpClient()
+        assertThat(production.retryOnConnectionFailure).isFalse()
+        assertThat(production.followRedirects).isFalse()
+        assertThat(production.followSslRedirects).isFalse()
+        assertThat(production.callTimeoutMillis).isEqualTo(30_000)
+        assertThat(production.connectTimeoutMillis).isEqualTo(10_000)
+
+        respond(302, "", "Location" to "/api/v1/elsewhere")
+        respond(201, okBody)
+
+        val outcome = provision(api(base = production))
+
+        assertThat(outcome).isInstanceOf(Outcome.Failure::class.java)
+        assertThat(server.requestCount).isEqualTo(1)
+    }
+
     @Test
     fun stalledServerIsTimeout() {
         server.enqueue(MockResponse.Builder().onResponseStart(SocketEffect.Stall).build())

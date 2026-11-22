@@ -8,7 +8,8 @@ import ru.restofleet.agent.presentation.common.StringSpec
 
 /**
  * Экран статуса (FR-AG-05). [connectionBadge] и [connection] — состояние сессии, [connectionDetails] — причина
- * ошибки, `connId`, брокер; [registrationNote] — вместо строк регистрации, если учётки нет или она недоступна.
+ * ошибки, `connId`, брокер; [registrationNote] — вместо строк регистрации, если учётки нет или она недоступна;
+ * [canOpenSetup] — учётки нет, экран предлагает мастер (R-13).
  */
 @Immutable
 data class StatusUiState(
@@ -23,6 +24,7 @@ data class StatusUiState(
     val permissions: List<PermissionRow>,
     val probes: List<ProbeRow>,
     val labAvailable: Boolean,
+    val canOpenSetup: Boolean = false,
 )
 
 /** Последний результат цели проверки: `up`/`down`/нет данных и короткая деталь (HTTP-код и время или ошибка). */

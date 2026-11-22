@@ -177,6 +177,8 @@ class ShadowCommandProvisioningRoutesTest {
                 restaurantId,
                 DeviceRole.KITCHEN,
                 BrokerEndpoint("10.0.2.2", 8883),
+                "MSK-001",
+                "Тверская, 1",
             ),
         )
 
@@ -189,6 +191,8 @@ class ShadowCommandProvisioningRoutesTest {
         assertThat(dto.password).isEqualTo("device-password-xyz")
         assertThat(dto.role).isEqualTo("kitchen")
         assertThat(dto.mqtt.port).isEqualTo(8883)
+        assertThat(dto.restaurantCode).isEqualTo("MSK-001")
+        assertThat(dto.restaurantName).isEqualTo("Тверская, 1")
         assertThat(request.captured.code).isEqualTo("RFP-7K3M-9QXA-2WBD")
         assertThat(request.captured.deviceInfo).isEqualTo(DeviceInfo("sdk_gphone64_arm64", "Google", "16", 36))
     }

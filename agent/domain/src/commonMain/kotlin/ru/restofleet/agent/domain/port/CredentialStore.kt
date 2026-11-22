@@ -15,10 +15,13 @@ data class BrokerSettings(
     val password: String,
     val role: DeviceRole? = null,
     val restaurantId: String? = null,
+    /** Код и название ресторана для мастера и статуса (V-5). */
+    val restaurantCode: String? = null,
+    val restaurantName: String? = null,
 ) {
     override fun toString(): String =
         "BrokerSettings(host=$host, port=$port, deviceId=${deviceId.value}, password=***, role=$role, " +
-            "restaurantId=$restaurantId)"
+            "restaurantId=$restaurantId, restaurantCode=$restaurantCode)"
 }
 
 /**

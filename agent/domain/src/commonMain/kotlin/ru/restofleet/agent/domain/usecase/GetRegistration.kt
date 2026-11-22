@@ -17,7 +17,11 @@ class GetRegistration(private val store: CredentialStore) {
     suspend operator fun invoke(): RegistrationState =
         try {
             store.load()?.let { s ->
-                RegistrationState.Registered(Registration(s.deviceId, s.role, s.restaurantId, s.host, s.port))
+                RegistrationState.Registered(
+                    Registration(
+                        s.deviceId, s.role, s.restaurantId, s.host, s.port, s.restaurantCode, s.restaurantName,
+                    ),
+                )
             } ?: RegistrationState.NotRegistered
         } catch (e: CancellationException) {
             currentCoroutineContext().ensureActive()

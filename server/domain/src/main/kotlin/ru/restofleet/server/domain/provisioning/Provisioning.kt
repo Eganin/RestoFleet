@@ -54,17 +54,22 @@ data class ProvisionRequest(
 /** Адрес брокера, который агент получает при провижининге (TLS 8883; host — как его видит устройство). */
 data class BrokerEndpoint(val host: String, val port: Int)
 
-/** Учётка нового устройства: [password] отдаётся один раз (P9). [toString] пароль не раскрывает. */
+/**
+ * Учётка нового устройства: [password] отдаётся один раз (P9). [restaurantCode] и [restaurantName] — чтобы мастер и
+ * статус агента показывали ресторан по-человечески (V-5). [toString] пароль не раскрывает.
+ */
 data class ProvisionedDevice(
     val deviceId: DeviceId,
     val password: String,
     val restaurantId: RestaurantId,
     val role: DeviceRole,
     val broker: BrokerEndpoint,
+    val restaurantCode: String? = null,
+    val restaurantName: String? = null,
 ) {
     override fun toString(): String =
         "ProvisionedDevice(deviceId=${deviceId.value}, password=***, restaurantId=${restaurantId.value}, role=$role, " +
-            "broker=$broker)"
+            "broker=$broker, restaurantCode=$restaurantCode)"
 }
 
 /** Настройки провижининга из конфигурации `server:app`. */

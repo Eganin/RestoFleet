@@ -17,7 +17,8 @@ enum class DeviceRole(val code: String) {
 
 /**
  * Регистрация устройства без секрета — то, что видят мастер и экран статуса. [role] и [restaurantId] — `null`, если
- * учётку внесли отладочным `DEV_CONFIG` (без провижининга).
+ * учётку внесли отладочным `DEV_CONFIG` (без провижининга); [restaurantCode] и [restaurantName] (V-5) — `null` и у
+ * учёток агента К и бэкенда без этих полей.
  */
 data class Registration(
     val deviceId: DeviceId,
@@ -25,6 +26,8 @@ data class Registration(
     val restaurantId: String?,
     val brokerHost: String,
     val brokerPort: Int,
+    val restaurantCode: String? = null,
+    val restaurantName: String? = null,
 )
 
 /** Состояние регистрации для навигации: учётка есть, нет или хранилище временно не читается. */
@@ -48,8 +51,10 @@ data class ProvisionedDevice(
     val role: DeviceRole,
     val brokerHost: String,
     val brokerPort: Int,
+    val restaurantCode: String? = null,
+    val restaurantName: String? = null,
 ) {
     override fun toString(): String =
         "ProvisionedDevice(deviceId=${deviceId.value}, password=***, restaurantId=$restaurantId, role=$role, " +
-            "broker=$brokerHost:$brokerPort)"
+            "broker=$brokerHost:$brokerPort, restaurantCode=$restaurantCode)"
 }

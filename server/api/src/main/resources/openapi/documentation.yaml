@@ -1028,6 +1028,8 @@ components:
           properties:
             host: { type: string, example: 10.0.2.2 }
             port: { type: integer, example: 8883 }
+        restaurantCode: { type: string, description: "Код ресторана для мастера агента (V-5, П)" }
+        restaurantName: { type: string, description: "Название ресторана (V-5, П)" }
     AlertState:
       type: string
       enum: [open, acknowledged, resolved]
