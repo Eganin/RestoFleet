@@ -59,6 +59,7 @@ class SessionManager(
     private val endpoint: ServerEndpoint,
 ) : AccessTokenSource {
     private val mutex = Mutex()
+    @Volatile
     private var access: String? = null
     private var refreshToken: String? = null
     private var identity: Pair<String, String>? = null
