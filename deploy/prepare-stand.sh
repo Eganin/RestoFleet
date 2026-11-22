@@ -2,7 +2,7 @@
 # Подготовка стенда «с нуля» (КМ2b, план 2.4) — идемпотентно, секреты не печатаются:
 #   1. deploy/.env с паролем admin DynSec (если файла нет);
 #   2. CA и серверный сертификат (если нет или в SAN нет toxiproxy — тогда перевыпуск, CA не меняется);
-#   3. секреты deploy/out/{postgres-password,jwt-secret,admin-password} (600; существующие не трогаются);
+#   3. секреты deploy/out/{postgres-password,jwt-secret,admin-password,support-password} (600; существующие не трогаются);
 #   4. DynSec: admin (dynsec-init), брокер, роли device/backend-service и учётка backend (mosquitto/dynsec-dev.sh);
 #   5. образ бэкенда: ./gradlew :server:app:installDist + docker compose build backend.
 # После него весь стенд поднимается одной командой: docker compose --profile dev up -d --wait
@@ -51,6 +51,7 @@ secret() {
 secret postgres-password 32
 secret jwt-secret 48
 secret admin-password 24
+secret support-password 24
 
 # 4. DynSec
 docker compose --profile init run --rm dynsec-init >/dev/null

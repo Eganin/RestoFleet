@@ -149,7 +149,7 @@ services:
     profiles: ["dev"]
     command: ["seed", "--restaurants", "/seed/restaurants.yaml", "--users", "/seed/users.yaml"]
     restart: "no"
-    secrets: [postgres-password, admin-password]
+    secrets: [postgres-password, admin-password, support-password]
     volumes:
       - ./seed:/seed:ro
     depends_on:
@@ -232,6 +232,8 @@ secrets:
     file: ./out/jwt-secret
   admin-password:
     file: ./out/admin-password
+  support-password:
+    file: ./out/support-password
 
 networks:
   default: {}

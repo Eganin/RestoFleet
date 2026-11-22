@@ -22,8 +22,8 @@ internal class MigrationsAndTransactionsTest : PostgresTest() {
         assertThat(TestDatabase.migrated).isEqualTo(MIGRATIONS)
         assertThat(tables).containsExactly(
             "alert_conditions", "alerts", "commands", "device_credentials", "device_sessions", "devices", "events",
-            "probe_results", "probe_states", "provisioning_tokens", "refresh_tokens", "restaurants", "shadows",
-            "telemetry", "users",
+            "incidents", "probe_agg_1m", "probe_results", "probe_states", "provisioning_tokens", "refresh_tokens",
+            "restaurants", "shadows", "telemetry", "users",
         )
         assertThat(Migrations.migrate(TestDatabase.dataSource)).isEqualTo(0)
         assertThat(TestDatabase.scalar("SELECT max(version) FROM flyway_schema_history")).isEqualTo("$MIGRATIONS")
@@ -81,7 +81,7 @@ internal class MigrationsAndTransactionsTest : PostgresTest() {
     }
 
     private companion object {
-        /** V1 — курсовая, V2 — тревоги (ПМ2). */
-        const val MIGRATIONS = 2
+        /** V1 — курсовая, V2 — тревоги (ПМ2), V3 — инциденты и сессии (ПМ3). */
+        const val MIGRATIONS = 3
     }
 }

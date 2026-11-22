@@ -120,7 +120,7 @@ class AlertUseCasesTest {
         )
 
         assertThat(w.db.state.probeStates[d1 to "api"])
-            .isEqualTo(StoredProbeState(down = true, since = 31, lastResultAt = 30))
+            .isEqualTo(StoredProbeState(down = true, since = 31, lastResultAt = 30, error = "timeout"))
         assertThat(stored().single().subject).isEqualTo(AlertSubject(RuleId.R05, d1, "api"))
         ingest(DeviceDataBatch(probes = listOf(report.copy(ts = 60))))
         assertThat(w.db.state.probeStates.getValue(d1 to "api").lastResultAt).isEqualTo(60)

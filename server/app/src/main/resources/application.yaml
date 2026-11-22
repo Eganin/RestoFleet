@@ -28,12 +28,26 @@ provisioning:
   tokenTtlHours: 24
 polling:
   staleAfterMs: 90000
+# Сессии (реш. 417): refresh — 24 ч простоя, не дольше 7 сут со входа
 auth:
-  refreshTtlDays: 7
+  refreshIdleHours: 24
+  sessionMaxDays: 7
 # Пороги, которые проверяет бэкенд (реш. 415): R-06 — свободно < 500 МБ, закрытие от 600 МБ
 alerts:
   freeMbEnter: 500
   freeMbExit: 600
+# Классификатор инцидентов (реш. 409–412): P = 50 %, M = max(3, ⌈0,25·N⌉), окно 2 мин, тик 30 с
+incidents:
+  backendDownPct: 50
+  minRestaurants: 3
+  restaurantSharePct: 25
+  offlinePct: 50
+  primaryTarget: api
+  refTarget: ref
+  windowSec: 120
+  silentAfterHours: 24
+  resolveAfterTicks: 2
+  tickMs: 30000
 rateLimit:
   loginPerMinute: 10
   provisionPerMinute: 60

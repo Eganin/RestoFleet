@@ -6,6 +6,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.updateReturning
@@ -57,6 +58,8 @@ internal class ExposedRefreshTokenRepository : RefreshTokenRepository {
             it[createdAt] = token.createdAt.toTimestamp()
             it[expiresAt] = token.expiresAt.toTimestamp()
             it[revokedAt] = token.revokedAt?.toTimestamp()
+            it[familyId] = token.familyId.toUuid()
+            it[sessionExpiresAt] = token.sessionExpiresAt.toTimestamp()
         }
     }
 
@@ -83,6 +86,20 @@ internal class ExposedRefreshTokenRepository : RefreshTokenRepository {
         return RefreshTokensTable.update({ active }) { it[revokedAt] = now.toTimestamp() }
     }
 
+    override suspend fun revokeFamily(familyId: String, now: Long): Int {
+        val uuid = familyId.toUuidOrNull() ?: return 0
+        val active = (RefreshTokensTable.familyId eq uuid) and RefreshTokensTable.revokedAt.isNull()
+        return RefreshTokensTable.update({ active }) { it[revokedAt] = now.toTimestamp() }
+    }
+
+    override suspend fun hasActive(familyId: String, now: Long): Boolean {
+        val uuid = familyId.toUuidOrNull() ?: return false
+        return RefreshTokensTable.select(RefreshTokensTable.id).where {
+            (RefreshTokensTable.familyId eq uuid) and RefreshTokensTable.revokedAt.isNull() and
+                (RefreshTokensTable.expiresAt greater now.toTimestamp())
+        }.limit(1).any()
+    }
+
     private fun ResultRow.toToken() = RefreshToken(
         id = this[RefreshTokensTable.id].toString(),
         userId = this[RefreshTokensTable.userId].toString(),
@@ -90,5 +107,7 @@ internal class ExposedRefreshTokenRepository : RefreshTokenRepository {
         createdAt = this[RefreshTokensTable.createdAt].toMillis(),
         expiresAt = this[RefreshTokensTable.expiresAt].toMillis(),
         revokedAt = this[RefreshTokensTable.revokedAt]?.toMillis(),
+        familyId = this[RefreshTokensTable.familyId].toString(),
+        sessionExpiresAt = this[RefreshTokensTable.sessionExpiresAt].toMillis(),
     )
 }

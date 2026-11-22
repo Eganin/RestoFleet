@@ -7,7 +7,8 @@ import ru.restofleet.server.domain.alert.SummaryBuilder
 import ru.restofleet.server.domain.common.PageRequest
 import ru.restofleet.server.domain.common.TransactionRunner
 import ru.restofleet.server.domain.common.inTransaction
-import ru.restofleet.server.domain.device.DeviceRepository
+import ru.restofleet.server.domain.device.FleetQueries
+import ru.restofleet.server.domain.incident.IncidentRepository
 import ru.restofleet.server.domain.restaurant.RestaurantRepository
 import ru.restofleet.shared.kernel.Clock
 
@@ -16,16 +17,17 @@ import ru.restofleet.shared.kernel.Clock
  * по первым [MAX_ALERTS] незакрытым тревогам (защита от «шторма»: ответ остаётся быстрым).
  */
 class GetSummary(
-    private val devices: DeviceRepository,
+    private val fleet: FleetQueries,
     private val alerts: AlertRepository,
     private val restaurants: RestaurantRepository,
+    private val incidents: IncidentRepository,
     private val tx: TransactionRunner,
     private val clock: Clock,
 ) {
     suspend operator fun invoke(): Summary = tx.inTransaction {
-        val deviceCounts = devices.counts(offlineSince = clock.nowMillis() - HOUR_MS)
+        val deviceCounts = fleet.counts(offlineSince = clock.nowMillis() - HOUR_MS)
         val active = alerts.list(AlertFilter(activeOnly = true), PageRequest.of(limit = MAX_ALERTS))
-        SummaryBuilder.build(deviceCounts, active, restaurants.list(), counts = alerts.activeCounts())
+        SummaryBuilder.build(deviceCounts, active, restaurants.list(), incidents.open(), alerts.activeCounts())
     }
 
     private companion object {

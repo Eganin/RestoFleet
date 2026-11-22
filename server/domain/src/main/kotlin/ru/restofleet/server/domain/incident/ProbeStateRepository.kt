@@ -8,9 +8,12 @@ import ru.restofleet.shared.kernel.DeviceId
  * и время последнего результата пробы — свежесть окна. Только в транзакции.
  */
 interface ProbeStateRepository {
-    /** `probe_state` агента: [down] с момента [at]. */
-    suspend fun recordState(deviceId: DeviceId, target: String, down: Boolean, at: Long)
+    /** `probe_state` агента: [down] с момента [at]; [error] — класс ошибки (у `down`). */
+    suspend fun recordState(deviceId: DeviceId, target: String, down: Boolean, error: String?, at: Long)
 
     /** Время последнего результата по каждой цели отчётов; новая пара «устройство × цель» начинает с `up`. */
     suspend fun recordResults(reports: List<ProbeReport>)
+
+    /** Пары с результатом не раньше [since] (окно агрегатора). */
+    suspend fun fresh(since: Long): List<ProbeObservation>
 }

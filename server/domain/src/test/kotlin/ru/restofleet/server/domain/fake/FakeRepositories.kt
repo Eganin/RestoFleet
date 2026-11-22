@@ -18,6 +18,7 @@ import ru.restofleet.server.domain.device.DeviceFilter
 import ru.restofleet.server.domain.device.DeviceRepository
 import ru.restofleet.server.domain.device.DeviceStatus
 import ru.restofleet.server.domain.device.DeviceTransport
+import ru.restofleet.server.domain.device.FleetQueries
 import ru.restofleet.server.domain.ingest.DeviceEvent
 import ru.restofleet.server.domain.ingest.ProbeRecord
 import ru.restofleet.server.domain.ingest.ProbeReport
@@ -57,17 +58,6 @@ class FakeDeviceRepository(private val db: InMemoryDb) : DeviceRepository {
 
     override suspend fun findByIds(ids: Collection<DeviceId>): List<Device> =
         db.read { s -> ids.mapNotNull { s.devices[it] } }
-
-    override suspend fun counts(offlineSince: Long): DeviceCounts = db.read { s ->
-        val live = s.devices.values.filterNot { it.isDecommissioned }
-        DeviceCounts(
-            total = live.size,
-            online = live.count { it.status == DeviceStatus.ONLINE },
-            offline = live.count { it.status == DeviceStatus.OFFLINE },
-            offlineRecently = live.count { it.status == DeviceStatus.OFFLINE && (it.lastSeenAt ?: 0) >= offlineSince },
-            byRestaurant = live.groupingBy { it.restaurantId }.eachCount(),
-        )
-    }
 
     override suspend fun list(filter: DeviceFilter, page: PageRequest): List<Device> = db.read { s ->
         s.devices.values
@@ -135,6 +125,23 @@ class FakeDeviceRepository(private val db: InMemoryDb) : DeviceRepository {
     private fun change(id: DeviceId, transform: (Device) -> Device) = db.update { s ->
         val d = s.devices[id]
         if (d == null || d.isDecommissioned) s else s.copy(devices = s.devices + (id to transform(d)))
+    }
+}
+
+class FakeFleetQueries(private val db: InMemoryDb) : FleetQueries {
+    override suspend fun fleet(seenSince: Long): List<Device> = db.read { s ->
+        s.devices.values.filter { !it.isDecommissioned && (it.lastSeenAt ?: Long.MIN_VALUE) >= seenSince }
+    }
+
+    override suspend fun counts(offlineSince: Long): DeviceCounts = db.read { s ->
+        val live = s.devices.values.filterNot { it.isDecommissioned }
+        DeviceCounts(
+            total = live.size,
+            online = live.count { it.status == DeviceStatus.ONLINE },
+            offline = live.count { it.status == DeviceStatus.OFFLINE },
+            offlineRecently = live.count { it.status == DeviceStatus.OFFLINE && (it.lastSeenAt ?: 0) >= offlineSince },
+            byRestaurant = live.groupingBy { it.restaurantId }.eachCount(),
+        )
     }
 }
 
@@ -385,6 +392,17 @@ class FakeRefreshTokenRepository(private val db: InMemoryDb) : RefreshTokenRepos
 
     override suspend fun findByHash(tokenHash: String): RefreshToken? =
         db.read { s -> s.refreshTokens.values.firstOrNull { it.tokenHash == tokenHash } }
+
+    override suspend fun revokeFamily(familyId: String, now: Long): Int {
+        val active = db.read { s -> s.refreshTokens.values.filter { it.familyId == familyId && it.revokedAt == null } }
+        active.forEach { insert(it.copy(revokedAt = now)) }
+        return active.size
+    }
+
+    override suspend fun hasActive(familyId: String, now: Long): Boolean =
+        db.read { s ->
+            s.refreshTokens.values.any { it.familyId == familyId && it.revokedAt == null && it.expiresAt > now }
+        }
 
     override suspend fun revokeAll(userId: String, now: Long): Int {
         val active = db.read { s -> s.refreshTokens.values.filter { it.userId == userId && it.revokedAt == null } }

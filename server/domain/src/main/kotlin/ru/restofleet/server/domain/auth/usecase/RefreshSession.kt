@@ -12,8 +12,10 @@ import ru.restofleet.shared.kernel.Clock
 import ru.restofleet.shared.kernel.Outcome
 
 /**
- * `POST /auth/refresh` (реш. 216): refresh одноразовый — погашается и заменяется новой парой (ротация). Повторное
- * предъявление уже погашенного токена — признак кражи: отзываются все refresh-токены пользователя (реш. 239).
+ * `POST /auth/refresh` (реш. 216, 417): refresh одноразовый — погашается и заменяется новой парой того же семейства
+ * (ротация, не дольше потолка сессии). Повторное предъявление погашенного токена, у которого в семействе есть живой
+ * преемник, — признак кражи: отзываются все refresh-токены пользователя (реш. 239). Токен сессии, закрытой выходом,
+ * живого преемника не имеет — его повтор просто 401 (реш. 451).
  */
 class RefreshSession(
     private val refreshTokens: RefreshTokenRepository,
@@ -30,14 +32,19 @@ class RefreshSession(
             val now = clock.nowMillis()
             val consumed = refreshTokens.consume(hash, now)
             val user = consumed?.let { users.findById(it.userId) }
-            if (user == null) Outcome.Failure(ServerError.Unauthorized) else Outcome.Success(sessions.issue(user, now))
+            if (consumed == null || user == null) {
+                Outcome.Failure(ServerError.Unauthorized)
+            } else {
+                Outcome.Success(sessions.rotate(user, consumed, now))
+            }
         }
         if (rotated is Outcome.Failure) {
             // Отдельной транзакцией: отзыв не должен откатиться вместе с неудачной ротацией
             tx.inTransaction {
+                val now = clock.nowMillis()
                 refreshTokens.findByHash(hash)
-                    ?.takeIf { it.revokedAt != null }
-                    ?.let { refreshTokens.revokeAll(it.userId, clock.nowMillis()) }
+                    ?.takeIf { it.revokedAt != null && refreshTokens.hasActive(it.familyId, now) }
+                    ?.let { refreshTokens.revokeAll(it.userId, now) }
             }
         }
         return rotated

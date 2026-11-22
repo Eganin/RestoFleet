@@ -11,6 +11,8 @@ import ru.restofleet.server.domain.device.DeviceInfo
 import ru.restofleet.server.domain.device.DeviceRole
 import ru.restofleet.server.domain.device.DeviceStatus
 import ru.restofleet.server.domain.device.DeviceTransport
+import ru.restofleet.server.domain.incident.IncidentSettings
+import ru.restofleet.server.domain.incident.usecase.EvaluateIncidents
 import ru.restofleet.server.domain.ingest.usecase.IngestBatch
 import ru.restofleet.server.domain.polling.PollingSettings
 import ru.restofleet.server.domain.presence.usecase.HandleStatus
@@ -55,6 +57,15 @@ class World {
     val probeStates = FakeProbeStateRepository(db)
     val bus = FakeEventBus()
     var ruleParams = RuleParams()
+    val fleet = FakeFleetQueries(db)
+    val incidents = FakeIncidentRepository(db)
+    val history = FakeProbeHistory(db)
+    val lock = FakeJobLock()
+    var incidentSettings = IncidentSettings()
+
+    fun evaluateIncidents() = EvaluateIncidents(
+        fleet, probeStates, incidents, alerts, history, restaurants, lock, bus, tx, clock, ids, incidentSettings,
+    )
 
     fun alertProcessor() = AlertProcessor(alerts, conditions, devices, ids, ruleParams)
 

@@ -48,7 +48,7 @@ class IngestBatch(
             if (accepted.probes.isNotEmpty()) probeStates.recordResults(accepted.probes)
             accepted.events.forEach { event ->
                 (event.signal as? DeviceSignal.ProbeState)?.let {
-                    probeStates.recordState(event.deviceId, it.target, it.down, event.ts)
+                    probeStates.recordState(event.deviceId, it.target, it.down, it.error, event.ts)
                 }
             }
             changedAlerts = alertProcessor.process(ruleInputs(accepted))

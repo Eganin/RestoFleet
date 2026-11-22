@@ -23,6 +23,10 @@ import ru.restofleet.server.domain.common.PageRequest
 import ru.restofleet.server.domain.device.Device
 import ru.restofleet.server.domain.device.DeviceFilter
 import ru.restofleet.server.domain.device.DeviceStatus
+import ru.restofleet.server.domain.incident.Incident
+import ru.restofleet.server.domain.incident.IncidentEvidence
+import ru.restofleet.server.domain.incident.IncidentKind
+import ru.restofleet.server.domain.incident.IncidentThresholds
 import ru.restofleet.server.domain.ingest.ProbeReport
 import ru.restofleet.server.domain.ingest.ProbeResult
 import ru.restofleet.server.domain.ingest.TelemetrySnapshot
@@ -40,6 +44,16 @@ internal class AlertRepositoriesTest : PostgresTest() {
     private val sessions = ExposedSessionRepository()
     private val commands = ExposedCommandRepository()
 
+    /** Инцидент-родитель для подавленных тревог (внешний ключ V3). */
+    private fun givenIncident(): String {
+        val incident = Incident(
+            id = Samples.uuid(), kind = IncidentKind.BACKEND_LOCAL, target = "api", restaurants = emptyList(),
+            startedAt = T0, evidence = IncidentEvidence(T0, emptyList(), 0, IncidentThresholds(50, 3, 0)),
+        )
+        tx { ExposedIncidentRepository().insert(incident) }
+        return incident.id
+    }
+
     private fun alert(device: Device, rule: RuleId, openedAt: Long, target: String? = null) = Alert(
         id = Samples.uuid(), subject = AlertSubject(rule, device.id, target), restaurantId = device.restaurantId,
         state = AlertState.OPEN, openedAt = openedAt, details = mapOf("k" to "v"),
@@ -50,7 +64,7 @@ internal class AlertRepositoriesTest : PostgresTest() {
         val d = givenDevice()
         val a1 = alert(d, RuleId.R05, T0 + 1, target = "api")
         val a2 = alert(d, RuleId.R03, T0 + 2)
-        val suppressed = alert(d, RuleId.R05, T0 + 3, target = "kds").copy(parentIncidentId = Samples.uuid())
+        val suppressed = alert(d, RuleId.R05, T0 + 3, target = "kds").copy(parentIncidentId = givenIncident())
         tx { listOf(a1, a2, suppressed).forEach { alerts.insert(it) } }
 
         assertThat(tx { alerts.active(listOf(d.id)) }.toSet()).containsExactly(a1, a2, suppressed)
@@ -115,10 +129,10 @@ internal class AlertRepositoriesTest : PostgresTest() {
         val d = givenDevice()
         fun result(target: String) = ProbeResult(target, true, 204, null, 10, null, null, null, null)
         tx { probeStates.recordResults(listOf(ProbeReport(d.id, T0 + 10, listOf(result("api"), result("ref"))))) }
-        tx { probeStates.recordState(d.id, "api", down = true, at = T0 + 20) }
-        tx { probeStates.recordState(d.id, "api", down = true, at = T0 + 30) }
+        tx { probeStates.recordState(d.id, "api", down = true, error = null, at = T0 + 20) }
+        tx { probeStates.recordState(d.id, "api", down = true, error = null, at = T0 + 30) }
         tx { probeStates.recordResults(listOf(ProbeReport(d.id, T0 + 5, listOf(result("api"))))) }
-        tx { probeStates.recordState(d.id, "kds", down = false, at = T0 + 40) }
+        tx { probeStates.recordState(d.id, "kds", down = false, error = null, at = T0 + 40) }
         tx { probeStates.recordResults(emptyList()) }
 
         val rows = tx { readProbeStates() }
@@ -126,7 +140,7 @@ internal class AlertRepositoriesTest : PostgresTest() {
             "api" to Triple("down", T0 + 20, T0 + 10), "ref" to Triple("up", T0 + 10, T0 + 10),
             "kds" to Triple("up", T0 + 40, null),
         )
-        tx { probeStates.recordState(d.id, "api", down = false, at = T0 + 50) }
+        tx { probeStates.recordState(d.id, "api", down = false, error = null, at = T0 + 50) }
         assertThat(tx { readProbeStates() }.toMap().getValue("api")).isEqualTo(Triple("up", T0 + 50, T0 + 10))
     }
 
@@ -137,7 +151,7 @@ internal class AlertRepositoriesTest : PostgresTest() {
         val b = givenDevice(r) { Samples.device(it).copy(name = "Зал_1", agentVersion = "1.0.0") }
         val other = givenDevice()
         tx { alerts.insert(alert(a, RuleId.R03, T0)) }
-        tx { alerts.insert(alert(b, RuleId.R05, T0, "api").copy(parentIncidentId = Samples.uuid())) }
+        tx { alerts.insert(alert(b, RuleId.R05, T0, "api").copy(parentIncidentId = givenIncident())) }
 
         fun ids(filter: DeviceFilter) = tx { devices.list(filter, PageRequest.of()) }.map { it.id }.toSet()
         assertThat(ids(DeviceFilter(query = "100%"))).containsExactly(a.id)
@@ -149,7 +163,7 @@ internal class AlertRepositoriesTest : PostgresTest() {
         assertThat(ids(DeviceFilter(problemsOnly = true))).containsExactly(a.id)
 
         tx { devices.markOffline(b.id, T0) }
-        val counts = tx { devices.counts(offlineSince = 0) }
+        val counts = tx { ExposedFleetQueries().counts(offlineSince = 0) }
         assertThat(counts.total).isEqualTo(3)
         assertThat(counts.online).isEqualTo(1)
         assertThat(counts.offline).isEqualTo(1)

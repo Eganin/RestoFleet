@@ -130,6 +130,14 @@ interface AlertRepository {
 
     /** Незакрытые неподавленные: всего и критичных. */
     suspend fun activeCounts(): AlertCounts
+
+    /** Незакрытые тревоги устройств ресторанов (кандидаты в подавление). */
+    suspend fun activeInRestaurants(restaurantIds: Collection<RestaurantId>): List<Alert>
+
+    /** Незакрытые подавленные (с родителем). */
+    suspend fun activeSuppressed(): List<Alert>
+
+    suspend fun setParent(alertId: String, parentIncidentId: String?)
 }
 
 data class AlertCounts(val active: Int, val critical: Int)

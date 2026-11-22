@@ -34,6 +34,7 @@ import ru.restofleet.server.domain.device.DeviceRepository
 import ru.restofleet.server.domain.device.DeviceRole
 import ru.restofleet.server.domain.device.DeviceStatus
 import ru.restofleet.server.domain.device.DeviceTransport
+import ru.restofleet.server.domain.device.FleetQueries
 import ru.restofleet.server.domain.restaurant.RestaurantId
 import ru.restofleet.shared.kernel.DeviceId
 
@@ -62,28 +63,6 @@ internal class ExposedDeviceRepository : DeviceRepository {
     override suspend fun findByIds(ids: Collection<DeviceId>): List<Device> {
         if (ids.isEmpty()) return emptyList()
         return DevicesTable.selectAll().where { DevicesTable.id inList ids.map { it.value } }.map { it.toDevice() }
-    }
-
-    override suspend fun counts(offlineSince: Long): DeviceCounts {
-        val n = DevicesTable.id.count()
-        val rows = DevicesTable.select(DevicesTable.restaurantId, DevicesTable.status, n)
-            .where { notDecommissioned() }
-            .groupBy(DevicesTable.restaurantId, DevicesTable.status)
-            .map { row ->
-                val restaurant = RestaurantId(row[DevicesTable.restaurantId].toString())
-                Triple(restaurant, row[DevicesTable.status], row[n].toInt())
-            }
-        val recent = DevicesTable.select(n).where {
-            (DevicesTable.status eq DeviceStatus.OFFLINE.code) and
-                (DevicesTable.lastSeenAt greaterEq offlineSince.toTimestamp())
-        }.single()[n].toInt()
-        return DeviceCounts(
-            total = rows.sumOf { it.third },
-            online = rows.filter { it.second == DeviceStatus.ONLINE.code }.sumOf { it.third },
-            offline = rows.filter { it.second == DeviceStatus.OFFLINE.code }.sumOf { it.third },
-            offlineRecently = recent,
-            byRestaurant = rows.groupBy({ it.first }, { it.third }).mapValues { (_, v) -> v.sum() },
-        )
     }
 
     override suspend fun list(filter: DeviceFilter, page: PageRequest): List<Device> {
@@ -213,6 +192,35 @@ private fun ResultRow.toDevice(): Device {
         agentVersion = this[DevicesTable.agentVersion],
         mode = this[DevicesTable.mode],
     )
+}
+
+/** Запросы по парку: учитываемые устройства для агрегатора и счётчики сводки. */
+internal class ExposedFleetQueries : FleetQueries {
+    override suspend fun fleet(seenSince: Long): List<Device> = DevicesTable.selectAll()
+        .where { notDecommissioned() and (DevicesTable.lastSeenAt greaterEq seenSince.toTimestamp()) }
+        .map { it.toDevice() }
+
+    override suspend fun counts(offlineSince: Long): DeviceCounts {
+        val n = DevicesTable.id.count()
+        val rows = DevicesTable.select(DevicesTable.restaurantId, DevicesTable.status, n)
+            .where { notDecommissioned() }
+            .groupBy(DevicesTable.restaurantId, DevicesTable.status)
+            .map { row ->
+                val restaurant = RestaurantId(row[DevicesTable.restaurantId].toString())
+                Triple(restaurant, row[DevicesTable.status], row[n].toInt())
+            }
+        val recent = DevicesTable.select(n).where {
+            (DevicesTable.status eq DeviceStatus.OFFLINE.code) and
+                (DevicesTable.lastSeenAt greaterEq offlineSince.toTimestamp())
+        }.single()[n].toInt()
+        return DeviceCounts(
+            total = rows.sumOf { it.third },
+            online = rows.filter { it.second == DeviceStatus.ONLINE.code }.sumOf { it.third },
+            offline = rows.filter { it.second == DeviceStatus.OFFLINE.code }.sumOf { it.third },
+            offlineRecently = recent,
+            byRestaurant = rows.groupBy({ it.first }, { it.third }).mapValues { (_, v) -> v.sum() },
+        )
+    }
 }
 
 /** `device_credentials`. */

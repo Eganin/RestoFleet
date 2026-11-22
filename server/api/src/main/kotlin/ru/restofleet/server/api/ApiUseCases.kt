@@ -5,6 +5,7 @@ import ru.restofleet.server.domain.alert.usecase.GetSummary
 import ru.restofleet.server.domain.alert.usecase.ListAlerts
 import ru.restofleet.server.domain.alert.usecase.ResolveAlert
 import ru.restofleet.server.domain.auth.usecase.Login
+import ru.restofleet.server.domain.auth.usecase.Logout
 import ru.restofleet.server.domain.auth.usecase.RefreshSession
 import ru.restofleet.server.domain.command.CommandReport
 import ru.restofleet.server.domain.command.usecase.GetCommand
@@ -15,6 +16,9 @@ import ru.restofleet.server.domain.device.usecase.DecommissionDevice
 import ru.restofleet.server.domain.device.usecase.GetDevice
 import ru.restofleet.server.domain.device.usecase.ListDevices
 import ru.restofleet.server.domain.health.usecase.CheckHealth
+import ru.restofleet.server.domain.incident.usecase.AcknowledgeIncident
+import ru.restofleet.server.domain.incident.usecase.GetIncident
+import ru.restofleet.server.domain.incident.usecase.ListIncidents
 import ru.restofleet.server.domain.ingest.DeviceDataBatch
 import ru.restofleet.server.domain.ingest.usecase.GetEventHistory
 import ru.restofleet.server.domain.ingest.usecase.GetProbeHistory
@@ -47,9 +51,10 @@ class ApiUseCases(
     val poll: PollUseCases,
     val health: CheckHealth,
     val alerts: AlertUseCases,
+    val incidents: IncidentUseCases,
 )
 
-class AuthUseCases(val login: Login, val refresh: RefreshSession)
+class AuthUseCases(val login: Login, val refresh: RefreshSession, val logout: Logout)
 
 class RestaurantUseCases(
     val create: CreateRestaurant,
@@ -70,6 +75,8 @@ class DeviceUseCases(
 class ShadowUseCases(val get: GetShadow, val update: UpdateDesired)
 
 class CommandUseCases(val send: SendCommand, val get: GetCommand, val history: ListDeviceCommands)
+
+class IncidentUseCases(val list: ListIncidents, val get: GetIncident, val acknowledge: AcknowledgeIncident)
 
 class AlertUseCases(
     val list: ListAlerts,

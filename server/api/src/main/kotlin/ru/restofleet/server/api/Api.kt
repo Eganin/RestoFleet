@@ -23,11 +23,13 @@ import ru.restofleet.server.api.auth.AuthProviders
 import ru.restofleet.server.api.auth.authFailureCounter
 import ru.restofleet.server.api.auth.installSecurity
 import ru.restofleet.server.api.auth.loginRoute
+import ru.restofleet.server.api.auth.logoutRoute
 import ru.restofleet.server.api.auth.refreshRoute
 import ru.restofleet.server.api.command.commandRoutes
 import ru.restofleet.server.api.device.deviceRoutes
 import ru.restofleet.server.api.error.installErrorHandling
 import ru.restofleet.server.api.health.healthRoute
+import ru.restofleet.server.api.incident.incidentRoutes
 import ru.restofleet.server.api.http.clientKey
 import ru.restofleet.server.api.poll.pollRoutes
 import ru.restofleet.server.api.provisioning.provisionRoute
@@ -75,6 +77,7 @@ fun Application.restofleetApi(useCases: ApiUseCases, settings: ApiSettings) {
             healthRoute(ApiPaths.HEALTH, useCases.health)
             rateLimit(RateLimits.LOGIN) { loginRoute(useCases.auth) }
             refreshRoute(useCases.auth)
+            logoutRoute(useCases.auth)
             rateLimit(RateLimits.PROVISION) { provisionRoute(useCases.provisioning) }
             // Лимит снаружи аутентификации: исчерпанный клиент получает 429 до проверки пароля (bcrypt)
             rateLimit(RateLimits.POLL_AUTH) {
@@ -88,6 +91,7 @@ fun Application.restofleetApi(useCases: ApiUseCases, settings: ApiSettings) {
                 commandRoutes(useCases.commands)
                 tokenRoutes(useCases.provisioning)
                 alertRoutes(useCases.alerts)
+                incidentRoutes(useCases.incidents)
             }
         }
     }

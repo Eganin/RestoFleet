@@ -96,7 +96,7 @@ class BackendOnPostgresTest {
             assertThat(koin.get<AccessTokenIssuer>()).isNotNull()
             assertThat(koin.get<IngestLifecycle>()).isNotNull()
             assertThat(koin.get<ServeJobs>().all.map { it.name })
-                .containsExactly("expire_commands", "mark_stale_pollers", "ingest_metrics")
+                .containsExactly("expire_commands", "mark_stale_pollers", "evaluate_incidents", "ingest_metrics")
             val decoder = koin.get<DevicePayloadDecoder>()
             val id = DeviceId.parse("d-x")!!
             assertThat(decoder.telemetryBatch(id, """{"telemetry":{"ts":1793865630000,"seq":1}}""").getOrNull())
@@ -176,6 +176,7 @@ class BackendOnPostgresTest {
                 "RF_SECRETSDIR" to dir.path,
             )
             secret("admin-password", ADMIN_PASSWORD)
+            secret("support-password", "support-password-for-tests")
         }
 
         @AfterClass

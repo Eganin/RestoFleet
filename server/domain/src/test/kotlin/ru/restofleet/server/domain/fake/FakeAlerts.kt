@@ -12,14 +12,22 @@ import ru.restofleet.server.domain.alert.Condition
 import ru.restofleet.server.domain.alert.ConditionKey
 import ru.restofleet.server.domain.alert.Severity
 import ru.restofleet.server.domain.common.PageRequest
+import ru.restofleet.server.domain.incident.Incident
+import ru.restofleet.server.domain.incident.IncidentFilter
+import ru.restofleet.server.domain.incident.IncidentRepository
+import ru.restofleet.server.domain.incident.JobLock
+import ru.restofleet.server.domain.incident.ProbeHistoryRepository
+import ru.restofleet.server.domain.incident.ProbeObservation
 import ru.restofleet.server.domain.incident.ProbeStateRepository
+import ru.restofleet.server.domain.incident.RestaurantStats
+import ru.restofleet.server.domain.restaurant.RestaurantId
 import ru.restofleet.server.domain.ingest.ProbeReport
 import ru.restofleet.server.domain.realtime.EventBus
 import ru.restofleet.server.domain.realtime.RealtimeEvent
 import ru.restofleet.shared.kernel.DeviceId
 
 /** Состояние «устройство × цель» в фейке. */
-data class StoredProbeState(val down: Boolean, val since: Long, val lastResultAt: Long?)
+data class StoredProbeState(val down: Boolean, val since: Long, val lastResultAt: Long?, val error: String? = null)
 
 class FakeAlertRepository(private val db: InMemoryDb) : AlertRepository {
     var lockedFor = mutableListOf<String>()
@@ -57,6 +65,17 @@ class FakeAlertRepository(private val db: InMemoryDb) : AlertRepository {
         AlertCounts(active.size, active.count { it.severity == Severity.CRITICAL })
     }
 
+    override suspend fun activeInRestaurants(restaurantIds: Collection<RestaurantId>): List<Alert> =
+        db.read { s -> s.alerts.values.filter { it.isActive && it.restaurantId in restaurantIds } }
+
+    override suspend fun activeSuppressed(): List<Alert> =
+        db.read { s -> s.alerts.values.filter { it.isActive && it.parentIncidentId != null } }
+
+    override suspend fun setParent(alertId: String, parentIncidentId: String?) = db.update { s ->
+        val alert = s.alerts.getValue(alertId)
+        s.copy(alerts = s.alerts + (alertId to alert.copy(parentIncidentId = parentIncidentId)))
+    }
+
     private fun view(s: DbState, alert: Alert): AlertView {
         val restaurant = s.restaurants[alert.restaurantId]
         return AlertView(alert, s.devices[alert.deviceId]?.name, restaurant?.code.orEmpty(), restaurant?.name.orEmpty())
@@ -74,10 +93,17 @@ class FakeConditionRepository(private val db: InMemoryDb) : AlertConditionReposi
 }
 
 class FakeProbeStateRepository(private val db: InMemoryDb) : ProbeStateRepository {
-    override suspend fun recordState(deviceId: DeviceId, target: String, down: Boolean, at: Long) = db.update { s ->
-        val key = deviceId to target
-        val old = s.probeStates[key]
-        s.copy(probeStates = s.probeStates + (key to StoredProbeState(down, at, old?.lastResultAt)))
+    override suspend fun recordState(deviceId: DeviceId, target: String, down: Boolean, error: String?, at: Long) =
+        db.update { s ->
+            val key = deviceId to target
+            val old = s.probeStates[key]
+            val since = if (old != null && old.down == down) old.since else at
+            s.copy(probeStates = s.probeStates + (key to StoredProbeState(down, since, old?.lastResultAt, error)))
+        }
+
+    override suspend fun fresh(since: Long): List<ProbeObservation> = db.read { s ->
+        s.probeStates.filter { (_, v) -> (v.lastResultAt ?: Long.MIN_VALUE) >= since }
+            .map { (k, v) -> ProbeObservation(k.first, k.second, v.down, v.error) }
     }
 
     override suspend fun recordResults(reports: List<ProbeReport>) = db.update { s ->
@@ -101,4 +127,40 @@ class FakeEventBus : EventBus {
     }
 
     override fun events(): Flow<RealtimeEvent> = flow
+}
+
+class FakeIncidentRepository(private val db: InMemoryDb) : IncidentRepository {
+    override suspend fun insert(incident: Incident) =
+        db.update { it.copy(incidents = it.incidents + (incident.id to incident)) }
+
+    override suspend fun update(incident: Incident) = insert(incident)
+
+    override suspend fun findForUpdate(id: String): Incident? = find(id)
+
+    override suspend fun find(id: String): Incident? = db.read { it.incidents[id] }
+
+    override suspend fun open(): List<Incident> = db.read { s -> s.incidents.values.filter { it.isOpen } }
+
+    override suspend fun list(filter: IncidentFilter, page: PageRequest): List<Incident> = db.read { s ->
+        s.incidents.values
+            .filter { filter.open == null || it.isOpen == filter.open }
+            .filter { filter.range.to == null || it.startedAt < filter.range.to!! }
+            .filter { filter.range.from == null || (it.resolvedAt ?: Long.MAX_VALUE) >= filter.range.from!! }
+            .sortedWith(compareByDescending<Incident> { it.startedAt }.thenByDescending { it.id })
+            .drop(page.offset.toInt()).take(page.limit)
+    }
+
+    override suspend fun suppressedCounts(ids: Collection<String>): Map<String, Int> = db.read { s ->
+        s.alerts.values.mapNotNull { it.parentIncidentId }.filter { it in ids }.groupingBy { it }.eachCount()
+    }
+}
+
+class FakeProbeHistory(private val db: InMemoryDb) : ProbeHistoryRepository {
+    override suspend fun record(bucket: Long, stats: List<RestaurantStats>) =
+        db.update { it.copy(history = it.history + (bucket to stats)) }
+}
+
+/** Блокировка тика: [held] — её держит «другой экземпляр». */
+class FakeJobLock(var held: Boolean = false) : JobLock {
+    override suspend fun tryLock(key: Long): Boolean = !held
 }

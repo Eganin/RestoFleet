@@ -10,7 +10,9 @@ import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.isNotNull
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.core.vendors.ForUpdateOption
@@ -35,6 +37,7 @@ import ru.restofleet.server.domain.alert.ConditionKey
 import ru.restofleet.server.domain.alert.RuleId
 import ru.restofleet.server.domain.alert.Severity
 import ru.restofleet.server.domain.common.PageRequest
+import ru.restofleet.server.domain.incident.ProbeObservation
 import ru.restofleet.server.domain.incident.ProbeStateRepository
 import ru.restofleet.server.domain.ingest.ProbeReport
 import ru.restofleet.server.domain.restaurant.RestaurantId
@@ -52,6 +55,7 @@ private fun String.toDetails(): Map<String, String> = RfJson.decodeFromString(de
  * `alerts` (реш. 413, 414): вставка — `ON CONFLICT DO NOTHING` (частичный уникальный индекс на незакрытый субъект
  * страхует от параллельной вставки), выдача — с join на устройство и ресторан.
  */
+@Suppress("TooManyFunctions") // операции порта AlertRepository и два помощника выборки с join
 internal class ExposedAlertRepository : AlertRepository {
     override suspend fun insert(alert: Alert) {
         AlertsTable.insertIgnore {
@@ -131,6 +135,24 @@ internal class ExposedAlertRepository : AlertRepository {
         return AlertCounts(active = rows.values.sum(), critical = rows[Severity.CRITICAL.code] ?: 0)
     }
 
+    override suspend fun activeInRestaurants(restaurantIds: Collection<RestaurantId>): List<Alert> {
+        val uuids = restaurantIds.mapNotNull { it.value.toUuidOrNull() }
+        if (uuids.isEmpty()) return emptyList()
+        return AlertsTable.selectAll().where { (AlertsTable.restaurantId inList uuids) and notResolved() }
+            .map { it.toAlert() }
+    }
+
+    override suspend fun activeSuppressed(): List<Alert> = AlertsTable.selectAll()
+        .where { AlertsTable.parentIncidentId.isNotNull() and notResolved() }
+        .map { it.toAlert() }
+
+    override suspend fun setParent(alertId: String, parentIncidentId: String?) {
+        val uuid = alertId.toUuidOrNull() ?: return
+        AlertsTable.update({ AlertsTable.id eq uuid }) {
+            it[AlertsTable.parentIncidentId] = parentIncidentId?.toUuidOrNull()
+        }
+    }
+
     private fun joined() = AlertsTable
         .join(DevicesTable, JoinType.INNER, AlertsTable.deviceId, DevicesTable.id)
         .join(RestaurantsTable, JoinType.INNER, AlertsTable.restaurantId, RestaurantsTable.id)
@@ -208,7 +230,7 @@ internal class ExposedAlertConditionRepository : AlertConditionRepository {
  * не сдвигает), время последнего результата — `GREATEST` из хранимого и нового.
  */
 internal class ExposedProbeStateRepository : ProbeStateRepository {
-    override suspend fun recordState(deviceId: DeviceId, target: String, down: Boolean, at: Long) {
+    override suspend fun recordState(deviceId: DeviceId, target: String, down: Boolean, error: String?, at: Long) {
         val key = target.take(MAX_PROBE_TARGET)
         val state = if (down) DOWN else UP
         val current = ProbeStatesTable.select(ProbeStatesTable.state)
@@ -221,12 +243,16 @@ internal class ExposedProbeStateRepository : ProbeStateRepository {
                 it[ProbeStatesTable.target] = key
                 it[ProbeStatesTable.state] = state
                 it[since] = at.toTimestamp()
+                it[ProbeStatesTable.error] = error?.take(MAX_ERROR)
             }
-            current[ProbeStatesTable.state] != state -> ProbeStatesTable.update({
+            else -> ProbeStatesTable.update({
                 (ProbeStatesTable.deviceId eq deviceId.value) and (ProbeStatesTable.target eq key)
             }) {
-                it[ProbeStatesTable.state] = state
-                it[since] = at.toTimestamp()
+                if (current[ProbeStatesTable.state] != state) {
+                    it[ProbeStatesTable.state] = state
+                    it[since] = at.toTimestamp()
+                }
+                it[ProbeStatesTable.error] = error?.take(MAX_ERROR)
             }
         }
     }
@@ -254,9 +280,21 @@ internal class ExposedProbeStateRepository : ProbeStateRepository {
         }
     }
 
+    override suspend fun fresh(since: Long): List<ProbeObservation> = ProbeStatesTable.selectAll()
+        .where { ProbeStatesTable.lastResultAt greaterEq since.toTimestamp() }
+        .map {
+            ProbeObservation(
+                deviceId = DeviceId.parse(it[ProbeStatesTable.deviceId]) ?: error("invalid device id in database"),
+                target = it[ProbeStatesTable.target],
+                down = it[ProbeStatesTable.state] == DOWN,
+                error = it[ProbeStatesTable.error],
+            )
+        }
+
     private companion object {
         const val UP = "up"
         const val DOWN = "down"
+        const val MAX_ERROR = 32
     }
 }
 

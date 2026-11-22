@@ -15,7 +15,10 @@ data class User(
     }
 }
 
-/** Refresh-токен (реш. 216): в БД только SHA-256, одноразовый (ротация). */
+/**
+ * Refresh-токен (реш. 216, 417): в БД только SHA-256, одноразовый (ротация). [familyId] — сессия: все токены одной
+ * цепочки ротаций с одного входа; [sessionExpiresAt] — абсолютный потолок сессии (вход + 7 сут).
+ */
 data class RefreshToken(
     val id: String,
     val userId: String,
@@ -23,6 +26,8 @@ data class RefreshToken(
     val createdAt: Long,
     val expiresAt: Long,
     val revokedAt: Long?,
+    val familyId: String,
+    val sessionExpiresAt: Long,
 )
 
 /** Подписанный access-токен (JWT подписывает `server:api`/`server:app` — порт [AccessTokenIssuer]). */
@@ -42,10 +47,21 @@ data class SessionTokens(
             "refreshExpiresAt=$refreshExpiresAt)"
 }
 
-/** Настройки сессий пользователей. Access TTL (15 мин) — у [AccessTokenIssuer]. */
-data class AuthSettings(val refreshTtlMillis: Long = DEFAULT_REFRESH_TTL_MS) {
+/**
+ * Настройки сессий пользователей (реш. 417): refresh живёт [refreshIdleMillis] с последней ротации, но не дольше
+ * [sessionMaxMillis] со входа. Access TTL (15 мин) — у [AccessTokenIssuer].
+ */
+data class AuthSettings(
+    val refreshIdleMillis: Long = DEFAULT_REFRESH_IDLE_MS,
+    val sessionMaxMillis: Long = DEFAULT_SESSION_MAX_MS,
+) {
+    init {
+        require(refreshIdleMillis in 1..sessionMaxMillis) { "refresh idle must be within the session ceiling" }
+    }
+
     companion object {
-        const val DEFAULT_REFRESH_TTL_MS: Long = 7L * 24 * 60 * 60 * 1000
+        const val DEFAULT_REFRESH_IDLE_MS: Long = 24L * 60 * 60 * 1000
+        const val DEFAULT_SESSION_MAX_MS: Long = 7L * 24 * 60 * 60 * 1000
     }
 }
 
@@ -79,4 +95,10 @@ interface RefreshTokenRepository {
 
     /** Отзыв всех действующих токенов пользователя (повторное использование погашенного токена). */
     suspend fun revokeAll(userId: String, now: Long): Int
+
+    /** Отзыв действующих токенов сессии ([RefreshToken.familyId]) — выход. */
+    suspend fun revokeFamily(familyId: String, now: Long): Int
+
+    /** Есть ли в семействе действующий (не погашенный и не просроченный) токен. */
+    suspend fun hasActive(familyId: String, now: Long): Boolean
 }

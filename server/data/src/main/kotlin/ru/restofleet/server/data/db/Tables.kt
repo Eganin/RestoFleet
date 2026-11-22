@@ -153,6 +153,8 @@ internal object RefreshTokensTable : Table("refresh_tokens") {
     val createdAt = timestampWithTimeZone("created_at")
     val expiresAt = timestampWithTimeZone("expires_at")
     val revokedAt = timestampWithTimeZone("revoked_at").nullable()
+    val familyId = javaUUID("family_id")
+    val sessionExpiresAt = timestampWithTimeZone("session_expires_at")
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -192,5 +194,35 @@ internal object ProbeStatesTable : Table("probe_states") {
     val state = varchar("state", 8)
     val since = timestampWithTimeZone("since")
     val lastResultAt = timestampWithTimeZone("last_result_at").nullable()
+    val error = varchar("error", 32).nullable()
     override val primaryKey = PrimaryKey(deviceId, target)
+}
+
+internal object IncidentsTable : Table("incidents") {
+    val id = javaUUID("id")
+    val kind = varchar("kind", 32)
+    val ruleId = varchar("rule_id", 8)
+    val target = varchar("target", 64)
+    val restaurants = json("restaurants")
+    val startedAt = timestampWithTimeZone("started_at")
+    val resolvedAt = timestampWithTimeZone("resolved_at").nullable()
+    val resolveReason = varchar("resolve_reason", 16).nullable()
+    val missedTicks = integer("missed_ticks")
+    val ackBy = varchar("ack_by", 64).nullable()
+    val ackAt = timestampWithTimeZone("ack_at").nullable()
+    val comment = varchar("comment", 500).nullable()
+    val evidence = json("evidence")
+    override val primaryKey = PrimaryKey(id)
+}
+
+internal object ProbeAgg1mTable : Table("probe_agg_1m") {
+    val restaurantId = javaUUID("restaurant_id")
+    val target = varchar("target", 64)
+    val bucket = timestampWithTimeZone("bucket")
+    val devicesTotal = integer("devices_total")
+    val devicesOnline = integer("devices_online")
+    val targetOnline = integer("target_online")
+    val targetDown = integer("target_down")
+    val refDown = integer("ref_down")
+    override val primaryKey = PrimaryKey(restaurantId, target, bucket)
 }

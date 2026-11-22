@@ -137,8 +137,9 @@ internal class TelemetryAndUserRepositoriesTest : PostgresTest() {
     @Test
     fun `refresh token is consumed once, not after expiry, and revokeAll stops the rest`() {
         val user = User(Samples.uuid(), "admin", "h", User.ROLE_ADMIN, T0).also { tx { users.insert(it) } }
-        fun token(n: Int, expiresAt: Long = T0 + 1_000) =
-            RefreshToken(Samples.uuid(), user.id, n.toString().padStart(64, 'f'), T0, expiresAt, null)
+        fun token(n: Int, expiresAt: Long = T0 + 1_000, family: String = Samples.uuid()) = RefreshToken(
+            Samples.uuid(), user.id, n.toString().padStart(64, 'f'), T0, expiresAt, null, family, T0 + 10_000,
+        )
         val a = token(1)
         val b = token(2)
         val old = token(3, expiresAt = T0 + 5)
@@ -153,5 +154,28 @@ internal class TelemetryAndUserRepositoriesTest : PostgresTest() {
         assertThat(tx { refresh.consume(b.tokenHash, T0 + 21) }).isNull()
         assertThat(tx { refresh.revokeAll("not-a-uuid", T0) }).isEqualTo(0)
         assertThat(tx { refresh.findByHash("0".repeat(64)) }).isNull()
+    }
+
+    @Test
+    fun `revokeFamily stops only the tokens of that session and keeps family and ceiling`() {
+        val user = User(Samples.uuid(), "support", "h", User.ROLE_ADMIN, T0).also { tx { users.insert(it) } }
+        val family = Samples.uuid()
+        fun token(n: Int, family: String) = RefreshToken(
+            Samples.uuid(), user.id, n.toString().padStart(64, 'e'), T0, T0 + 1_000, null, family, T0 + 5_000,
+        )
+        val first = token(1, family)
+        val second = token(2, family)
+        val other = token(3, Samples.uuid())
+        tx { listOf(first, second, other).forEach { refresh.insert(it) } }
+
+        assertThat(tx { refresh.findByHash(first.tokenHash) }).isEqualTo(first)
+        assertThat(tx { refresh.hasActive(family, T0 + 1) }).isTrue()
+        assertThat(tx { refresh.hasActive(family, T0 + 1_000) }).isFalse()
+        assertThat(tx { refresh.hasActive("not-a-uuid", T0) }).isFalse()
+        assertThat(tx { refresh.revokeFamily(family, T0 + 1) }).isEqualTo(2)
+        assertThat(tx { refresh.hasActive(family, T0 + 1) }).isFalse()
+        assertThat(tx { refresh.revokeFamily(family, T0 + 2) }).isEqualTo(0)
+        assertThat(tx { refresh.revokeFamily("not-a-uuid", T0) }).isEqualTo(0)
+        assertThat(tx { refresh.consume(other.tokenHash, T0 + 3) }).isEqualTo(other.copy(revokedAt = T0 + 3))
     }
 }

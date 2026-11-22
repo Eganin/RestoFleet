@@ -91,7 +91,6 @@ paths:
   /api/v1/auth/logout:
     post:
       tags: [auth]
-      x-planned: true
       summary: Выход — отзыв семейства refresh-токенов сессии (реш. 417)
       description: JWT не нужен (access мог истечь). Ответ всегда 204, даже для неизвестного или погашенного токена.
       security: []
@@ -486,7 +485,6 @@ paths:
   /api/v1/incidents:
     get:
       tags: [incidents]
-      x-planned: true
       summary: Сводные инциденты доступности R-07…R-09 (FR-BE-36, 37), новые сначала
       parameters:
         - { name: state, in: query, schema: { type: string, enum: [open, resolved] } }
@@ -516,7 +514,6 @@ paths:
       - { name: id, in: path, required: true, schema: { type: string } }
     get:
       tags: [incidents]
-      x-planned: true
       summary: Инцидент и доказательства классификации (текст объяснения строит консоль)
       responses:
         "200":
@@ -528,7 +525,6 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
     patch:
       tags: [incidents]
-      x-planned: true
       summary: Подтвердить инцидент с комментарием (закрывается только автоматически, реш. 412)
       requestBody:
         required: true

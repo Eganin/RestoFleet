@@ -44,7 +44,7 @@ class AuthUseCasesTest {
         upsert("admin", password)
         val tokens = (login("admin", password) as Outcome.Success).value
         assertThat(tokens.accessToken).startsWith("jwt-")
-        assertThat(tokens.refreshExpiresAt).isEqualTo(w.clock.now + AuthSettings.DEFAULT_REFRESH_TTL_MS)
+        assertThat(tokens.refreshExpiresAt).isEqualTo(w.clock.now + AuthSettings.DEFAULT_REFRESH_IDLE_MS)
         assertThat(w.db.state.refreshTokens.values.single().tokenHash).isEqualTo("sha(${tokens.refreshToken})")
         assertThat(tokens.toString()).doesNotContain(tokens.refreshToken)
     }
@@ -88,7 +88,7 @@ class AuthUseCasesTest {
         assertThat(refresh("")).isEqualTo(Outcome.Failure(ServerError.Unauthorized))
         assertThat(refresh("x".repeat(257))).isEqualTo(Outcome.Failure(ServerError.Unauthorized))
         assertThat(refresh("unknown")).isEqualTo(Outcome.Failure(ServerError.Unauthorized))
-        w.clock.now += AuthSettings.DEFAULT_REFRESH_TTL_MS
+        w.clock.now += AuthSettings.DEFAULT_REFRESH_IDLE_MS
         assertThat(refresh(tokens.refreshToken)).isEqualTo(Outcome.Failure(ServerError.Unauthorized))
         // Просроченный, но не погашенный — не повод отзывать остальные
         assertThat(w.db.state.refreshTokens.values.single().revokedAt).isNull()

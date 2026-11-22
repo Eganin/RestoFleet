@@ -74,13 +74,12 @@ class SummaryBuilderTest {
     fun atMostTenRestaurantsAndExactCountsOverride() {
         val many = (1..12).map { restaurant("x-$it", "C-%02d".format(it)) }
         val alerts = many.mapIndexed { i, r -> view("a$i", RuleId.R06, "d-$i", r, i.toLong()) }
-        val summary = SummaryBuilder.build(counts, alerts, many, incidentsOpen = 2, counts = AlertCounts(5000, 70))
+        val summary = SummaryBuilder.build(counts, alerts, many, counts = AlertCounts(5000, 70))
         assertThat(summary.problems).hasSize(SummaryBuilder.MAX_PROBLEMS)
         assertThat(summary.problems.first().restaurant.code).isEqualTo("C-01")
         assertThat(summary.restaurantsWithProblems).isEqualTo(12)
         assertThat(summary.alertsOpen).isEqualTo(5000)
         assertThat(summary.alertsCritical).isEqualTo(70)
-        assertThat(summary.incidentsOpen).isEqualTo(2)
     }
 
     @Test
@@ -102,7 +101,7 @@ class SummaryBuilderTest {
         val alert = Alert("a", AlertSubject(RuleId.R01, World.deviceId("d-2")), RestaurantId("r-1"), AlertState.OPEN, 1)
         w.seed { it.copy(alerts = mapOf("a" to alert)) }
 
-        val summary = GetSummary(w.devices, w.alerts, w.restaurants, w.tx, w.clock)()
+        val summary = GetSummary(w.fleet, w.alerts, w.restaurants, w.incidents, w.tx, w.clock)()
         assertThat(summary.devicesTotal).isEqualTo(3)
         assertThat(summary.devicesOnline).isEqualTo(1)
         assertThat(summary.devicesOffline).isEqualTo(2)

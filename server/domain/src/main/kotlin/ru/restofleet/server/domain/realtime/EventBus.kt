@@ -3,6 +3,7 @@ package ru.restofleet.server.domain.realtime
 import kotlinx.coroutines.flow.Flow
 import ru.restofleet.server.domain.alert.AlertView
 import ru.restofleet.server.domain.device.DeviceStatus
+import ru.restofleet.server.domain.incident.IncidentView
 import ru.restofleet.server.domain.ingest.TelemetrySnapshot
 import ru.restofleet.server.domain.restaurant.RestaurantId
 import ru.restofleet.shared.kernel.DeviceId
@@ -20,6 +21,8 @@ sealed interface RealtimeEvent {
     data class TelemetryReceived(val snapshot: TelemetrySnapshot) : RealtimeEvent
 
     data class AlertChanged(val view: AlertView) : RealtimeEvent
+
+    data class IncidentChanged(val view: IncidentView) : RealtimeEvent
 }
 
 /**

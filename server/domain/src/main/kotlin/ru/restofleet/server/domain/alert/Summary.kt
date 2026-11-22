@@ -1,6 +1,7 @@
 package ru.restofleet.server.domain.alert
 
 import ru.restofleet.server.domain.device.DeviceCounts
+import ru.restofleet.server.domain.incident.Incident
 import ru.restofleet.server.domain.restaurant.Restaurant
 import ru.restofleet.shared.kernel.DeviceId
 
@@ -32,7 +33,8 @@ data class ProblemRestaurant(
 )
 
 /**
- * Сборка сводки — чистая функция над счётчиками устройств, незакрытыми неподавленными тревогами и ресторанами;
+ * Сборка сводки — чистая функция над счётчиками устройств, незакрытыми неподавленными тревогами, открытыми
+ * инцидентами и ресторанами. Рестораны инцидентов идут первыми и не дублируются тревогами;
  * [counts] — точные счётчики тревог, если [alerts] — лишь первая страница.
  * Главное правило ресторана: сначала критичное, затем по числу затронутых устройств, затем самое давнее. Рестораны —
  * сначала с критичной проблемой, затем по числу устройств и давности; не больше [MAX_PROBLEMS].
@@ -44,14 +46,23 @@ object SummaryBuilder {
         devices: DeviceCounts,
         alerts: List<AlertView>,
         restaurants: List<Restaurant>,
-        incidentsOpen: Int = 0,
+        incidents: List<Incident> = emptyList(),
         counts: AlertCounts? = null,
     ): Summary {
         val active = alerts.filter { it.alert.isActive && it.alert.parentIncidentId == null }
         val byId = restaurants.associateBy { it.id }
-        val problems = active.groupBy { it.alert.restaurantId }.mapNotNull { (restaurantId, views) ->
-            byId[restaurantId]?.let { problemOf(it, views, devices.byRestaurant[restaurantId] ?: 0) }
-        }
+        val open = incidents.filter { it.isOpen }
+        val fromIncidents = open.flatMap { incident ->
+            incident.restaurants.mapNotNull { id ->
+                byId[id]?.let { problemOf(it, incident, devices.byRestaurant[id] ?: 0) }
+            }
+        }.distinctBy { it.restaurant.id }
+        val covered = fromIncidents.map { it.restaurant.id }.toSet()
+        val fromAlerts = active.groupBy { it.alert.restaurantId }.filterKeys { it !in covered }
+            .mapNotNull { (restaurantId, views) ->
+                byId[restaurantId]?.let { problemOf(it, views, devices.byRestaurant[restaurantId] ?: 0) }
+            }
+        val problems = fromIncidents + fromAlerts
         return Summary(
             devicesOnline = devices.online,
             devicesTotal = devices.total,
@@ -59,13 +70,24 @@ object SummaryBuilder {
             offlineLastHour = devices.offlineRecently,
             alertsOpen = counts?.active ?: active.size,
             alertsCritical = counts?.critical ?: active.count { it.alert.severity == Severity.CRITICAL },
-            incidentsOpen = incidentsOpen,
+            incidentsOpen = open.size,
             restaurantsWithProblems = problems.size,
             restaurantsTotal = restaurants.size,
             problems = problems.sortedWith(
                 compareBy<ProblemRestaurant> { it.rule.severity != Severity.CRITICAL }
                     .thenByDescending { it.count }.thenBy { it.since }.thenBy { it.restaurant.code },
             ).take(MAX_PROBLEMS),
+        )
+    }
+
+    /** Ресторан в инциденте: правило инцидента, затронуто — недоступна цель или офлайн (что больше). */
+    private fun problemOf(restaurant: Restaurant, incident: Incident, devicesTotal: Int): ProblemRestaurant {
+        val evidence = incident.evidence.restaurants.firstOrNull { it.restaurantId == restaurant.id }
+        val affected = evidence?.let { maxOf(it.targetDown, it.devicesTotal - it.devicesOnline) } ?: 0
+        return ProblemRestaurant(
+            restaurant = restaurant, rule = incident.kind.rule, count = affected,
+            devicesTotal = evidence?.devicesTotal ?: devicesTotal, target = incident.target, deviceId = null,
+            deviceName = null, since = incident.startedAt, details = emptyMap(),
         )
     }
 

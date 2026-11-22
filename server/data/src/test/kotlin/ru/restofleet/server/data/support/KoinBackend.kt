@@ -19,6 +19,7 @@ import ru.restofleet.server.domain.auth.AccessToken
 import ru.restofleet.server.domain.auth.AccessTokenIssuer
 import ru.restofleet.server.domain.alert.RuleParams
 import ru.restofleet.server.domain.auth.AuthSettings
+import ru.restofleet.server.domain.incident.IncidentSettings
 import ru.restofleet.server.domain.polling.PollingSettings
 import ru.restofleet.server.domain.provisioning.BrokerEndpoint
 import ru.restofleet.server.domain.provisioning.ProvisioningSettings
@@ -36,6 +37,7 @@ class KoinBackend(mqtt: MqttConfig, ingest: IngestConfig = IngestConfig(batchWin
                 single { PollingSettings() }
                 single { AuthSettings() }
                 single { RuleParams() }
+                single { IncidentSettings() }
                 single { AccessTokenIssuer { AccessToken("test-jwt", 0) } }
             },
             dataModule,
