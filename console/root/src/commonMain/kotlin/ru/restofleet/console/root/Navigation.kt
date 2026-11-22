@@ -49,6 +49,9 @@ interface MainNavigator {
 
     fun switchTab(tab: Tab)
 
+    /** Закрывает верхний экран стека активной вкладки. */
+    fun back()
+
     fun logout()
 }
 

@@ -22,6 +22,12 @@ import ru.restofleet.console.core.storage.TokenStore
 import ru.restofleet.console.feature.auth.component.LoginComponentFactory
 import ru.restofleet.console.feature.auth.component.di.authModule
 import ru.restofleet.console.feature.auth.domain.Logout
+import ru.restofleet.console.feature.commands.component.di.commandsModule
+import ru.restofleet.console.feature.dashboard.component.di.dashboardModule
+import ru.restofleet.console.feature.devicedetails.component.di.deviceDetailsModule
+import ru.restofleet.console.feature.devices.component.di.devicesModule
+import ru.restofleet.console.feature.restaurants.component.di.restaurantsModule
+import ru.restofleet.console.feature.shadow.component.di.shadowModule
 import ru.restofleet.console.feature.auth.domain.ObserveSession
 import ru.restofleet.console.feature.auth.domain.RestoreSession
 import ru.restofleet.console.root.MainComponent
@@ -63,6 +69,12 @@ val screensModule: Module = module {
 fun consoleModules(platform: PlatformDependencies): List<Module> = listOf(
     coreModule(platform),
     authModule,
+    dashboardModule,
+    devicesModule,
+    restaurantsModule,
+    deviceDetailsModule,
+    shadowModule,
+    commandsModule,
     screensModule,
 )
 

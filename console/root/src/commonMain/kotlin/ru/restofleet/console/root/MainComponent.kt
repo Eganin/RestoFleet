@@ -30,6 +30,10 @@ class MainComponent(
 
         override fun switchTab(tab: Tab) = this@MainComponent.select(tab)
 
+        override fun back() {
+            this@MainComponent.back()
+        }
+
         override fun logout() = onLogout()
     }
 

@@ -19,3 +19,9 @@
 **Отклонения от плана ПМ6.** `expect/actual SecretCipher` заменён интерфейсом с реализацией только на android (реш. 470); движок Ktor передаёт composition root (реш. 473); плагин Ktor `Auth` заменён перехватчиком `HttpSend` (реш. 474); `core:testing` и приложения не входят в Kover-агрегат (реш. 475).
 
 **Не проверено.** Keystore на устройстве и WebSocket через реальный сервер (реш. 470, 471) — в валидации ПМ11; `assembleRelease` и проверка `verifyReleaseNoDebugSurface` не запускались (release-подпись не настроена, этап не требует).
+
+## ПМ7. Обзор, рестораны, устройства, карточка, тень, команды
+
+- 22.11 — шесть фич по 4 модуля (`dashboard`, `restaurants`, `devices`, `device-details`, `shadow`, `commands`) с тестами use cases, репозиториев (`MockEngine` + фикстуры контракта), Reducer, Mapper, ViewModel; `RuleTexts` в `core:common`; `ScreenFactories` в `console:root` связывает `Output` фич с навигацией; тест корня собирает каждый экран из графа Koin.
+- Решения 480–487 (detekt консоли, тексты правил, время в UI, склейка realtime, слоты вкладок, команды, форма тени, порог графика).
+- [x] 7.1 …  [x] 7.6; 7.7 гейт и коммит — ниже.

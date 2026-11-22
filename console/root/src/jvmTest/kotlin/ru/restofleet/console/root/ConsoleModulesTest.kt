@@ -59,4 +59,29 @@ class ConsoleModulesTest {
         // сессии нет → вход
         assertThat(root.stack.value.active.instance).isInstanceOf(RootComponent.Child.Login::class.java)
     }
+
+    private class NullNavigator : MainNavigator {
+        override fun open(screen: Screen) = Unit
+
+        override fun switchTab(tab: Tab) = Unit
+
+        override fun back() = Unit
+
+        override fun logout() = Unit
+    }
+
+    @Test
+    fun `screen factory builds every screen from the module graph`() {
+        val koin = koinApplication { modules(consoleModules(platform())) }.koin
+        val factory = koin.get<ScreenFactory>()
+        val screens = listOf(
+            Screen.Dashboard, Screen.Devices(), Screen.Devices("r1", "Сокол", false), Screen.DeviceDetails("d1"),
+            Screen.Alerts, Screen.IncidentDetails("i1"), Screen.Restaurants, Screen.Provisioning,
+        )
+
+        screens.forEach { screen ->
+            val ctx = DefaultComponentContext(LifecycleRegistry().apply { resume() })
+            assertThat(factory.create(ctx, screen, NullNavigator())).isNotNull()
+        }
+    }
 }
