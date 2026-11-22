@@ -73,6 +73,21 @@ class EvaluateTest(unittest.TestCase):
         self.assertIsNone(r["accuracy"])
 
 
+    def test_incidents_after_the_end_of_the_run_are_ignored(self):
+        row = [truth("S8-09", "none", 0, MIN)]
+        late = [incident("restaurant_network", ["S8-09"], 3 * MIN, None)]
+        self.assertEqual(accuracy.evaluate(row, late, [])["correct"], 0)
+        self.assertEqual(accuracy.evaluate(row, late, [], until=2 * MIN)["correct"], 1)
+        dev = [truth("S8-10", "device", 0, MIN, device="d-1")]
+        self.assertEqual(accuracy.evaluate(dev, [], [alert("d-1", 3 * MIN)], until=2 * MIN)["correct"], 0)
+
+    def test_incidents_left_open_by_the_previous_run_are_ignored(self):
+        row = [truth("S8-09", "none", 10 * MIN, 11 * MIN)]
+        left = [incident("restaurant_network", ["S8-09"], 0, None)]
+        self.assertEqual(accuracy.evaluate(row, left, [])["correct"], 0)
+        self.assertEqual(accuracy.evaluate(row, left, [], since=5 * MIN)["correct"], 1)
+
+
 class CliTest(unittest.TestCase):
     def test_main_reads_files_and_writes_markdown(self):
         with tempfile.TemporaryDirectory() as d:

@@ -9,6 +9,9 @@
 - 22.11 — ПМ1 начат. Прочитаны план, Rulings 400–429, спецификация, `openapi.yaml`, DTO `server:api`, `shared:protocol`. Версии зависимостей сверены с Maven Central и Google Maven.
 - 22.11 — 1.1–1.3 в рабочей копии (не закоммичено): DTO консоли в `shared:protocol` `rest.console` (+ `rest.ApiErrorDto`), `server:api` их импортирует; WS — `rest.console.ws`; REST- и WS-фикстуры; `openapi.yaml` с `x-planned`; тесты `ConsoleRestDtoTest`, `WsMessagesTest`, `ConsoleContractTest`, `OpenApiSpecTest` зелёные. Дальше — 1.4 (toml, settings, корневой Kover), гейт, коммит.
 - 22.11 — 1.4: toml (версии реш. 431, проверены временным спайком — удалён), `settings.gradle.kts` + `console/modules.settings.gradle.kts`, блок `// console` в корневом Kover, Konsist `serverApiDeclaresNoRestDtoOfItsOwn`; Rulings 430–442. Гейт №1 — rc=1: detekt `MatchingDeclarationName` (`ShadowViewDto.kt` → `ShadowDto.kt`) и Kover `shared:protocol` 78 % < 90 % (геттеры DTO не читались, у 6 DTO не было фикстур) — добавлены 9 фикстур и тест «поле → свойство», покрытие модуля 99,7 %. Гейт №2 — rc=0 (2 мин 26 с), коммит ПМ1.
+- 23.11 — ПМ3 закоммичена (`fdb40e7`, `d724538`). ПМ4 в рабочей копии: отказы устройств (`domain/fault`), `synthetic` и генератор эпизодов (`domain/synthetic`), драйвер отказов в прогоне, эталон CSV, команда `prepare`, сценарии `tools/incidents/scenarios`, `accuracy.py` + `test_accuracy.py` (9 тестов), `run-accuracy.sh`; R-22, R-24 (домен 99,1 %). Гейт №1 — rc=1 (detekt: длина `invoke`, `TooManyFunctions`, `ThrowsCount`) → исправлено, запущен №2. Rulings 458–461.
+- 23.11 — ПМ4 закоммичена (`fa8e70e`, гейт rc=0). Стенд пересобран (`prepare-stand.sh`, Flyway V2, V3), `test-backend.sh` — 24/24 PASS, утечек 0. `run-accuracy.sh prepare` — 72 устройства (первая попытка упёрлась в предел `/provision` 60/мин, повтор через минуту). Smoke `s8-a` — приёмка выполнена (раздел ПМ4). Хвост R-07 после остановки → окно прогона в `accuracy.py` (реш. 462).
+- 23.11 — ПМ5 начат: 5.1 (`DesiredDefaults` из `application.yaml`, прокси `ref`/`kds`), 5.2 (`rf.watchedApps` → `BuildConfig`, `<queries>` только launcher-intent, `DefaultWatchedApps` через Koin) — в рабочей копии, гейт впереди.
 
 ## ПМ1. Контракт API и зависимости
 
@@ -95,4 +98,26 @@
 **Отклонения:** состав и доказательства инцидента — `jsonb` (реш. 452); тесты WS — на реальном сервере (реш. 455); повтор токена после выхода — не кража (реш. 451).
 
 **Не проверено:** `test-backend.sh` с новыми шагами и nginx-проксирование WS на живом стенде — проверены `bash -n` и `nginx -t` (до загрузки сертификата); прогон — в ПМ4 (smoke s8-a) и ПМ11.
-- 23.11 — ПМ3 закоммичена (`fdb40e7`, `d724538`). ПМ4 в рабочей копии: отказы устройств (`domain/fault`), `synthetic` и генератор эпизодов (`domain/synthetic`), драйвер отказов в прогоне, эталон CSV, команда `prepare`, сценарии `tools/incidents/scenarios`, `accuracy.py` + `test_accuracy.py` (9 тестов), `run-accuracy.sh`; R-22, R-24 (домен 99,1 %). Гейт №1 — rc=1 (detekt: длина `invoke`, `TooManyFunctions`, `ThrowsCount`) → исправлено, запущен №2. Rulings 458–461.
+
+## ПМ4. Симулятор: отказы, `synthetic`, точность
+
+**Итог.** Симулятор воспроизводит отказы устройств (FR-SM-04) и сети/бэкенда (FR-SM-05), пишет эталон и прогоняет сценарии S8; точность считает `tools/incidents/accuracy.py`.
+
+| Что | Где |
+|---|---|
+| Отказы устройств (`overheat`, `app_closed`, `discharge`, `low_storage`, `mass_reconnect`) | `server/simulator/.../domain/fault/DeviceFaults.kt`, `VirtualDevice` |
+| `probeMode: synthetic`, сеть ресторанов, генератор эпизодов (реш. 428, 460) | `domain/synthetic/Synthetic.kt` |
+| Драйвер отказов: молчаливое исчезновение и возврат устройств | `domain/runtime/ExperimentRun.kt` |
+| Эталон до старта устройств | `TruthSink`, `data/.../CsvTruthSink` → `deploy/out/sim/truth-<сценарий>-<старт>.csv` |
+| Парк S8 (реш. 461) | `domain/usecase/PrepareFleet.kt`, CLI `prepare`, `creds-s8.jsonl` |
+| Сценарии, точность, обвязка | `tools/incidents/scenarios/{s8-a,s8-b,s8-c,accuracy,sm04}.yaml`, `accuracy.py`, `test_accuracy.py`, `run-accuracy.sh` |
+
+**Тесты.** `FaultsAndSyntheticTest` (детерминизм от seed, окна отказов, R-22 при `timeScale = 1`), `DisruptionsRunTest` (исчезновение и возврат, эталон до старта), `IncidentScenariosTest` (все сценарии читаются, `sm04` покрывает все типы отказов), `test_accuracy.py` — 11 тестов (сопоставление, допуск, `none`, `device`, `degradation`, окно прогона).
+
+**Метрики:** гейт rc=0; домен симулятора 99,1 % строк (вариант Kover `domain`, порог 90 %).
+
+**Smoke `s8-a` на стенде (приёмка).** 72 устройства, 300 с, `connected=72` всё окно, `pubErr=0`, `lost=0`. Бэкенд: один инцидент R-08 `backend_global` по 12 ресторанам, 72 тревоги R-05 подавлены, инцидент закрыт `cleared` ≈ через 150 с после снятия отказа. `accuracy.py`: 12/12 = **100 %** (`docs/experiments/incidents/s8-a.md`).
+
+**Отклонения:** после штатной остановки симулятора парк офлайн → 12 инцидентов R-07; в оценку не входят (окно прогона, реш. 462). `sm04` — `synthetic` (реш. 462).
+
+**Не проверено:** `s8-b`, `s8-c`, `sm04` и полный прогон точности (40 мин) на стенде — ПМ11.

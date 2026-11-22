@@ -7,6 +7,8 @@ seed: 404
 rampPerSec: 20
 warmupSec: 0
 durationSec: 900
+# synthetic: цели проверок умолчаний ролей ведут на 10.0.2.2 (эмулятор) — из контейнера они недоступны
+probeMode: synthetic
 fleet: { prefix: S8, restaurants: 2 }
 faults:
   - { type: overheat, atSec: 60, durationSec: 120, devices: 1, offset: 0 }

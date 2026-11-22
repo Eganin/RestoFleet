@@ -11,7 +11,10 @@
   * класс совпал — среди таких инцидентов есть инцидент ожидаемого класса; иначе предсказание — класс первого
     по времени из них; нет ни одного — «none»;
   * «device» — R-01 этого устройства без подавления инцидентом, пересекающаяся с интервалом (инцидента при этом нет);
-  * класс «degradation» исключается: R-10 — диплом.
+  * класс «degradation» исключается: R-10 — диплом;
+  * --since/--until (epoch ms) — окно прогона: инциденты и тревоги, начавшиеся вне него, не учитываются. После
+    штатной остановки симулятора все устройства офлайн (R-07 в каждом ресторане) — это не эпизод эталона, а
+    следующий прогон застаёт эти инциденты открытыми до переподключения устройств (реш. 462).
 """
 import argparse
 import csv
@@ -74,8 +77,13 @@ def predict(row, incidents, alerts, horizon):
     return "none"
 
 
-def evaluate(truth, incidents, alerts):
+def evaluate(truth, incidents, alerts, until=None, since=None):
     """Матрица ошибок и точность; строки эталона — без исключённых классов."""
+    def inside(at):
+        return (since is None or at >= since) and (until is None or at <= until)
+
+    incidents = [i for i in incidents if inside(i["startedAt"])]
+    alerts = [a for a in alerts if inside(a["openedAt"])]
     rows = []
     for t in truth:
         if t["expected_class"] in EXCLUDED:
@@ -112,8 +120,12 @@ def main(argv=None):
     p.add_argument("--alerts", required=True)
     p.add_argument("--out")
     p.add_argument("--title", default="Точность классификатора инцидентов")
+    p.add_argument("--since", type=int, help="начало прогона, epoch ms")
+    p.add_argument("--until", type=int, help="конец прогона, epoch ms")
     args = p.parse_args(argv)
-    result = evaluate(load_truth(args.truth), load_items(args.incidents), load_items(args.alerts))
+    result = evaluate(
+        load_truth(args.truth), load_items(args.incidents), load_items(args.alerts), args.until, args.since,
+    )
     text = render(result, args.title, [f"эталон: `{args.truth}`", "инциденты: `GET /api/v1/incidents`",
                                        "тревоги: `GET /api/v1/alerts?rule=R-01&includeSuppressed=true`"])
     if args.out:

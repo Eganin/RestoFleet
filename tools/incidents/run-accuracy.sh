@@ -4,7 +4,7 @@
 #   tools/incidents/run-accuracy.sh build          # installDist + образ restofleet/simulator:dev
 #   tools/incidents/run-accuracy.sh prepare        # рестораны S8-01…S8-12 и 72 устройства (кэш deploy/out/sim/creds-s8.jsonl)
 #   tools/incidents/run-accuracy.sh run <сценарий> # прогон tools/incidents/scenarios/<сценарий>.yaml и оценка
-#   tools/incidents/run-accuracy.sh eval <truth.csv> [отчёт.md]  # оценка готового эталона по GET /incidents и /alerts
+#   tools/incidents/run-accuracy.sh eval <truth.csv> [отчёт.md] [конец [начало], epoch ms]  # оценка эталона
 #
 # Эталон пишет симулятор: deploy/out/sim/truth-<сценарий>-<старт>.csv (600). Результат: accuracy → 
 # docs/experiments/incidents/accuracy.md, остальные сценарии → docs/experiments/incidents/<сценарий>.md.
@@ -34,13 +34,14 @@ login() {
 fetch() { curl -fsS --cacert "$CA" -H "@$tmp/auth-header" "$BASE$1"; }
 
 evaluate() {
-  local truth=$1 out=$2 since
+  local truth=$1 out=$2 until=${3:-} started=${4:-} since
   since=$(python3 -I -c 'import csv,sys; r=list(csv.DictReader(open(sys.argv[1]))); print(min(int(x["from"]) for x in r) - 600000)' "$truth")
   login
   fetch "/api/v1/incidents?from=$since&limit=1000" >"$tmp/incidents.json"
   fetch "/api/v1/alerts?rule=R-01&includeSuppressed=true&limit=1000" >"$tmp/alerts.json"
   python3 -I tools/incidents/accuracy.py --truth "$truth" --incidents "$tmp/incidents.json" \
-    --alerts "$tmp/alerts.json" --out "$out" --title "Точность классификатора: $(basename "$truth" .csv)"
+    --alerts "$tmp/alerts.json" --out "$out" --title "Точность классификатора: $(basename "$truth" .csv)" \
+    ${until:+--until "$until"} ${started:+--since "$started"}
 }
 
 cmd=${1:-}
@@ -57,7 +58,10 @@ case "$cmd" in
     name=${2:?сценарий: s8-a | s8-b | s8-c | accuracy | sm04}
     [ -f "tools/incidents/scenarios/$name.yaml" ] || { echo "нет tools/incidents/scenarios/$name.yaml" >&2; exit 2; }
     log "run $name"
+    # Окно прогона: до старта — хвост прошлого прогона, после остановки — офлайн всего парка (реш. 462)
+    started=$(python3 -I -c 'import time; print(int(time.time() * 1000))')
     compose --profile experiment run --rm simulator run --scenario "/incident-scenarios/$name.yaml" --creds "$CREDS"
+    ended=$(python3 -I -c 'import time; print(int(time.time() * 1000))')
     truth=$(ls -t deploy/out/sim/truth-"$name"-*.csv 2>/dev/null | head -1 || true)
     if [ -z "$truth" ]; then log "эталона нет (сценарий без отказов сети и бэкенда)"; exit 0; fi
     mkdir -p docs/experiments/incidents
@@ -65,11 +69,11 @@ case "$cmd" in
     [ "$name" = accuracy ] && out=docs/experiments/incidents/accuracy.md
     # Закрытие последнего эпизода: два тика без условия и пробы K — до 2 мин после конца прогона
     sleep "${RF_SETTLE_SEC:-90}"
-    evaluate "$truth" "$out"
+    evaluate "$truth" "$out" "$ended" "$started"
     log "отчёт: $out"
     ;;
   eval)
-    evaluate "${2:?truth.csv}" "${3:-docs/experiments/incidents/eval.md}"
+    evaluate "${2:?truth.csv}" "${3:-docs/experiments/incidents/eval.md}" "${4:-}" "${5:-}"
     ;;
   *)
     sed -n '2,11p' "$0"

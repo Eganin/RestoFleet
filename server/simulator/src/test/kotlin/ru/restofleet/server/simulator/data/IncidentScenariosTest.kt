@@ -57,7 +57,7 @@ class IncidentScenariosTest {
     @Test
     fun `sm04 covers every device fault`() {
         assertThat(load("sm04").faults.map { it.type }.toSet()).containsExactlyElementsIn(DeviceFaultType.entries)
-        assertThat(load("sm04").probeMode).isEqualTo(ProbeMode.REAL)
+        assertThat(load("sm04").probeMode).isEqualTo(ProbeMode.SYNTHETIC)
     }
 
     @Test
