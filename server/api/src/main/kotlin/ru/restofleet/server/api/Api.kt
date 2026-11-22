@@ -1,5 +1,6 @@
 package ru.restofleet.server.api
 
+import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.auth.authenticate
@@ -15,18 +16,20 @@ import io.ktor.server.request.httpMethod
 import io.ktor.server.request.path
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
-import io.ktor.serialization.kotlinx.json.json
 import org.slf4j.event.Level
+import ru.restofleet.server.api.alert.alertRoutes
 import ru.restofleet.server.api.auth.AuthFailureBudget
 import ru.restofleet.server.api.auth.AuthProviders
 import ru.restofleet.server.api.auth.authFailureCounter
 import ru.restofleet.server.api.auth.installSecurity
 import ru.restofleet.server.api.auth.loginRoute
+import ru.restofleet.server.api.auth.logoutRoute
 import ru.restofleet.server.api.auth.refreshRoute
 import ru.restofleet.server.api.command.commandRoutes
 import ru.restofleet.server.api.device.deviceRoutes
 import ru.restofleet.server.api.error.installErrorHandling
 import ru.restofleet.server.api.health.healthRoute
+import ru.restofleet.server.api.incident.incidentRoutes
 import ru.restofleet.server.api.http.clientKey
 import ru.restofleet.server.api.poll.pollRoutes
 import ru.restofleet.server.api.provisioning.provisionRoute
@@ -74,6 +77,7 @@ fun Application.restofleetApi(useCases: ApiUseCases, settings: ApiSettings) {
             healthRoute(ApiPaths.HEALTH, useCases.health)
             rateLimit(RateLimits.LOGIN) { loginRoute(useCases.auth) }
             refreshRoute(useCases.auth)
+            logoutRoute(useCases.auth)
             rateLimit(RateLimits.PROVISION) { provisionRoute(useCases.provisioning) }
             // Лимит снаружи аутентификации: исчерпанный клиент получает 429 до проверки пароля (bcrypt)
             rateLimit(RateLimits.POLL_AUTH) {
@@ -86,6 +90,8 @@ fun Application.restofleetApi(useCases: ApiUseCases, settings: ApiSettings) {
                 shadowRoutes(useCases.shadows)
                 commandRoutes(useCases.commands)
                 tokenRoutes(useCases.provisioning)
+                alertRoutes(useCases.alerts)
+                incidentRoutes(useCases.incidents)
             }
         }
     }

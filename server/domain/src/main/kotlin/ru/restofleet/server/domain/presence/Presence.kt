@@ -37,6 +37,9 @@ interface SessionRepository {
     /** Последняя по времени подключения сессия устройства. */
     suspend fun latest(deviceId: DeviceId): DeviceSession?
 
+    /** Последняя сессия каждого устройства из [ids]. */
+    suspend fun latestFor(ids: Collection<DeviceId>): Map<DeviceId, DeviceSession>
+
     /** Закрывает сессию [connId], если она открыта. */
     suspend fun close(deviceId: DeviceId, connId: String, at: Long, reason: String)
 

@@ -1,9 +1,18 @@
 package ru.restofleet.server.data.db
 
+import org.jetbrains.exposed.v1.core.JoinType
+import org.jetbrains.exposed.v1.core.LikePattern
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.count
+import org.jetbrains.exposed.v1.core.exists
+import org.jetbrains.exposed.v1.core.greaterEq
+import org.jetbrains.exposed.v1.core.isNull
+import org.jetbrains.exposed.v1.core.like
+import org.jetbrains.exposed.v1.core.lowerCase
+import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.less
@@ -18,12 +27,14 @@ import ru.restofleet.server.domain.common.PageRequest
 import ru.restofleet.server.domain.device.CredentialRepository
 import ru.restofleet.server.domain.device.Device
 import ru.restofleet.server.domain.device.DeviceAnnouncement
+import ru.restofleet.server.domain.device.DeviceCounts
 import ru.restofleet.server.domain.device.DeviceFilter
 import ru.restofleet.server.domain.device.DeviceInfo
 import ru.restofleet.server.domain.device.DeviceRepository
 import ru.restofleet.server.domain.device.DeviceRole
 import ru.restofleet.server.domain.device.DeviceStatus
 import ru.restofleet.server.domain.device.DeviceTransport
+import ru.restofleet.server.domain.device.FleetQueries
 import ru.restofleet.server.domain.restaurant.RestaurantId
 import ru.restofleet.shared.kernel.DeviceId
 
@@ -49,6 +60,11 @@ internal class ExposedDeviceRepository : DeviceRepository {
     override suspend fun findById(id: DeviceId): Device? =
         DevicesTable.selectAll().where { DevicesTable.id eq id.value }.singleOrNull()?.toDevice()
 
+    override suspend fun findByIds(ids: Collection<DeviceId>): List<Device> {
+        if (ids.isEmpty()) return emptyList()
+        return DevicesTable.selectAll().where { DevicesTable.id inList ids.map { it.value } }.map { it.toDevice() }
+    }
+
     override suspend fun list(filter: DeviceFilter, page: PageRequest): List<Device> {
         val conditions = listOfNotNull(
             filter.restaurantId?.let { r ->
@@ -56,8 +72,12 @@ internal class ExposedDeviceRepository : DeviceRepository {
             },
             filter.role?.let { DevicesTable.role eq it.code },
             filter.status?.let { DevicesTable.status eq it.code },
+            filter.agentVersion?.let { DevicesTable.agentVersion eq it },
+            filter.query?.let(::matches),
+            hasProblems().takeIf { filter.problemsOnly },
         )
-        return DevicesTable.selectAll()
+        return DevicesTable.join(RestaurantsTable, JoinType.INNER, DevicesTable.restaurantId, RestaurantsTable.id)
+            .selectAll()
             .where(conditions.fold(Op.TRUE as Op<Boolean>) { acc, op -> acc and op })
             .orderBy(DevicesTable.createdAt to SortOrder.ASC, DevicesTable.id to SortOrder.ASC)
             .limit(page.limit)
@@ -126,6 +146,21 @@ private fun change(id: DeviceId, body: DevicesTable.(UpdateStatement) -> Unit) {
 
 private fun notDecommissioned(): Op<Boolean> = DevicesTable.status neq DeviceStatus.DECOMMISSIONED.code
 
+/** `q`: подстрока без учёта регистра; `%`, `_` и `\` в запросе — буквально (реш. 424). */
+private fun matches(query: String): Op<Boolean> {
+    val pattern = LikePattern("%" + LikePattern.ofLiteral(query.lowercase()).pattern + "%", '\\')
+    return listOf(DevicesTable.name, RestaurantsTable.code, RestaurantsTable.name, DevicesTable.model)
+        .map<_, Op<Boolean>> { column -> column.lowerCase() like pattern }
+        .reduce { acc, op -> acc or op }
+}
+
+/** Есть незакрытая тревога, не покрытая инцидентом (`problems=true`). */
+private fun hasProblems(): Op<Boolean> = exists(
+    AlertsTable.select(AlertsTable.id).where {
+        (AlertsTable.deviceId eq DevicesTable.id) and notResolved() and AlertsTable.parentIncidentId.isNull()
+    },
+)
+
 private fun UpdateBuilder<*>.info(info: DeviceInfo?) {
     this[DevicesTable.model] = info?.model?.take(MAX_MODEL)
     this[DevicesTable.manufacturer] = info?.manufacturer?.take(MAX_MODEL)
@@ -157,6 +192,35 @@ private fun ResultRow.toDevice(): Device {
         agentVersion = this[DevicesTable.agentVersion],
         mode = this[DevicesTable.mode],
     )
+}
+
+/** Запросы по парку: учитываемые устройства для агрегатора и счётчики сводки. */
+internal class ExposedFleetQueries : FleetQueries {
+    override suspend fun fleet(seenSince: Long): List<Device> = DevicesTable.selectAll()
+        .where { notDecommissioned() and (DevicesTable.lastSeenAt greaterEq seenSince.toTimestamp()) }
+        .map { it.toDevice() }
+
+    override suspend fun counts(offlineSince: Long): DeviceCounts {
+        val n = DevicesTable.id.count()
+        val rows = DevicesTable.select(DevicesTable.restaurantId, DevicesTable.status, n)
+            .where { notDecommissioned() }
+            .groupBy(DevicesTable.restaurantId, DevicesTable.status)
+            .map { row ->
+                val restaurant = RestaurantId(row[DevicesTable.restaurantId].toString())
+                Triple(restaurant, row[DevicesTable.status], row[n].toInt())
+            }
+        val recent = DevicesTable.select(n).where {
+            (DevicesTable.status eq DeviceStatus.OFFLINE.code) and
+                (DevicesTable.lastSeenAt greaterEq offlineSince.toTimestamp())
+        }.single()[n].toInt()
+        return DeviceCounts(
+            total = rows.sumOf { it.third },
+            online = rows.filter { it.second == DeviceStatus.ONLINE.code }.sumOf { it.third },
+            offline = rows.filter { it.second == DeviceStatus.OFFLINE.code }.sumOf { it.third },
+            offlineRecently = recent,
+            byRestaurant = rows.groupBy({ it.first }, { it.third }).mapValues { (_, v) -> v.sum() },
+        )
+    }
 }
 
 /** `device_credentials`. */

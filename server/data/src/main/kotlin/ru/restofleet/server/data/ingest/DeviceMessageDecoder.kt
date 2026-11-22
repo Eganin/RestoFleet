@@ -12,6 +12,7 @@ import ru.restofleet.server.domain.command.ReportedCommandStatus
 import ru.restofleet.server.domain.device.DeviceAnnouncement
 import ru.restofleet.server.domain.device.DeviceInfo
 import ru.restofleet.server.domain.ingest.DeviceEvent
+import ru.restofleet.server.domain.ingest.DeviceSignal
 import ru.restofleet.server.domain.ingest.ProbeReport
 import ru.restofleet.server.domain.ingest.ProbeResult
 import ru.restofleet.server.domain.ingest.TelemetrySnapshot
@@ -29,9 +30,13 @@ import ru.restofleet.shared.protocol.dto.CommandStatusDto
 import ru.restofleet.shared.protocol.dto.DebugSeqEventDto
 import ru.restofleet.shared.protocol.dto.DeviceStateDto
 import ru.restofleet.shared.protocol.dto.EventDto
+import ru.restofleet.shared.protocol.dto.FgAbsentEventDto
+import ru.restofleet.shared.protocol.dto.FgChangedEventDto
+import ru.restofleet.shared.protocol.dto.ProbeStateEventDto
 import ru.restofleet.shared.protocol.dto.ProbeReportDto
 import ru.restofleet.shared.protocol.dto.StatusDto
 import ru.restofleet.shared.protocol.dto.TelemetryDto
+import ru.restofleet.shared.protocol.dto.ThresholdEventDto
 import ru.restofleet.shared.shadow.ShadowKeys
 
 /** Разобранное входящее сообщение устройства (MQTT-DTO `shared:protocol` → модель `server:domain`). */
@@ -163,8 +168,22 @@ class DeviceMessageDecoder(private val maxPayloadBytes: Int) {
         return if (dto is DebugSeqEventDto) {
             Decoded.Ignored("debug_seq")
         } else {
-            Decoded.Event(DeviceEvent(id, dto.ts, type.take(MAX_TYPE), raw))
+            Decoded.Event(DeviceEvent(id, dto.ts, type.take(MAX_TYPE), raw, signal(dto)))
         }
+    }
+
+    /** Смысл события для правил тревог (реш. 415); длины — под столбцы `alert_conditions` и `probe_states`. */
+    private fun signal(dto: EventDto): DeviceSignal? = when (dto) {
+        is ThresholdEventDto ->
+            DeviceSignal.Threshold(dto.metric.take(MAX_TYPE), dto.state == ENTER, dto.value, dto.limit)
+        is FgAbsentEventDto ->
+            DeviceSignal.FgAbsent(
+                dto.pkg.take(MAX_PACKAGE), dto.sinceTs, dto.limitMin, dto.foregroundApp?.take(MAX_PACKAGE),
+            )
+        is FgChangedEventDto -> DeviceSignal.FgChanged(dto.to?.take(MAX_PACKAGE))
+        is ProbeStateEventDto ->
+            DeviceSignal.ProbeState(dto.target.take(MAX_ID), dto.state == DOWN, dto.error, dto.failures)
+        else -> null
     }
 
     /** `reported` разбирается обобщённо (документ тени — дерево), метаданные отделяются от документа. */
@@ -202,6 +221,8 @@ class DeviceMessageDecoder(private val maxPayloadBytes: Int) {
         const val MAX_PACKAGE = 255
         const val MAX_TYPE = 32
         const val TYPE_KEY = "type"
+        const val ENTER = "enter"
+        const val DOWN = "down"
         const val NUL = '\u0000'
         const val NUL_ESCAPE = "\\u0000"
         val BATTERY_LEVEL = 0..100

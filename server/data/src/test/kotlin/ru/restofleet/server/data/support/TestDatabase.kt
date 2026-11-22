@@ -46,7 +46,8 @@ object TestDatabase {
 
     private val TABLES = listOf(
         "refresh_tokens", "users", "commands", "events", "probe_results", "telemetry", "shadows", "device_sessions",
-        "provisioning_tokens", "device_credentials", "devices", "restaurants",
+        "provisioning_tokens", "device_credentials", "alerts", "alert_conditions", "probe_states", "probe_agg_1m",
+        "incidents", "devices", "restaurants",
     )
 
     /** Пустые таблицы перед каждым тестом. */

@@ -22,7 +22,7 @@ import ru.restofleet.shared.kernel.Outcome
 class PollingUseCasesTest {
     private val w = World()
     private val auth = AuthenticateDevice(w.devices, w.credentials, w.cache, w.hasher, w.digest, w.tx)
-    private val ingest = IngestBatch(w.devices, w.telemetry, w.tx, w.clock)
+    private val ingest = w.ingestBatch()
     private val pollTelemetry = PollTelemetry(w.devices, ingest, w.tx, w.clock)
     private val pollCommands = PollCommands(w.devices, w.commands, w.tx, w.clock)
     private val markStale = MarkStalePollers(w.devices, w.pollingSettings, w.tx, w.clock)

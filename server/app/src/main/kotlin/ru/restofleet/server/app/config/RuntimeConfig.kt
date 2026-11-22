@@ -7,6 +7,9 @@ import ru.restofleet.server.data.config.DataConfig
 import ru.restofleet.server.data.config.DatabaseConfig
 import ru.restofleet.server.data.config.MqttConfig
 import ru.restofleet.server.domain.auth.AuthSettings
+import ru.restofleet.server.domain.alert.RuleParams
+import ru.restofleet.server.domain.incident.ClassifierParams
+import ru.restofleet.server.domain.incident.IncidentSettings
 import ru.restofleet.server.domain.polling.PollingSettings
 import ru.restofleet.server.domain.provisioning.BrokerEndpoint
 import ru.restofleet.server.domain.provisioning.ProvisioningSettings
@@ -24,8 +27,11 @@ class RuntimeConfig private constructor(
     val polling: PollingSettings,
     val auth: AuthSettings,
     val jobs: JobsSection,
+    val rules: RuleParams,
+    val incidents: IncidentSettings,
 ) {
     companion object {
+        private const val MS_PER_SECOND = 1_000L
         private const val MS_PER_MINUTE = 60_000L
         private const val MS_PER_HOUR = 60 * MS_PER_MINUTE
         private const val MS_PER_DAY = 24 * MS_PER_HOUR
@@ -82,8 +88,28 @@ class RuntimeConfig private constructor(
                 tokenTtlMillis = config.provisioning.tokenTtlHours * MS_PER_HOUR,
             ),
             polling = PollingSettings(staleAfterMillis = config.polling.staleAfterMs),
-            auth = AuthSettings(refreshTtlMillis = config.auth.refreshTtlDays * MS_PER_DAY),
+            auth = AuthSettings(
+                refreshIdleMillis = config.auth.refreshIdleHours * MS_PER_HOUR,
+                sessionMaxMillis = config.auth.sessionMaxDays * MS_PER_DAY,
+            ),
             jobs = config.jobs,
+            rules = RuleParams(freeMbEnter = config.alerts.freeMbEnter, freeMbExit = config.alerts.freeMbExit),
+            incidents = config.incidents.let {
+                IncidentSettings(
+                    classifier = ClassifierParams(
+                        backendDownPct = it.backendDownPct,
+                        minRestaurants = it.minRestaurants,
+                        restaurantSharePct = it.restaurantSharePct,
+                        offlinePct = it.offlinePct,
+                        primaryTarget = it.primaryTarget,
+                        refTarget = it.refTarget,
+                    ),
+                    windowMillis = it.windowSec * MS_PER_SECOND,
+                    silentAfterMillis = it.silentAfterHours * MS_PER_HOUR,
+                    resolveAfterTicks = it.resolveAfterTicks,
+                    tickMillis = it.tickMs,
+                )
+            },
         )
     }
 }

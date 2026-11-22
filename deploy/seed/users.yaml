@@ -4,3 +4,6 @@
 users:
   - login: admin
     passwordSecret: admin-password
+  # Инженер поддержки — вход в консоль (реш. 417; роль admin — роли в дипломе). Пароль — deploy/out/support-password
+  - login: support
+    passwordSecret: support-password

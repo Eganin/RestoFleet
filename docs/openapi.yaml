@@ -91,7 +91,6 @@ paths:
   /api/v1/auth/logout:
     post:
       tags: [auth]
-      x-planned: true
       summary: Выход — отзыв семейства refresh-токенов сессии (реш. 417)
       description: JWT не нужен (access мог истечь). Ответ всегда 204, даже для неизвестного или погашенного токена.
       security: []
@@ -107,7 +106,6 @@ paths:
   /api/v1/summary:
     get:
       tags: [alerts]
-      x-planned: true
       summary: Сводка для экрана «Обзор» (FR-CN-02); те же данные приходят по WS `summary_changed`
       responses:
         "200":
@@ -196,17 +194,14 @@ paths:
         - { name: status, in: query, schema: { $ref: "#/components/schemas/DeviceStatus" } }
         - name: q
           in: query
-          x-planned: true
           description: Поиск без учёта регистра по имени устройства, коду и названию ресторана, модели (`%` и `_` — буквально)
           schema: { type: string, maxLength: 100 }
         - name: version
           in: query
-          x-planned: true
           description: Точная версия агента (`agentVersion`, реш. 424)
           schema: { type: string, maxLength: 64 }
         - name: problems
           in: query
-          x-planned: true
           description: true — только устройства с открытой или подтверждённой неподавленной тревогой
           schema: { type: boolean, default: false }
         - $ref: "#/components/parameters/Limit"
@@ -214,8 +209,8 @@ paths:
       responses:
         "200":
           description: |
-            Устройства (по времени регистрации). С ПМ2 у элементов заполнены поля консоли: `restaurantCode`,
-            `restaurantName`, `lastTelemetry`, `lastSessionReason`, `alerts`.
+            Устройства (по времени регистрации) с полями консоли: `restaurantCode`, `restaurantName`, `lastTelemetry`,
+            `lastSessionReason`, `alerts`.
           content:
             application/json:
               schema:
@@ -399,7 +394,6 @@ paths:
         "503": { $ref: "#/components/responses/Unavailable" }
     get:
       tags: [commands]
-      x-planned: true
       summary: История команд устройства, новые сначала (FR-CN-07)
       parameters:
         - $ref: "#/components/parameters/Limit"
@@ -437,7 +431,6 @@ paths:
   /api/v1/alerts:
     get:
       tags: [alerts]
-      x-planned: true
       summary: Тревоги R-01…R-06 (FR-BE-30, 31), новые сначала
       parameters:
         - { name: state, in: query, schema: { $ref: "#/components/schemas/AlertState" } }
@@ -469,9 +462,10 @@ paths:
       - { name: id, in: path, required: true, schema: { type: string } }
     patch:
       tags: [alerts]
-      x-planned: true
       summary: Подтвердить или закрыть тревогу (закрытие — с комментарием 1…500)
-      description: Автор — `sub` JWT. Повтор над подтверждённой или закрытой — 409 `conflict`.
+      description: |
+        Автор — `login` из JWT (реш. 446). Повтор над подтверждённой — 409 `conflict` (`reason` = `already_acknowledged`),
+        над закрытой — 409 (`already_resolved`). Неизвестное `action` или комментарий вне 1…500 — 400 `validation`.
       requestBody:
         required: true
         content:
@@ -491,7 +485,6 @@ paths:
   /api/v1/incidents:
     get:
       tags: [incidents]
-      x-planned: true
       summary: Сводные инциденты доступности R-07…R-09 (FR-BE-36, 37), новые сначала
       parameters:
         - { name: state, in: query, schema: { type: string, enum: [open, resolved] } }
@@ -521,7 +514,6 @@ paths:
       - { name: id, in: path, required: true, schema: { type: string } }
     get:
       tags: [incidents]
-      x-planned: true
       summary: Инцидент и доказательства классификации (текст объяснения строит консоль)
       responses:
         "200":
@@ -533,7 +525,6 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
     patch:
       tags: [incidents]
-      x-planned: true
       summary: Подтвердить инцидент с комментарием (закрывается только автоматически, реш. 412)
       requestBody:
         required: true
@@ -885,15 +876,15 @@ components:
         agentVersion: { type: string }
         mode: { type: string, enum: [normal, device_owner] }
         deviceInfo: { $ref: "#/components/schemas/DeviceInfo" }
-        restaurantCode: { type: string, description: "С ПМ2" }
-        restaurantName: { type: string, description: "С ПМ2" }
+        restaurantCode: { type: string }
+        restaurantName: { type: string }
         lastTelemetry:
           allOf: [{ $ref: "#/components/schemas/TelemetryPoint" }]
-          description: Последняя точка — только в `GET /devices` (с ПМ2)
-        lastSessionReason: { type: string, example: lwt, description: "Причина закрытия последней сессии офлайн-устройства (с ПМ2)" }
+          description: Последняя точка — только в `GET /devices`
+        lastSessionReason: { type: string, example: lwt, description: "Причина закрытия последней сессии офлайн-устройства" }
         alerts:
           type: array
-          description: Открытые и подтверждённые неподавленные тревоги — сначала критичные, затем новые (с ПМ2)
+          description: Открытые и подтверждённые неподавленные тревоги — сначала критичные, затем новые
           items: { $ref: "#/components/schemas/Alert" }
     TelemetryPoint:
       type: object
@@ -1056,10 +1047,10 @@ components:
         restaurantName: { type: string }
         target: { type: string, description: "Цель проверки у R-05 (api, kds, ref)" }
         openedAt: { type: integer, format: int64 }
-        ackBy: { type: string, description: "sub JWT" }
+        ackBy: { type: string, description: "login пользователя из JWT (реш. 446)" }
         ackAt: { type: integer, format: int64 }
         resolvedAt: { type: integer, format: int64 }
-        resolvedBy: { type: string, description: "sub JWT; у автоматически закрытых нет" }
+        resolvedBy: { type: string, description: "login пользователя; у автоматически закрытых нет" }
         comment: { type: string, maxLength: 500 }
         auto: { type: boolean, description: "Закрыта автоматически по выходу из условия" }
         parentIncidentId: { type: string, description: "Покрыта инцидентом (реш. 416)" }

@@ -43,8 +43,17 @@ data class ProbeReport(val deviceId: DeviceId, val ts: Long, val results: List<P
 /** Строка истории проверок. */
 data class ProbeRecord(val deviceId: DeviceId, val ts: Long, val result: ProbeResult)
 
-/** Событие устройства (`events`); [payload] — сообщение JSON-текстом. Идентификатора нет, дубль допустим (реш. 207). */
-data class DeviceEvent(val deviceId: DeviceId, val ts: Long, val type: String, val payload: String)
+/**
+ * Событие устройства (`events`); [payload] — сообщение JSON-текстом. Идентификатора нет, дубль допустим (реш. 207).
+ * [signal] — смысл для правил тревог (не хранится отдельно: восстанавливается из [payload]).
+ */
+data class DeviceEvent(
+    val deviceId: DeviceId,
+    val ts: Long,
+    val type: String,
+    val payload: String,
+    val signal: DeviceSignal? = null,
+)
 
 /** Пачка данных устройств для одной транзакции ingest (MQTT: до 500 сообщений; REST: один опрос). */
 data class DeviceDataBatch(
@@ -91,6 +100,9 @@ interface TelemetryRepository {
     suspend fun insertEvents(events: List<DeviceEvent>): Int
 
     suspend fun latest(deviceId: DeviceId): TelemetrySnapshot?
+
+    /** Последняя точка каждого устройства из [ids] (у кого она есть). */
+    suspend fun latestFor(ids: Collection<DeviceId>): Map<DeviceId, TelemetrySnapshot>
 
     suspend fun telemetry(deviceId: DeviceId, range: TimeRange, page: PageRequest): List<TelemetrySnapshot>
 

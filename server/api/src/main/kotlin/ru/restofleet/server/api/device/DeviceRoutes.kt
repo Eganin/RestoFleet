@@ -9,9 +9,11 @@ import io.ktor.server.routing.route
 import ru.restofleet.server.api.DeviceUseCases
 import ru.restofleet.server.api.error.ApiException
 import ru.restofleet.server.api.error.orThrow
+import ru.restofleet.server.api.http.booleanParam
 import ru.restofleet.server.api.http.page
 import ru.restofleet.server.api.http.pathDeviceId
 import ru.restofleet.server.api.http.queryParam
+import ru.restofleet.server.api.http.requireText
 import ru.restofleet.server.api.http.timeRange
 import ru.restofleet.server.domain.device.DeviceFilter
 import ru.restofleet.server.domain.device.DeviceRole
@@ -54,13 +56,22 @@ fun Route.deviceRoutes(useCases: DeviceUseCases) {
     }
 }
 
-/** `?restaurant=&role=&status=`: неизвестная роль или статус — 400 (а не пустой список). */
+/**
+ * `?restaurant=&role=&status=&q=&version=&problems=`: неизвестная роль или статус — 400 (а не пустой список);
+ * `q` ≤ 100 символов, `version` ≤ 64 (реш. 424).
+ */
 private fun ApplicationCall.deviceFilter(): DeviceFilter = DeviceFilter(
     restaurantId = queryParam("restaurant")?.let(::RestaurantId),
     role = queryParam("role")?.let { DeviceRole.fromCode(it) ?: throw ApiException.validation("role", "unknown") },
     status = queryParam("status")
         ?.let { DeviceStatus.fromCode(it) ?: throw ApiException.validation("status", "unknown") },
+    query = queryParam("q")?.trim()?.let { requireText("q", it, MAX_QUERY) },
+    agentVersion = queryParam("version")?.let { requireText("version", it, MAX_VERSION) },
+    problemsOnly = booleanParam("problems") ?: false,
 )
+
+private const val MAX_QUERY = 100
+private const val MAX_VERSION = 64
 
 /** `?metric=batteryLevel,tempC` — проекция полей (план 2.3); без параметра — все поля. */
 private fun ApplicationCall.metrics(): Set<String> {

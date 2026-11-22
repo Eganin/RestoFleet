@@ -4,6 +4,7 @@ import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
@@ -31,6 +32,16 @@ internal class ExposedSessionRepository : SessionRepository {
         .limit(1)
         .singleOrNull()
         ?.toSession()
+
+    override suspend fun latestFor(ids: Collection<DeviceId>): Map<DeviceId, DeviceSession> {
+        if (ids.isEmpty()) return emptyMap()
+        return DeviceSessionsTable.selectAll()
+            .where { DeviceSessionsTable.deviceId inList ids.map { it.value } }
+            .withDistinctOn(DeviceSessionsTable.deviceId)
+            .orderBy(DeviceSessionsTable.deviceId to SortOrder.ASC, DeviceSessionsTable.connectedAt to SortOrder.DESC)
+            .map { it.toSession() }
+            .associateBy { it.deviceId }
+    }
 
     override suspend fun close(deviceId: DeviceId, connId: String, at: Long, reason: String) {
         DeviceSessionsTable.update({

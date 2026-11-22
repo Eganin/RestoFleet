@@ -1,5 +1,8 @@
 package ru.restofleet.server.domain.device.usecase
 
+import ru.restofleet.server.domain.alert.AlertConditionRepository
+import ru.restofleet.server.domain.alert.AlertRepository
+import ru.restofleet.server.domain.alert.AlertState
 import ru.restofleet.server.domain.command.CommandReasons
 import ru.restofleet.server.domain.command.CommandRepository
 import ru.restofleet.server.domain.common.ServerError
@@ -24,13 +27,16 @@ import ru.restofleet.shared.kernel.Outcome
  * команды (`queued`/`delivered`) → `failed` с причиной `decommissioned` (R-8, реш. 307). Отказ брокера
  * откатывает транзакцию — в БД устройство остаётся активным, вызов можно повторить. После commit — очистка retained
  * `desired`/`status` и сброс кэша Basic (реш. 213). Повторный вызов для уже выведенного устройства идемпотентен и
- * дочищает то, что могло не выполниться в прошлый раз.
+ * дочищает то, что могло не выполниться в прошлый раз. Незакрытые тревоги устройства закрываются автоматически, факты-
+ * условия удаляются: выведенное устройство больше ничего не сообщит (реш. 444).
  */
 class DecommissionDevice(
     private val devices: DeviceRepository,
     private val credentials: CredentialRepository,
     private val sessions: SessionRepository,
     private val commands: CommandRepository,
+    private val alerts: AlertRepository,
+    private val conditions: AlertConditionRepository,
     private val broker: BrokerAccounts,
     private val publisher: MessagePublisher,
     private val cache: DeviceCredentialCache,
@@ -53,6 +59,10 @@ class DecommissionDevice(
                         devices.decommission(id, now)
                         credentials.revoke(id, now)
                         sessions.closeOpen(id, now, SessionCloseReason.DECOMMISSIONED)
+                        alerts.active(listOf(id)).forEach {
+                            alerts.update(it.copy(state = AlertState.RESOLVED, resolvedAt = now, auto = true))
+                        }
+                        conditions.active(listOf(id)).forEach { conditions.delete(it.key) }
                         Outcome.Success(device.copy(status = DeviceStatus.DECOMMISSIONED, decommissionedAt = now))
                     }
                 }

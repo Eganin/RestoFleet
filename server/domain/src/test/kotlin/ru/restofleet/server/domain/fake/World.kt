@@ -1,5 +1,7 @@
 package ru.restofleet.server.domain.fake
 
+import ru.restofleet.server.domain.alert.AlertProcessor
+import ru.restofleet.server.domain.alert.RuleParams
 import ru.restofleet.server.domain.auth.AuthSettings
 import ru.restofleet.server.domain.auth.SessionIssuer
 import ru.restofleet.server.domain.command.Command
@@ -9,7 +11,11 @@ import ru.restofleet.server.domain.device.DeviceInfo
 import ru.restofleet.server.domain.device.DeviceRole
 import ru.restofleet.server.domain.device.DeviceStatus
 import ru.restofleet.server.domain.device.DeviceTransport
+import ru.restofleet.server.domain.incident.IncidentSettings
+import ru.restofleet.server.domain.incident.usecase.EvaluateIncidents
+import ru.restofleet.server.domain.ingest.usecase.IngestBatch
 import ru.restofleet.server.domain.polling.PollingSettings
+import ru.restofleet.server.domain.presence.usecase.HandleStatus
 import ru.restofleet.server.domain.provisioning.BrokerEndpoint
 import ru.restofleet.server.domain.provisioning.ProvisioningSettings
 import ru.restofleet.server.domain.restaurant.Restaurant
@@ -46,6 +52,26 @@ class World {
     val pollingSettings = PollingSettings()
     val authSettings = AuthSettings()
     val sessionIssuer = SessionIssuer(refreshTokens, accessTokens, secrets, digest, authSettings, ids)
+    val alerts = FakeAlertRepository(db)
+    val conditions = FakeConditionRepository(db)
+    val probeStates = FakeProbeStateRepository(db)
+    val bus = FakeEventBus()
+    var ruleParams = RuleParams()
+    val fleet = FakeFleetQueries(db)
+    val incidents = FakeIncidentRepository(db)
+    val history = FakeProbeHistory(db)
+    val lock = FakeJobLock()
+    var incidentSettings = IncidentSettings()
+
+    fun evaluateIncidents() = EvaluateIncidents(
+        fleet, probeStates, incidents, alerts, history, restaurants, lock, bus, tx, clock, ids, incidentSettings,
+    )
+
+    fun alertProcessor() = AlertProcessor(alerts, conditions, devices, ids, ruleParams)
+
+    fun ingestBatch() = IngestBatch(devices, telemetry, alertProcessor(), alerts, probeStates, bus, tx, clock)
+
+    fun handleStatus() = HandleStatus(devices, sessions, shadows, publisher, alertProcessor(), alerts, bus, tx, clock)
 
     fun seed(change: (DbState) -> DbState) {
         db.state = change(db.state)

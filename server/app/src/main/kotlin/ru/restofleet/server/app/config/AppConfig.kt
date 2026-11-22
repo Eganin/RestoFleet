@@ -22,6 +22,8 @@ data class AppConfig(
     val auth: AuthSection = AuthSection(),
     val rateLimit: RateLimitSection = RateLimitSection(),
     val jobs: JobsSection = JobsSection(),
+    val alerts: AlertsSection = AlertsSection(),
+    val incidents: IncidentsSection = IncidentsSection(),
     /** Каталог секретов для `seed` (`passwordSecret` в `users.yaml`): в контейнере — `/run/secrets`. */
     val secretsDir: String = "/run/secrets",
 )
@@ -61,7 +63,25 @@ data class ProvisioningSection(
 
 data class PollingSection(val staleAfterMs: Long = 90_000)
 
-data class AuthSection(val refreshTtlDays: Long = 7)
+/** Пороги, которые проверяет бэкенд (реш. 415): R-06 — вход < [freeMbEnter], выход ≥ [freeMbExit]. */
+data class AlertsSection(val freeMbEnter: Long = 500, val freeMbExit: Long = 600)
+
+/** Классификатор инцидентов (реш. 409–412): пороги P и M, окно, тик, цели. */
+data class IncidentsSection(
+    val backendDownPct: Int = 50,
+    val minRestaurants: Int = 3,
+    val restaurantSharePct: Int = 25,
+    val offlinePct: Int = 50,
+    val primaryTarget: String = "api",
+    val refTarget: String = "ref",
+    val windowSec: Long = 120,
+    val silentAfterHours: Long = 24,
+    val resolveAfterTicks: Int = 2,
+    val tickMs: Long = 30_000,
+)
+
+/** Сессии (реш. 417): refresh живёт [refreshIdleHours] с ротации, не дольше [sessionMaxDays] со входа. */
+data class AuthSection(val refreshIdleHours: Long = 24, val sessionMaxDays: Long = 7)
 
 /** Rate limit на клиента (IP); [pollAuthFailuresPerMinute] — неудачные Basic-проверки устройств на `/poll/…` (R-7). */
 data class RateLimitSection(

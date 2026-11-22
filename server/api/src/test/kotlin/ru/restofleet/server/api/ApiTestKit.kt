@@ -32,16 +32,19 @@ class ApiTestKit(
     val jwt = JwtSettings(secret = "test-secret-test-secret-test-secret-42")
     val settings = ApiSettings(jwt, rateLimit, maxBodyBytes = 64 * 1024)
 
-    val auth = AuthUseCases(mockk(), mockk())
+    val auth = AuthUseCases(mockk(), mockk(), mockk(relaxed = true))
     val restaurants = RestaurantUseCases(mockk(), mockk(), mockk(), mockk())
     val devices = DeviceUseCases(mockk(), mockk(), mockk(), mockk(), mockk(), mockk())
     val shadows = ShadowUseCases(mockk(), mockk())
-    val commands = CommandUseCases(mockk(), mockk())
+    val commands = CommandUseCases(mockk(), mockk(), mockk())
     val provisioning = ProvisioningUseCases(mockk(), mockk())
     val poll = PollUseCases(mockk(), mockk(), mockk(), mockk(), mockk())
     val health = mockk<CheckHealth>()
+    val alerts = AlertUseCases(mockk(), mockk(), mockk(), mockk())
+    val incidents = IncidentUseCases(mockk(), mockk(), mockk())
 
-    val useCases = ApiUseCases(auth, restaurants, devices, shadows, commands, provisioning, poll, health)
+    val useCases =
+        ApiUseCases(auth, restaurants, devices, shadows, commands, provisioning, poll, health, alerts, incidents)
 
     val admin = User("u-1", "admin", "hash", User.ROLE_ADMIN, 0)
 

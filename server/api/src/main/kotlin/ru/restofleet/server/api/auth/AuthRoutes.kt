@@ -1,5 +1,6 @@
 package ru.restofleet.server.api.auth
 
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -11,6 +12,7 @@ import ru.restofleet.server.api.error.orThrow
 import ru.restofleet.server.api.http.noStore
 import ru.restofleet.server.domain.auth.SessionTokens
 import ru.restofleet.shared.protocol.rest.console.LoginRequestDto
+import ru.restofleet.shared.protocol.rest.console.LogoutRequestDto
 import ru.restofleet.shared.protocol.rest.console.RefreshRequestDto
 import ru.restofleet.shared.protocol.rest.console.TokenResponseDto
 
@@ -21,6 +23,14 @@ fun Route.loginRoute(useCases: AuthUseCases) {
         val tokens = withContext(Dispatchers.Default) { useCases.login(request.login, request.password) }.orThrow()
         call.noStore()
         call.respond(tokens.toDto())
+    }
+}
+
+/** `POST /auth/logout` (реш. 417, 438): без JWT, всегда 204 — ответ не выдаёт, был ли токен действителен. */
+fun Route.logoutRoute(useCases: AuthUseCases) {
+    post("/auth/logout") {
+        useCases.logout(call.receive<LogoutRequestDto>().refreshToken)
+        call.respond(HttpStatusCode.NoContent)
     }
 }
 

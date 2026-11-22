@@ -31,6 +31,11 @@ fun ApplicationCall.page(): PageRequest = PageRequest.of(
 
 fun ApplicationCall.queryParam(name: String): String? = request.queryParameters[name]?.takeIf { it.isNotBlank() }
 
+/** `true` | `false`; иное — 400 (а не «молча false»). */
+fun ApplicationCall.booleanParam(name: String): Boolean? = queryParam(name)?.let {
+    it.toBooleanStrictOrNull() ?: throw ApiException.validation(name, "not_boolean")
+}
+
 private fun ApplicationCall.longParam(name: String): Long? =
     queryParam(name)?.let { it.toLongOrNull() ?: throw ApiException.validation(name, "not_integer") }
 

@@ -49,7 +49,10 @@ class SeedTest {
 
         val file = SeedFiles.users(text)
 
-        assertThat(file.users.single()).isEqualTo(SeedUser("admin", "admin-password"))
+        assertThat(file.users).containsExactly(
+            SeedUser("admin", "admin-password"),
+            SeedUser("support", "support-password"),
+        ).inOrder()
         assertThat(text.lines().filterNot { it.trimStart().startsWith("#") }.joinToString("\n"))
             .doesNotContainMatch("(?m)^\\s*password\\s*:")
     }

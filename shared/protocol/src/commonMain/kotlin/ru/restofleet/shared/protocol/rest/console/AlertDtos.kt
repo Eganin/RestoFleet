@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
  * Тревога (FR-BE-30, 31; реш. 413–416). Субъект — `(ruleId, deviceId, target)`: незакрытая тревога на субъект одна.
  * - [ruleId] — `R-01…R-06` ([RuleIds.ALERT_RULES]); [severity] — [Severities]; [state] — [AlertStates];
  * - [target] — цель проверки у R-05 (`api`, `kds`, `ref`), у остальных правил нет;
- * - [ackBy], [resolvedBy] — `sub` JWT пользователя; [auto] — закрыта автоматически по выходу из условия;
+ * - [ackBy], [resolvedBy] — `login` из JWT (реш. 446); [auto] — закрыта автоматически по выходу из условия;
  * - [comment] — комментарий подтверждения или ручного закрытия (1…500 символов);
  * - [parentIncidentId] — тревогу покрывает инцидент (реш. 416): по умолчанию `GET /alerts` её не отдаёт;
  * - [details] — значения условия строками; ключи по правилам: R-01 `reason`; R-02 `batteryLevel`, `limit`;

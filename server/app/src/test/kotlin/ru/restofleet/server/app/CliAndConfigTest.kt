@@ -98,7 +98,8 @@ class CliAndConfigTest {
         assertThat(serve.data.mqtt.caFile).isEqualTo("/certs/ca.crt")
         assertThat(serve.provisioning.tokenTtlMillis).isEqualTo(24 * 3_600_000L)
         assertThat(serve.polling.staleAfterMillis).isEqualTo(90_000)
-        assertThat(serve.auth.refreshTtlMillis).isEqualTo(7 * 86_400_000L)
+        assertThat(serve.auth.refreshIdleMillis).isEqualTo(24 * 3_600_000L)
+        assertThat(serve.auth.sessionMaxMillis).isEqualTo(7 * 86_400_000L)
         assertThat(serve.data.toString()).doesNotContain("secret-of")
     }
 

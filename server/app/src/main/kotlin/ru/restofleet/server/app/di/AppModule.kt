@@ -5,7 +5,9 @@ import org.koin.core.Koin
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
+import ru.restofleet.server.api.AlertUseCases
 import ru.restofleet.server.api.ApiUseCases
+import ru.restofleet.server.api.IncidentUseCases
 import ru.restofleet.server.api.AuthUseCases
 import ru.restofleet.server.api.CommandUseCases
 import ru.restofleet.server.api.DevicePayloadDecoder
@@ -27,6 +29,8 @@ import ru.restofleet.server.data.mqtt.MqttBackend
 import ru.restofleet.server.domain.command.CommandReport
 import ru.restofleet.server.domain.command.usecase.ExpireCommands
 import ru.restofleet.server.domain.ingest.DeviceDataBatch
+import ru.restofleet.server.domain.incident.IncidentSettings
+import ru.restofleet.server.domain.incident.usecase.EvaluateIncidents
 import ru.restofleet.server.domain.polling.usecase.MarkStalePollers
 import ru.restofleet.shared.kernel.DeviceId
 import ru.restofleet.shared.kernel.Outcome
@@ -43,6 +47,8 @@ fun appModule(runtime: RuntimeConfig): Module = module {
     single { runtime.provisioning }
     single { runtime.polling }
     single { runtime.auth }
+    single { runtime.rules }
+    single { runtime.incidents }
     runtime.api?.let { api -> single { api } }
     single<DevicePayloadDecoder> { DataPayloadDecoder(get()) }
     single<IngestLifecycle> { MqttIngest(get()) }
@@ -51,12 +57,15 @@ fun appModule(runtime: RuntimeConfig): Module = module {
 }
 
 /**
- * Периодические задачи `serve` (контракт КМ2b): `ExpireCommands` и `MarkStalePollers` каждые 5 с, счётчики ingest в
- * журнал раз в минуту (только при изменении). Use cases без состояния — один экземпляр на всё время работы.
+ * Периодические задачи `serve` (контракт КМ2b): `ExpireCommands` и `MarkStalePollers` каждые 5 с, тик инцидентов
+ * каждые 30 с (ПМ3), счётчики ingest в журнал раз в минуту (только при изменении). Use cases без состояния — один
+ * экземпляр на всё время работы.
  */
 class ServeJobs(
     expireCommands: ExpireCommands,
     markStalePollers: MarkStalePollers,
+    evaluateIncidents: EvaluateIncidents,
+    incidents: IncidentSettings,
     metrics: IngestMetrics,
     settings: JobsSection,
 ) {
@@ -65,6 +74,8 @@ class ServeJobs(
     val all: List<PeriodicJob> = listOf(
         PeriodicJob("expire_commands", settings.expireCommandsMs) { expireCommands() },
         PeriodicJob("mark_stale_pollers", settings.markStalePollersMs) { markStalePollers() },
+        // Тик инцидентов (реш. 411): под pg_try_advisory_xact_lock, второй экземпляр тик пропускает
+        PeriodicJob("evaluate_incidents", incidents.tickMillis) { evaluateIncidents() },
         PeriodicJob("ingest_metrics", settings.metricsLogMs) {
             val snapshot = metrics.snapshot()
             if (snapshot != lastMetrics) {
@@ -84,14 +95,16 @@ fun databaseModules(runtime: RuntimeConfig): List<Module> = listOf(appModule(run
 /** Use cases маршрутам — параметрами (арх. разд. 8): `get()` только здесь, в composition root. */
 fun apiUseCases(koin: Koin): ApiUseCases = with(koin) {
     ApiUseCases(
-        auth = AuthUseCases(get(), get()),
+        auth = AuthUseCases(get(), get(), get()),
         restaurants = RestaurantUseCases(get(), get(), get(), get()),
         devices = DeviceUseCases(get(), get(), get(), get(), get(), get()),
         shadows = ShadowUseCases(get(), get()),
-        commands = CommandUseCases(get(), get()),
+        commands = CommandUseCases(get(), get(), get()),
         provisioning = ProvisioningUseCases(get(), get()),
         poll = PollUseCases(get(), get(), get(), get(), get()),
         health = get(),
+        alerts = AlertUseCases(get(), get(), get(), get()),
+        incidents = IncidentUseCases(get(), get(), get()),
     )
 }
 

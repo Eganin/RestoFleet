@@ -13,6 +13,8 @@ interface DeviceRepository {
 
     suspend fun findById(id: DeviceId): Device?
 
+    suspend fun findByIds(ids: Collection<DeviceId>): List<Device>
+
     /** Упорядочено по времени регистрации, затем по id. */
     suspend fun list(filter: DeviceFilter, page: PageRequest): List<Device>
 
@@ -31,6 +33,15 @@ interface DeviceRepository {
     suspend fun markStalePollersOffline(cutoff: Long): Int
 
     suspend fun decommission(id: DeviceId, at: Long)
+}
+
+/** Запросы по парку целиком (сводка, агрегатор инцидентов). Только в транзакции. */
+interface FleetQueries {
+    /** Учитываемые агрегатором (реш. 410): не выведенные, с `last_seen_at` не раньше [seenSince]. */
+    suspend fun fleet(seenSince: Long): List<Device>
+
+    /** Без выведенных; [offlineSince] — граница «ушли в офлайн недавно» (по `last_seen_at`). */
+    suspend fun counts(offlineSince: Long): DeviceCounts
 }
 
 /** Учётка устройства для REST-polling (P9): bcrypt-хэш пароля; отзыв — при выводе из эксплуатации. */
