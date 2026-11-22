@@ -99,7 +99,7 @@ abstract class GenerateStandTrustTask : DefaultTask() {
 
 /**
  * Падает, если в смёрженном release-манифесте осталась отладочная поверхность: `networkSecurityConfig` (CA стенда не
- * доверяется), `DevConfigReceiver` и его действие `DEV_CONFIG` (приём учётки брокера по adb, только debug),
+ * доверяется), `DevConfigReceiver` и его действия `DEV_CONFIG`/`DEV_PROVISION` (учётка или код по adb, только debug),
  * `testOnly="true"` (позволил бы снять Device Owner без сброса) или `debuggable="true"`.
  */
 abstract class VerifyNoDebugSurfaceTask : DefaultTask() {
@@ -113,6 +113,7 @@ abstract class VerifyNoDebugSurfaceTask : DefaultTask() {
         check("networkSecurityConfig" !in text) { "release manifest must not declare networkSecurityConfig" }
         check("DevConfigReceiver" !in text) { "release manifest must not declare DevConfigReceiver" }
         check("DEV_CONFIG" !in text) { "release manifest must not declare the DEV_CONFIG action" }
+        check("DEV_PROVISION" !in text) { "release manifest must not declare the DEV_PROVISION action" }
         check(!TEST_ONLY.containsMatchIn(text)) { "release manifest must not be testOnly" }
         check(!DEBUGGABLE.containsMatchIn(text)) { "release manifest must not be debuggable" }
     }

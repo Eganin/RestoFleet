@@ -5,6 +5,7 @@ import kotlinx.coroutines.ensureActive
 import ru.restofleet.agent.domain.capability.Capabilities
 import ru.restofleet.agent.domain.command.Command
 import ru.restofleet.agent.domain.command.CommandOutcome
+import ru.restofleet.agent.domain.diagnostics.OnDemandChecks
 import ru.restofleet.agent.domain.port.AppLauncher
 import ru.restofleet.agent.domain.port.Beeper
 import ru.restofleet.agent.domain.port.CapabilitiesSource
@@ -20,6 +21,7 @@ import kotlin.coroutines.cancellation.CancellationException
  * (`Failed("kiosk_active")`, решение 141), затем вызов порта.
  * Сбой порта изолируется (решение 78): `Exception` -> `Failed("exception:<Класс>")`, `Error` и настоящая отмена
  * вызывающего пробрасываются. Таймаут исполнения и срок `expiresAt` здесь не проверяются (задача 3.4, M3).
+ * `run_probe` и `collect_diagnostics` уходят в [onDemand] (FR-AG-62, 64); без него — `unsupported` / `not_available`.
  */
 class ExecuteCommand(
     private val caps: CapabilitiesSource,
@@ -28,6 +30,7 @@ class ExecuteCommand(
     private val launcher: AppLauncher,
     private val beeper: Beeper,
     private val clock: Clock,
+    private val onDemand: OnDemandChecks = OnDemandChecks.Unavailable,
 ) {
     @Suppress("TooGenericExceptionCaught")
     suspend operator fun invoke(command: Command): CommandOutcome =
@@ -55,6 +58,8 @@ class ExecuteCommand(
         Command.Reboot -> admin.reboot().toOutcome()
         is Command.InstallApk -> admin.installApk(command.pkg, command.url, command.sha256).toOutcome()
         is Command.LockTask -> admin.startLockTask(command.pkg, command.url).toOutcome()
+        is Command.RunProbe -> onDemand.runProbe(command.target)
+        Command.CollectDiagnostics -> onDemand.collectDiagnostics()
     }
 
     private fun Outcome<Unit, DomainError>.toOutcome(): CommandOutcome = when (this) {

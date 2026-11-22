@@ -1,0 +1,396 @@
+{
+    "deviceInfo": {
+        "apiLevel": 36,
+        "model": "sdk_gphone64_arm64",
+        "isEmulator": true,
+        "mode": "device_owner",
+        "agentVersion": "0.1.0-mvp"
+    },
+    "ts": 1794386211401,
+    "results": [
+        {
+            "id": "L1",
+            "status": "limited",
+            "raw": {
+                "samples": "594",
+                "coverageMs": "291026736",
+                "gaps": "5",
+                "maxGapMs": "193814709",
+                "wakeLock": "held"
+            },
+            "note": "heartbeat gaps over 120 s: 5",
+            "ts": 1794386205289
+        },
+        {
+            "id": "L2",
+            "status": "ok",
+            "raw": {
+                "bootAt": "1794386195221",
+                "firstHeartbeatAt": "1794386195329",
+                "delayMs": "108"
+            },
+            "note": null,
+            "ts": 1794386205305
+        },
+        {
+            "id": "L3",
+            "status": "not_checked",
+            "raw": {
+                "scheduled": "true",
+                "lastWatchdogStartAt": "none",
+                "lastWatchdogDeniedAt": "none",
+                "lastStartFailureAt": "none"
+            },
+            "note": "watchdog has not restarted the agent yet",
+            "ts": 1794386205323
+        },
+        {
+            "id": "L4",
+            "status": "limited",
+            "raw": {
+                "notifications": "true",
+                "usageAccess": "false",
+                "ignoreBatteryOptimizations": "false"
+            },
+            "note": "missing: usageAccess, ignoreBatteryOptimizations",
+            "ts": 1794386205336
+        },
+        {
+            "id": "L5",
+            "status": "ok",
+            "raw": {
+                "deviceId": "dev-do-36",
+                "endpoint": "10.0.2.2:8883"
+            },
+            "note": null,
+            "ts": 1794386205340
+        },
+        {
+            "id": "R1",
+            "status": "ok",
+            "raw": {
+                "level": "100",
+                "charging": "false",
+                "source": "NONE"
+            },
+            "note": null,
+            "ts": 1794386205360
+        },
+        {
+            "id": "R2",
+            "status": "ok",
+            "raw": {
+                "tempC": "25.0"
+            },
+            "note": null,
+            "ts": 1794386205364
+        },
+        {
+            "id": "R3",
+            "status": "ok",
+            "raw": {
+                "status": "NONE",
+                "headroom": "0.9033333659172058"
+            },
+            "note": null,
+            "ts": 1794386205366
+        },
+        {
+            "id": "R4",
+            "status": "ok",
+            "raw": {
+                "type": "WIFI",
+                "rssiDbm": "-50",
+                "validated": "true"
+            },
+            "note": null,
+            "ts": 1794386205369
+        },
+        {
+            "id": "R5",
+            "status": "ok",
+            "raw": {
+                "ssid": "AndroidWifi"
+            },
+            "note": null,
+            "ts": 1794386205480
+        },
+        {
+            "id": "R6",
+            "status": "ok",
+            "raw": {
+                "freeStorageMb": "4290",
+                "availMemoryMb": "1932",
+                "uptimeSec": "67",
+                "os": "16",
+                "api": "36",
+                "model": "sdk_gphone64_arm64",
+                "manufacturer": "Google"
+            },
+            "note": null,
+            "ts": 1794386205482
+        },
+        {
+            "id": "R7",
+            "status": "ok",
+            "raw": {
+                "com.android.chrome": "133.0.6943.137 (694313732)",
+                "ru.restofleet.dummy.waiter": "4.14 (14)"
+            },
+            "note": null,
+            "ts": 1794386205488
+        },
+        {
+            "id": "R8",
+            "status": "unavailable",
+            "raw": {},
+            "note": "PermissionMissing: PACKAGE_USAGE_STATS",
+            "ts": 1794386205488
+        },
+        {
+            "id": "R9",
+            "status": "ok",
+            "raw": {
+                "lux": "0.0"
+            },
+            "note": null,
+            "ts": 1794386205544
+        },
+        {
+            "id": "R10",
+            "status": "ok",
+            "raw": {
+                "cpuC": "",
+                "skinC": "30.1",
+                "batteryC": "30.2"
+            },
+            "note": null,
+            "ts": 1794386205596
+        },
+        {
+            "id": "R11",
+            "status": "unavailable",
+            "raw": {},
+            "note": "Failed: missing sensor: significant_motion",
+            "ts": 1794386205596
+        },
+        {
+            "id": "R12",
+            "status": "ok",
+            "raw": {
+                "events": "0"
+            },
+            "note": "subscription registered, no events yet",
+            "ts": 1794386205596
+        },
+        {
+            "id": "R13",
+            "status": "ok",
+            "raw": {
+                "serial": "****13X0"
+            },
+            "note": null,
+            "ts": 1794386205605
+        },
+        {
+            "id": "R14",
+            "status": "ok",
+            "raw": {
+                "events": "1",
+                "last_event": "WIFI validated=true",
+                "last_at": "1794386197488"
+            },
+            "note": null,
+            "ts": 1794386205606
+        },
+        {
+            "id": "P1",
+            "status": "limited",
+            "raw": {
+                "google_204": "expected=ok actual=ok httpStatus=204 totalMs=1086",
+                "nonexistent": "expected=dns_fail actual=timeout httpStatus=- totalMs=5042",
+                "blackhole": "expected=timeout actual=tls_error httpStatus=- totalMs=1289",
+                "refused": "expected=conn_refused actual=conn_refused httpStatus=- totalMs=80",
+                "expired_badssl": "expected=tls_error actual=timeout httpStatus=- totalMs=5035",
+                "httpbin_503": "expected=http_5xx actual=http_5xx httpStatus=503 totalMs=1158"
+            },
+            "note": "nonexistent: expected dns_fail, got timeout; blackhole: expected timeout, got tls_error; expired_badssl: expected tls_error, got timeout",
+            "ts": 1794386210670
+        },
+        {
+            "id": "P2",
+            "status": "ok",
+            "raw": {
+                "dnsMs": "6",
+                "connectMs": "4",
+                "tlsMs": "519",
+                "ttfbMs": "707",
+                "totalMs": "713"
+            },
+            "note": null,
+            "ts": 1794386211385
+        },
+        {
+            "id": "P3",
+            "status": "ok",
+            "raw": {
+                "result": "conn_refused",
+                "totalMs": "10"
+            },
+            "note": null,
+            "ts": 1794386211396
+        },
+        {
+            "id": "P4",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794386211397
+        },
+        {
+            "id": "C1",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794386211397
+        },
+        {
+            "id": "C2",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794386211397
+        },
+        {
+            "id": "C3",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794386211397
+        },
+        {
+            "id": "C4",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794386211397
+        },
+        {
+            "id": "D1",
+            "status": "ok",
+            "raw": {
+                "mode": "DEVICE_OWNER"
+            },
+            "note": null,
+            "ts": 1794386211400
+        },
+        {
+            "id": "D2",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794386211401
+        },
+        {
+            "id": "D3",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794386211401
+        },
+        {
+            "id": "D4",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794386211401
+        },
+        {
+            "id": "D5",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794386211401
+        },
+        {
+            "id": "D6",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794386211401
+        },
+        {
+            "id": "D7",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794386211401
+        },
+        {
+            "id": "M1",
+            "status": "ok",
+            "raw": {
+                "endpoint": "10.0.2.2:8883",
+                "connId": "k-a1bf96b6-599"
+            },
+            "note": null,
+            "ts": 1794386211401
+        },
+        {
+            "id": "M2",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794386211401
+        },
+        {
+            "id": "M3",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794386211401
+        },
+        {
+            "id": "M4",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794386211401
+        },
+        {
+            "id": "M5",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794386211401
+        },
+        {
+            "id": "M6",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794386211401
+        },
+        {
+            "id": "M7",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794386211401
+        },
+        {
+            "id": "RS1",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794386211401
+        },
+        {
+            "id": "RS2",
+            "status": "not_checked",
+            "raw": {},
+            "note": null,
+            "ts": 1794386211401
+        }
+    ]
+}

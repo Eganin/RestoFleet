@@ -1,0 +1,1 @@
+{ "type": "threshold", "ts": 1793869350000, "metric": "temp_high", "state": "exit", "value": 42.5, "limit": 45.0 }

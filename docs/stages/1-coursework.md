@@ -21,13 +21,15 @@
 | Часть | Требования ТЗ |
 |---|---|
 | Протокол | разд. 7 + правки P1–P10 (`architecture.md` разд. 7) |
-| Агент | FR-AG-01…05, 10, 12, 20…23, 25…27, 30…35 (включая фазы 33), 40…44, 50, 51, 60…64, 70, 75, 76, 78 — только то, что получило ✅/⚠️ в MVP |
-| Брокер | FR-BR-01…03, 07 + базовый 04 (DynSec) |
-| Бэкенд | FR-BE-01, 02, 04, 10, 11, 12, 20, 21, 40, 41, 50, 52 (одна роль), 54, 56 |
+| Агент | FR-AG-01…05, 10, 12, 20…23, 25…27, 30…35 (включая фазы 33), 40…44, 50, 51, 53, 60…64, 70…72, 75, 76, 78…80 — только то, что получило ✅/⚠️ в MVP |
+| Брокер | FR-BR-01…03, 07, 08 + базовый 04 (DynSec) |
+| Бэкенд | FR-BE-01, 02, 04, 10, 11, 12, 14, 20, 21, 40, 41, 50, 52 (одна роль), 54, 56 |
 | Симулятор | FR-SM-01…03, 06, 07 + базовый 08 (регистрация через провижининг) |
 | Эксперимент | ТЗ 13.2 |
 
 **Не входит:** правила и тревоги (R-01…R-06), WebSocket, корреляция инцидентов, консоль (все — в П); Device Owner, профили, роли, Timescale, VPS (в Д).
+
+> **Объём уточнён 22.11.2026 (решение пользователя, реш. 326; закрывает вопрос реш. 321).** По ТЗ 16.3 в объём К добавлены FR-AG-53 (валидация `desired`), FR-AG-71 (идемпотентность команд), FR-AG-72 (истёкшая команда), FR-AG-79 (окончательный/временный отказ PUBACK), FR-AG-80 (повторы по причине разрыва), FR-BR-08 (persistence брокера), FR-BE-14 (идемпотентность приёма). Нового кода нет: поведение реализовано в КМ1–КМ5, приёмка — существующими тестами (разд. 7, «Требования без отдельного сценария»).
 
 ## 4. Архитектура этапа
 
@@ -59,7 +61,7 @@ deploy/            compose: mosquitto, postgres (timescale-pg17), backend, migra
 Порты domain: `RestaurantRepository`, `DeviceRepository`, `TokenRepository`, `TelemetryRepository`, `ShadowRepository`, `CommandRepository`, `BrokerAccounts`, `MessagePublisher`, `PasswordHasher`, `Clock`, `IdGenerator`.
 
 ### 4.3 Агент: use cases К
-`CollectTelemetry`, `EvaluateThresholds` (события 40–44), `RunProbes` (30–35), `ApplyShadow` (50–51), `ExecuteCommand` (60–64, 70 по `Capabilities`), `FlushOutbox` (75, 76), `Provision` (10, 12), `MaintainConnection` (backoff + jitter, 78).
+`CollectTelemetry`, `EvaluateThresholds` (события 40–44), `RunProbes` (30–35), `ApplyShadow` (50, 51, 53), `ExecuteCommand` (60–64, 70 по `Capabilities`; 71, 72 — `HandleIncomingCommand`), `FlushOutbox` (75, 76, 79), `Provision` (10, 12), `MaintainConnection` (backoff + jitter, 78, 80).
 
 ### 4.4 Модель данных (Flyway V1…)
 `restaurants(id, code UNIQUE, name, city, address, timezone, created_at, updated_at)`, `devices(id, restaurant_id, role, name, status, last_seen_at, decommissioned_at)`, `device_credentials(device_id, password_hash, revoked_at)`, `provisioning_tokens(id, token_hash, restaurant_id, role, name, expires_at, used_at)`, `device_sessions(device_id, conn_id, connected_at, disconnected_at, reason)`, `shadows(device_id, desired jsonb, desired_version, reported jsonb, reported_version, applied_at)`, `telemetry(device_id, ts, battery_level, charging, temp_c, thermal, rssi, free_mb, avail_mb, fg_app, payload jsonb)`, `probe_results(device_id, ts, target, ok, status, error, total_ms, dns_ms, connect_ms, tls_ms, ttfb_ms)`, `events(device_id, ts, type, payload jsonb)`, `commands(cmd_id, device_id, type, params jsonb, status, created_at, expires_at, delivered_at, finished_at, result jsonb)`, `users(id, login, password_hash, role)`.
@@ -81,25 +83,25 @@ Swagger UI бэкенда (создать ресторан, выпустить �
 ## 5. Задачи
 
 ### К1. Протокол (2 дня)
-- [ ] Финальные DTO `shared:protocol` по ТЗ 7.2 + P1–P10; фикстуры на каждое сообщение и каждый статус команды.
-- [ ] `shared:shadow`, `shared:probes` — TDD, ≥ 90 %.
+- [x] Финальные DTO `shared:protocol` по ТЗ 7.2 + P1–P10; фикстуры на каждое сообщение и каждый статус команды.
+- [x] `shared:shadow`, `shared:probes` — TDD, ≥ 90 %.
 
 ### К2. Агент — обычный режим (5 дней)
-- [ ] Use cases из 4.3 с тестами (фейки портов).
-- [ ] Data: MQTT-сессия (LWT с `connId`, Clean Start=false, Session Expiry 24 ч), outbox на Room, провижининг + Keystore.
-- [ ] Presentation: мастер настройки, экран статуса.
-- [ ] Ночной прогон на эмуляторе: телеметрия без пропусков, outbox после 1 ч офлайна.
+- [x] Use cases из 4.3 с тестами (фейки портов).
+- [x] Data: MQTT-сессия (LWT с `connId`, Clean Start=false, Session Expiry 24 ч), outbox на Room, провижининг + Keystore.
+- [x] Presentation: мастер настройки, экран статуса.
+- [x] Ночной прогон на эмуляторе: телеметрия без пропусков, outbox после 1 ч офлайна. — **сокращённый, реш. 295** (15 мин связи + 10 мин офлайна, `docs/reports/1-coursework/validation.md`); полный — MVP-B.
 
 ### К3. Брокер и ядро бэкенда (5 дней)
-- [ ] Mosquitto: роль `device` с ACL по направлениям, `clientid = deviceId`, persistence.
-- [ ] `server:domain` — use cases 4.2 (TDD); `server:data` — репозитории, миграции, ingest с ack после commit, DynSec-клиент; `server:api` — routes + OpenAPI/Swagger; `server:app` — Koin, конфиг, CLI `migrate`/`seed`.
-- [ ] Dev-seed ресторанов и пользователя admin.
-- [ ] Интеграционные тесты (Testcontainers): provision → telemetry → БД; команда офлайн-устройству → доставка / `expired`; отозванная учётка не подключается.
+- [x] Mosquitto: роль `device` с ACL по направлениям, `clientid = deviceId`, persistence.
+- [x] `server:domain` — use cases 4.2 (TDD); `server:data` — репозитории, миграции, ingest с ack после commit, DynSec-клиент; `server:api` — routes + OpenAPI/Swagger; `server:app` — Koin, конфиг, CLI `migrate`/`seed`.
+- [x] Dev-seed ресторанов и пользователя admin.
+- [x] Интеграционные тесты (Testcontainers): provision → telemetry → БД; команда офлайн-устройству → доставка / `expired`; отозванная учётка не подключается.
 
 ### К4. Симулятор и эксперимент (3 дня)
-- [ ] Симулятор по 4.6, тесты генераторов профилей.
-- [ ] Прогон эксперимента, CSV → таблицы и графики в `docs/experiments/`.
-- [ ] Пояснительная записка (структура — ТЗ 16.3).
+- [x] Симулятор по 4.6, тесты генераторов профилей.
+- [x] Прогон эксперимента, CSV → таблицы и графики в `docs/experiments/`.
+- [x] Пояснительная записка (структура — ТЗ 16.3). — `docs/coursework/` → `RestoFleet-coursework.docx` (генератор `tools/coursework/`), главы 1–4, заключение, приложения А–Г; основная часть 53 стр. (реш. 318); финальная вёрстка в Word — пользователь (реш. 319).
 
 ## 6. Тесты
 
@@ -114,9 +116,32 @@ Domain бэкенда и агента ≥ 90 %, проект ≥ 80 % (Kover-г�
 - **S7′** — Toxiproxy отключает `api` → событие `probe_state: down` в БД.
 - Эксперимент на N ≥ 1 000; `docker compose up` поднимает стенд; Kover-гейт зелёный.
 
+### Требования без отдельного сценария (реш. 326)
+
+Приёмка — существующими тестами; все они зелёные на последнем гейте КМ5 5.3 (rc = 0, 1 869 тестов), после него Kotlin не менялся. Пути: агент — `agent/domain/src/jvmTest/…/usecase/`, `agent/data/src/test/…/{mqtt,outbox,shadow}/`; `shared/shadow/src/jvmTest/`; сервер — `server/{domain,data,api}/src/test/`.
+
+| Требование | Что проверяется | Тесты (класс → методы) |
+|---|---|---|
+| FR-AG-53 валидация `desired` | `intervalSec` 10…3600 с, неверный не применяется (остаётся прежний, без тени — 30 с); пустой и повторный `id` цели, пустой `url`, неверное имя пакета отклоняются, причины — в `errors` `reported` | `DesiredValidationTest` → `intervalBoundaries`, `probesTable`, `watchedAppsTable`, `errorCodesMatchSpec`; `ApplyDesiredShadowTest` → `intervalBelowRangeIsNotAppliedAndReported`, `intervalAboveRangeIsNotApplied`, `invalidIntervalKeepsThePreviouslyAppliedValue`, `duplicateProbeIdKeepsFirstAndReportsError`, `blankIdAndBlankUrlProbesAreDropped`, `repeatOfSameVersionStillReportsValidationErrors`; `ApplyDesiredShadowWatchedAppsTest` → `invalidAndBlankPackageNamesAreDroppedAndReported`; `AppliedTelemetryIntervalTest` → `withoutAShadowTheDefaultIsUsed`, `outOfRangeStoredValueFallsBackToTheDefault` |
+| FR-AG-71 идемпотентность команд | повтор `cmdId` не исполняется; порядок `received` → отметка → исполнение → итог; журнал 200 последних `cmdId` в Room переживает перезапуск; таймаут 60 с, `install_update` — 10 мин | `HandleIncomingCommandTest` → `duplicateCmdIdIsNotExecutedAndNothingIsPublished`, `redeliveryAfterHandlingExecutesOnlyOnce`, `markProcessedHappensAfterReceivedAndBeforeExecution`, `ordinaryCommandTimesOutAfterSixtySeconds`, `installApkGetsTenMinutes`; `RoomProcessedCommandsTest` → `after 201 marks the first one is forgotten and the last one is kept`, `repeated mark is idempotent and does not push others out`, `journal and outbox survive reopening the database file` |
+| FR-AG-72 истёкшая команда | истёкшая более чем на 5 мин — `received`, затем `failed`/`expired`, не исполняется; в пределах допуска — исполняется; нечитаемая — `failed`/`invalid_params`, неизвестный тип — `unsupported` | `HandleIncomingCommandTest` → `expiredCommandFailsWithoutExecution`, `commandExpiringExactlyNowIsStillExecuted`, `commandExpiredWithinClockSkewToleranceIsStillExecuted`, `parseErrorFailsWithInvalidParams`, `unknownTypeIsUnsupported`; `CommandMapperTest` → `parseCarriesMqttPropertiesAndExpiry` |
+| FR-AG-79 отказ PUBACK | `0x87`, `0x90`, `0x97`, `0x99` — окончательный отказ: запись удаляется, досылка идёт дальше; `0x80`, `0x83`, `0x91` и сбой публикации — запись остаётся, досылка останавливается | `MqttErrorMapperTest` → `pubAckExceptionNotAuthorizedIsNotAuthorizedNotConnectFailed`, `finalPubAckCodesAreRejectedWithTheirName`, `transientPubAckCodesStayRetryableFailures`; `FlushOutboxTest` → `brokerRejectedHeadIsDroppedAndTheNextRecordIsSent`, `transientFailureAfterADropStillStopsAndKeepsTheRecord`, `failureOnFirstMessageKeepsEverything`, `publisherExceptionStopsFlushAndKeepsRecord`. **Без теста:** таймаут публикации 10 с — константа `HiveMqLink.PUBLISH_TIMEOUT_MS` (у `HiveMqLink` нет unit-теста) |
+| FR-AG-80 повторы по причине | `auth_failed` — 15, 30, затем 60 мин, смена учётки прерывает паузу; `session_taken_over` (`0x8E`) — 5 мин + jitter до 1 мин; нет учётки или CA — ждать смены учётки | `ReconnectPausesTest` (файл `ReconnectBackoffTest.kt`) → `authFailureIsRetriedRarelyFromFifteenUpToSixtyMinutes`, `provisioningErrorsWaitForCredentialChangeOnly`; `MqttBrokerSessionTest` → `authFailureIsRetriedRarely`, `authFailureReconnectsImmediatelyAfterCredentialChange`, `withoutCredentialsSessionDoesNotStartAndReportsNotConfigured`, `missingCaFailsClosedWithoutConnecting`; `DisconnectPolicyTest` → `sessionTakenOverReconnectsAfterFiveMinutesWithJitter`; `MqttErrorMapperTest` → `sessionTakenOverIsItsOwnRetryableCode` |
+| FR-BR-08 persistence брокера | `persistence true` + том (`deploy/mosquitto/mosquitto.conf`, `docker-compose.yml`); после рестарта брокера учётки DynSec и постоянная сессия бэкенда на месте, приём идёт; при выводе из эксплуатации retained `desired` очищается | `BrokerRestartIngestTest` → `after a broker restart the backend subscribes again and device messages reach the database once` (Testcontainers, конфигурация стенда); `deploy/test-stand.sh` (admin DynSec после рестарта), `deploy/test-backend.sh` п. 8; `DeviceUseCasesTest` → `decommissionDisablesRevokesClosesAndClears`; `BrokerAclAndPublisherTest` → `desired is retained with its version and cleared by an empty payload`; `RegistryRoutesTest` → `decommission returns the device and whether retained messages were cleared`. **Без теста:** сохранность retained `desired` и очереди QoS 1 через рестарт брокера отдельно не проверялась |
+| FR-BE-14 идемпотентность приёма | повтор `(cmdId, status)` не меняет команду; первый итог устройства окончательный, поздний итог побеждает серверный `expired`/`broker_unavailable`; дубль события при передоставке допускается | `CommandUseCasesTest` → `receivedThenSucceeded`, `lateFinalBeatsServerSideFinals`; `IngestProcessorOnPostgresTest` → `one batch of every channel lands in its table and a redelivered batch adds only events` |
+
 ## 8. Передаётся в практику
 
-Стабильный протокол и фикстуры, агент обычного режима, бэкенд с API и OpenAPI, наполненный стенд, симулятор с профилями, результаты эксперимента.
+Фактическое состояние на закрытии К (12.11.2026, ветка `stage/1-coursework`, отчёт — `docs/reports/1-coursework/README.md`):
+
+- **Протокол** `shared:protocol` с фикстурами на каждое сообщение и статус, `shared:shadow`, `shared:probes`; ТЗ разд. 7 приведён к коду (v0.4).
+- **Агент** обычного режима: служба `specialUse`, сторож, мастер (провижининг по коду, Keystore), экран статуса, телеметрия, пробы с автоматом, пороги, тень, команды, outbox; проверен на `rf-api36` (S1, S2′, S4, S5, S7′), реальные устройства — MVP-B.
+- **Бэкенд** Ktor: реестр, провижининг, ingest с ack после commit и переподпиской, presence, тени, команды, REST API + OpenAPI/Swagger, JWT + refresh, REST-polling с лимитом неудачных Basic; 1 869 тестов, покрытие 96,3 %.
+- **Брокер** Mosquitto 2.1.2 + DynSec (роли `device`, `backend-service`), пределы пакета и очередей, persistence.
+- **Стенд** Docker Compose (postgres/Timescale, backend, mosquitto, nginx, toxiproxy, simulator), `test-backend.sh` 20/20; в реестре 5 000 виртуальных устройств (`offline`) после эксперимента.
+- **Симулятор** с профилями и режимами MQTT/REST-polling, измеритель; результаты эксперимента серии 2 — `docs/experiments/`.
+- **Записка** — `docs/coursework/` и генератор `tools/coursework/`.
+- **Долги в П:** Minor ревью и валидации и остатки исправленных находок (`K5.md`, «Отложено в этап П»), заголовки `X-RateLimit-*` на `/poll/*` (реш. 317), полный ночной прогон и реальные устройства (MVP-B), Linux-хост для потерь в обе стороны.
 
 ## 9. Риски
 

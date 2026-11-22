@@ -14,6 +14,7 @@ import ru.restofleet.agent.domain.model.ProbePhases
 import ru.restofleet.agent.domain.model.ProbeResult
 import ru.restofleet.agent.domain.model.ProbeTarget
 import ru.restofleet.agent.domain.port.ShadowStore
+import ru.restofleet.shared.probes.ProbeSchedule
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ProbeLoopTest {
@@ -39,15 +40,15 @@ class ProbeLoopTest {
     private val logs = mutableListOf<String>()
     private var executorFailure: (ProbeTarget) -> Throwable? = { null }
 
-    private fun TestScope.loop(store: Store) = ProbeLoop(
+    private fun TestScope.loop(store: Store, schedule: ProbeSchedule = ProbeSchedule()) = ProbeLoop(
         scope = backgroundScope,
         shadow = store,
-        executor = { t ->
+        run = { t ->
             executed += t.id
             executorFailure(t)?.let { throw it }
-            result(t)
+            published += listOf(result(t))
         },
-        publish = { published += it },
+        schedule = schedule,
         log = { logs += it },
     )
 
@@ -114,23 +115,6 @@ class ProbeLoopTest {
     }
 
     @Test
-    fun failingPublicationDoesNotStopTheLoop() = runTest {
-        val store = Store(shadow(1, target("a", 30)))
-        var calls = 0
-        val loop = ProbeLoop(
-            backgroundScope,
-            store,
-            { result(it) },
-            { if (calls++ == 0) error("db") else published += it },
-        )
-        loop.start()
-
-        advanceTimeBy(40_000)
-
-        assertThat(published).hasSize(1)
-    }
-
-    @Test
     fun stopHaltsTheProbes() = runTest {
         val store = Store(shadow(1, target("a", 30)))
         val loop = loop(store)
@@ -156,13 +140,24 @@ class ProbeLoopTest {
     }
 
     @Test
-    fun tooSmallIntervalIsRaisedSoTheLoopDoesNotSpin() = runTest {
-        val store = Store(shadow(1, target("a", 0)))
+    fun tooSmallIntervalIsRaisedToTheScheduleMinimum() = runTest {
+        // НФТ «нагрузка проверок» (реш. 228): не чаще раза в 30 с к цели
+        val store = Store(shadow(1, target("a", 5)))
         loop(store).start()
 
-        advanceTimeBy(10_000)
+        advanceTimeBy(59_000)
 
-        assertThat(published.size).isAtMost(2)
+        assertThat(published).hasSize(2)
+    }
+
+    @Test
+    fun standScheduleAllowsFiveSeconds() = runTest {
+        val store = Store(shadow(1, target("a", 0)))
+        loop(store, ProbeSchedule.forStand()).start()
+
+        advanceTimeBy(19_000)
+
+        assertThat(published).hasSize(4)
     }
 
     @Test
@@ -181,7 +176,7 @@ class ProbeLoopTest {
                 }
             }
         }
-        ProbeLoop(backgroundScope, store, { result(it) }, { published += it }).start()
+        ProbeLoop(backgroundScope, store, { published += listOf(result(it)) }).start()
 
         advanceTimeBy(15_000)
 

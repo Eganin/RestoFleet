@@ -7,6 +7,7 @@ import android.content.SharedPreferences
 import android.os.Parcel
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
 import org.junit.Test
 import org.koin.test.verify.definition
 import org.koin.test.verify.injectedParameters
@@ -28,6 +29,10 @@ import ru.restofleet.agent.domain.port.ForeignTopicPublisher
 import ru.restofleet.agent.domain.usecase.GenerateDebugEvents
 import ru.restofleet.agent.domain.usecase.RunCapabilityChecks
 import ru.restofleet.agent.domain.usecase.RunCommandCheck
+import ru.restofleet.agent.presentation.setup.api.ISetupRouter
+import ru.restofleet.agent.presentation.setup.viewmodel.SetupViewModel
+import ru.restofleet.agent.presentation.status.api.IStatusRouter
+import ru.restofleet.agent.presentation.status.viewmodel.StatusViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import ru.restofleet.shared.kernel.Clock
 import ru.restofleet.shared.kernel.IdGenerator
@@ -48,6 +53,9 @@ class KoinModulesVerifyTest {
         IdGenerator::class, // connId (`k-<uuid>`) создаётся лямбдой в mqttModule
         DeviceFacts::class, // сведения об устройстве для status online собираются из Build в лямбде mqttModule
         BootIdSource::class, // и источник bootId тоже
+        // сведения об устройстве для /provision собираются из Build в лямбде provisioningModule (DTO протокола, app его
+        // напрямую не видит)
+        Class.forName("ru.restofleet.shared.protocol.dto.DeviceInfoDto").kotlin,
         // фабрика ссылок HiveMQ создаётся лямбдой внутри mqttModule; тип internal в data, поэтому по имени
         Class.forName("ru.restofleet.agent.data.mqtt.MqttLinkFactory").kotlin,
     )
@@ -58,7 +66,9 @@ class KoinModulesVerifyTest {
             // RunCommandCheck — необязательная зависимость LabViewModel (getOrNull): в release её нет (решение 140).
             // Long — таймаут проверки со значением по умолчанию, CoroutineScope — scope ViewModel по умолчанию:
             // нужны только appModule и в общий список не входят, чтобы не ослаблять verify других модулей.
-            extraTypes = platformTypes + listOf(Long::class, CoroutineScope::class, RunCommandCheck::class,
+            // Flow — поток запросов досылки (реш. 203): SessionSupervisor берёт его у ConflatedFlushTrigger
+            extraTypes = platformTypes + listOf(
+                Long::class, CoroutineScope::class, RunCommandCheck::class, Flow::class, Boolean::class,
                 // кнопки отладки M2/M7 — необязательные зависимости LabViewModel (getOrNull): в release их нет
                 GenerateDebugEvents::class, ForeignTopicPublisher::class,
             ),
@@ -67,6 +77,9 @@ class KoinModulesVerifyTest {
                 definition<RunCapabilityChecks>(List::class),
                 // ComponentName создаётся напрямую из контекста и класса приёмника; verify смотрит на его конструктор
                 definition<ComponentName>(Parcel::class, Class::class),
+                // роутер экранов приходит параметром (parametersOf): он живёт с ViewModel в InstanceKeeper
+                definition<SetupViewModel>(ISetupRouter::class),
+                definition<StatusViewModel>(IStatusRouter::class),
             ),
         )
     }

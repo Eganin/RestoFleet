@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CA стенда RestoFleet и серверный сертификат (Mosquitto, apk-host).
+# CA стенда RestoFleet и серверный сертификат (Mosquitto, apk-host; SAN toxiproxy — клиенты через прокси деградации).
 #   ./make-ca.sh [LAN_IP]      LAN_IP по умолчанию — адрес en0 (нужен реальным устройствам в MVP-B)
 # Результат — в $OUT_DIR (по умолчанию deploy/certs/out, в .gitignore):
 #   ca.key (600), ca.crt — CA на 10 лет; создаётся один раз и при повторном запуске НЕ перевыпускается;
@@ -35,7 +35,7 @@ cat >"$ext" <<CONF
 basicConstraints=critical,CA:FALSE
 keyUsage=critical,digitalSignature,keyEncipherment
 extendedKeyUsage=serverAuth
-subjectAltName=DNS:localhost,DNS:mosquitto,DNS:apk-host,IP:127.0.0.1,IP:10.0.2.2,IP:${lan_ip}
+subjectAltName=DNS:localhost,DNS:mosquitto,DNS:apk-host,DNS:backend,DNS:toxiproxy,IP:127.0.0.1,IP:10.0.2.2,IP:${lan_ip}
 CONF
 
 openssl ecparam -name prime256v1 -genkey -noout -out "$out/server.key"
@@ -49,4 +49,4 @@ cp -p "$out/ca.crt" "$out/server.crt" "$out/server.key" "$out/broker/"
 
 umask 022
 cp "$out/ca.crt" "$out/public/ca.crt"
-echo "Серверный сертификат: $out/server.crt (SAN: localhost, mosquitto, apk-host, 127.0.0.1, 10.0.2.2, ${lan_ip})"
+echo "Серверный сертификат: $out/server.crt (SAN: localhost, mosquitto, apk-host, backend, toxiproxy, 127.0.0.1, 10.0.2.2, ${lan_ip})"

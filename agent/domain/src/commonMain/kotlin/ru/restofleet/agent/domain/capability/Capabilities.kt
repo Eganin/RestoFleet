@@ -29,7 +29,7 @@ data class Capabilities(
      * Отказ из-за киоска: `null` — киоск не мешает. Под киоском `ShowMessage` (уведомление не видно) и `LaunchApp`
      * для пакета вне [kioskPackages] (запуск блокирует система) честно получают `kiosk_active`, а не ложный успех.
      * Идёт после [check]: неверные аргументы по-прежнему `Unsupported`. `Beep`, `Ping`, `Reboot`, `InstallApk`,
-     * `LockTask` киоск не затрагивает.
+     * `LockTask`, `RunProbe`, `CollectDiagnostics` киоск не затрагивает.
      */
     fun kioskRefusal(command: Command): String? = when {
         !kioskActive -> null
@@ -56,6 +56,8 @@ data class Capabilities(
         Command.Reboot -> requireDeviceOwner()
         is Command.InstallApk -> requireDeviceOwner() ?: checkInstall(command)
         is Command.LockTask -> requireDeviceOwner() ?: checkTarget(command.pkg, command.url)
+        is Command.RunProbe -> if (command.target.isBlank()) "invalid_target" else null
+        Command.CollectDiagnostics -> null
     }
 
     private fun requireDeviceOwner(): String? =

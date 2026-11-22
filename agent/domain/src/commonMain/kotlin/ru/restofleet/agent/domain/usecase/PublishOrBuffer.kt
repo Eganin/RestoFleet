@@ -7,6 +7,7 @@ import kotlinx.coroutines.sync.withLock
 import ru.restofleet.agent.domain.error.MessageRejected
 import ru.restofleet.agent.domain.model.OutgoingMessage
 import ru.restofleet.agent.domain.port.BrokerSession
+import ru.restofleet.agent.domain.port.FlushTrigger
 import ru.restofleet.agent.domain.port.MessagePublisher
 import ru.restofleet.agent.domain.port.Outbox
 import ru.restofleet.agent.domain.port.SessionState
@@ -23,18 +24,24 @@ import kotlin.coroutines.cancellation.CancellationException
  * идут вид, код и счётчик, payload — никогда (решение 171). Вызовы сериализует `Mutex`: проверка `size()` и публикация
  * неатомарны, без него параллельный вызов обогнал бы только что упавший (сомнение 3.4). Настоящая отмена и `Error`
  * пробрасываются, сообщение не буферизуется.
+ *
+ * Если сообщение ушло в outbox при `CONNECTED` (очередь не пуста или публикация не удалась), дёргается [trigger]:
+ * досылка начинается сразу, а не через таймер 60 с (реш. 203). Без связи будить нечего — досылку запустит
+ * подключение.
  */
 class PublishOrBuffer(
     private val session: BrokerSession,
     private val publisher: MessagePublisher,
     private val outbox: Outbox,
+    private val trigger: FlushTrigger = FlushTrigger {},
     private val log: (String) -> Unit = {},
 ) {
     private val mutex = Mutex()
     private var droppedTotal = 0L
 
     suspend operator fun invoke(m: OutgoingMessage) = mutex.withLock {
-        val canPublishNow = session.state.value == SessionState.CONNECTED && outbox.size() == 0
+        val connected = session.state.value == SessionState.CONNECTED
+        val canPublishNow = connected && outbox.size() == 0
         val outcome = if (canPublishNow) publishOrNull(m) else null
         val rejected = (outcome as? Outcome.Failure)?.error as? MessageRejected
         when {
@@ -46,7 +53,10 @@ class PublishOrBuffer(
                         "(kind=${m.kind}, reason=${rejected.code}, total=$droppedTotal)",
                 )
             }
-            else -> outbox.enqueue(m.copy(qos = maxOf(m.qos, BUFFERED_MIN_QOS)))
+            else -> {
+                outbox.enqueue(m.copy(qos = maxOf(m.qos, BUFFERED_MIN_QOS)))
+                if (connected) trigger.request()
+            }
         }
     }
 

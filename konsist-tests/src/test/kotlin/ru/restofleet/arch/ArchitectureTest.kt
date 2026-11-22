@@ -14,7 +14,8 @@ import org.junit.Test
  * - domain: `<part>/domain/`, `<feature>-domain/`, `shared/{kernel,shadow,probes}/`;
  * - presentation: `<part>/presentation/`, `<feature>-ui/`, `console/core/mvi/`;
  * - composition root: `<part>/app/`, `console/app-<platform>/`, `console/root/`, `<feature>-component/`, пакеты `di`.
- * `shared:protocol` — DTO транспорта, то есть слой data.
+ * `shared:protocol` — DTO транспорта, то есть слой data. Исключение — `server:api` (presentation бэкенда): REST-DTO
+ * устройства из `shared:protocol.rest` — это его request/response DTO (реш. 222, 245), правило — отдельный тест.
  */
 class ArchitectureTest {
 
@@ -33,6 +34,87 @@ class ArchitectureTest {
     fun domainHasNoFrameworkOrOuterLayerImports() {
         domainFiles.assertFalse(testName = "domain imports framework, transport or data") { file ->
             file.imports.any { import -> isForbiddenInDomain(import.name) }
+        }
+    }
+
+    @Test
+    fun sharedDomainModulesAreFoundAndDoNotDependOnParts() {
+        // shared:shadow и shared:probes — общий домен агента, бэкенда и симулятора: не знают о частях системы
+        val shared = production.filter { SHARED_DOMAIN_PATH.containsMatchIn(it.normalizedPath) }
+        listOf("/shared/shadow/", "/shared/probes/").forEach { module ->
+            assertWithMessage("files of $module").that(shared.any { module in it.normalizedPath }).isTrue()
+        }
+        shared.assertFalse(testName = "shared domain imports agent, server, console or protocol") { file ->
+            file.imports.any { import -> PARTS.any { import.name.startsWith(it) } }
+        }
+    }
+
+    @Test
+    fun serverDomainIsFoundAndUsesOnlySharedDomain() {
+        // server:domain (КМ2): только shared:kernel/shadow/probes и свой пакет; без JDBC и фреймворков бэкенда
+        val serverDomain = production.filter { "/server/domain/src/" in it.normalizedPath }
+        assertWithMessage("server:domain files").that(serverDomain).isNotEmpty()
+        serverDomain.assertFalse(testName = "server domain imports outside shared domain") { file ->
+            file.imports.any { import ->
+                import.name.startsWith("ru.restofleet.") && SERVER_DOMAIN_ALLOWED.none { import.name.startsWith(it) }
+            }
+        }
+    }
+
+    @Test
+    fun serverUseCasesAreFound() {
+        // Правило «один invoke» ниже матчит пакеты ..usecase..: убедиться, что серверные use cases туда попадают
+        val useCases = Konsist.scopeFromProduction().classes()
+            .filter { it.resideInPackage("ru.restofleet.server.domain..usecase..") }
+        assertWithMessage("server use cases").that(useCases.size).isAtLeast(MIN_SERVER_USE_CASES)
+    }
+
+    @Test
+    fun serverDataDoesNotImportApiOrApp() {
+        production.filter { "/server/data/src/" in it.normalizedPath }
+            .assertFalse(testName = "server data imports api or app") { file ->
+                file.imports.any { import -> SERVER_OUTER.any { import.name.startsWith(it) } }
+            }
+    }
+
+    @Test
+    fun serverApiIsFoundAndDoesNotImportDataOrInfrastructure() {
+        // server:api — presentation бэкенда (КМ2b, реш. 245): только domain и REST-контракт устройства из
+        // shared:protocol (реш. 222); реализации портов, Exposed, HiveMQ, JDBC-пул и composition root — нельзя
+        val api = production.filter { "/server/api/src/" in it.normalizedPath }
+        assertWithMessage("server:api files").that(api).isNotEmpty()
+        api.assertFalse(testName = "server api imports data layer, app or infrastructure") { file ->
+            file.imports.any { import ->
+                import.name.contains(".data.") || SERVER_API_FORBIDDEN.any { import.name.startsWith(it) }
+            }
+        }
+    }
+
+    @Test
+    fun simulatorDomainIsFoundAndUsesOnlySharedDomain() {
+        // server:simulator (КМ4, реш. 279): слои — пакеты одного модуля; domain — без фреймворков, протокола и HiveMQ,
+        // из своих — только shared:kernel/shadow/probes
+        val domain = production.filter { SIMULATOR_DOMAIN in it.normalizedPath }
+        assertWithMessage("server:simulator domain files").that(domain).isNotEmpty()
+        domain.assertFalse(testName = "simulator domain imports framework or outer layer") { file ->
+            file.imports.any { import ->
+                val foreignPart = import.name.startsWith("ru.restofleet.") &&
+                    SIMULATOR_DOMAIN_ALLOWED.none { import.name.startsWith(it) }
+                FORBIDDEN_IN_DOMAIN.any { import.name.startsWith(it) } || foreignPart
+            }
+        }
+    }
+
+    @Test
+    fun simulatorDataDoesNotImportAppAndSimulatorUsesNoOtherServerModule() {
+        val simulator = production.filter { "/server/simulator/src/" in it.normalizedPath }
+        simulator.filter { SIMULATOR_DATA in it.normalizedPath }
+            .assertFalse(testName = "simulator data imports app") { file ->
+                file.imports.any { it.name.startsWith("ru.restofleet.server.simulator.app") }
+            }
+        // Симулятор ходит к бэкенду только по протоколу (MQTT, REST), а не через его классы
+        simulator.assertFalse(testName = "simulator imports backend or agent modules") { file ->
+            file.imports.any { import -> SIMULATOR_FOREIGN.any { import.name.startsWith(it) } }
         }
     }
 
@@ -70,13 +152,47 @@ class ArchitectureTest {
     private companion object {
         val DOMAIN_PATH = Regex("/(domain|[a-z0-9]+(-[a-z0-9]+)*-domain|shared/(kernel|shadow|probes))/src/")
         val PRESENTATION_PATH = Regex("/(presentation|[a-z0-9]+(-[a-z0-9]+)*-ui|console/core/mvi)/src/")
-        val COMPOSITION_ROOT_PATH =
-            Regex("(/app/src/|/console/app-[a-z]+/src/|/console/root/src/|-component/src/|/di/)")
+        val COMPOSITION_ROOT_PATH = Regex(
+            "(/app/src/|/console/app-[a-z]+/src/|/console/root/src/|-component/src/|/di/|" +
+                "/server/simulator/src/main/kotlin/ru/restofleet/server/simulator/app/)",
+        )
+
+        const val SIMULATOR_DOMAIN = "/server/simulator/src/main/kotlin/ru/restofleet/server/simulator/domain/"
+        const val SIMULATOR_DATA = "/server/simulator/src/main/kotlin/ru/restofleet/server/simulator/data/"
+        val SIMULATOR_DOMAIN_ALLOWED = listOf(
+            "ru.restofleet.server.simulator.domain.", "ru.restofleet.shared.kernel.", "ru.restofleet.shared.shadow.",
+            "ru.restofleet.shared.probes.",
+        )
+        val SIMULATOR_FOREIGN = listOf(
+            "ru.restofleet.server.domain.", "ru.restofleet.server.data.", "ru.restofleet.server.api.",
+            "ru.restofleet.server.app.", "ru.restofleet.agent.",
+        )
+
+        val SHARED_DOMAIN_PATH = Regex("/shared/(kernel|shadow|probes)/src/")
+        val PARTS = listOf(
+            "ru.restofleet.agent.", "ru.restofleet.server.", "ru.restofleet.console.", "ru.restofleet.shared.protocol",
+        )
 
         val FORBIDDEN_IN_DOMAIN = listOf(
             "android.", "androidx.", "io.ktor.", "org.jetbrains.exposed.", "kotlinx.serialization.",
             "org.koin.", "com.hivemq.", "okhttp3.", "com.arkivanov.", "ru.restofleet.shared.protocol",
+            "org.flywaydb.", "com.zaxxer.", "org.postgresql.", "at.favre.", "java.sql.", "javax.sql.",
         )
+
+        val SERVER_DOMAIN_ALLOWED = listOf(
+            "ru.restofleet.server.domain.", "ru.restofleet.shared.kernel.", "ru.restofleet.shared.shadow.",
+            "ru.restofleet.shared.probes.",
+        )
+
+        val SERVER_OUTER = listOf("ru.restofleet.server.api", "ru.restofleet.server.app")
+
+        val SERVER_API_FORBIDDEN = listOf(
+            "ru.restofleet.server.app", "org.jetbrains.exposed.", "com.hivemq.", "org.flywaydb.", "com.zaxxer.",
+            "org.postgresql.", "at.favre.", "javax.sql.",
+        )
+
+        /** Сейчас их 30 (КМ2a); порог ловит потерю правила при переносе пакетов. */
+        const val MIN_SERVER_USE_CASES = 30
 
         fun isDataLayer(name: String): Boolean =
             name.contains(".data.") || name.startsWith("ru.restofleet.shared.protocol")

@@ -1,0 +1,4 @@
+# Контекст сборки образа — только дистрибутив installDist и точка входа
+*
+!build/install/
+!docker-entrypoint.sh

@@ -39,6 +39,12 @@ class FileShadowStore(private val file: File) : ShadowStore {
 
     private val saves = MutableStateFlow(0)
 
+    /** Стирает сохранённую тень (R-3): следующий `desired` применяется как первый; наблюдатели получают `null`. */
+    suspend fun clear(): Unit = mutex.withLock {
+        if (file.exists() && !file.delete()) throw IOException("shadow was not cleared")
+        saves.update { it + 1 }
+    }
+
     override fun observe(): Flow<DesiredShadow?> = saves.map { load() }
 
     /** Сохранённая тень или `null`; нужна циклам, чтобы применить конфигурацию при старте (3.6b). */
@@ -93,12 +99,14 @@ class FileShadowStore(private val file: File) : ShadowStore {
         val intervalSec: Int,
         val failThreshold: Int,
         val reference: Boolean,
+        /** С КМ3 (реш. 219); файл тени MVP поля не имеет — `null`. */
+        val expectedStatus: Int? = null,
     ) {
-        fun toDomain() = ProbeTarget(id, url, timeoutMs, intervalSec, failThreshold, reference)
+        fun toDomain() = ProbeTarget(id, url, timeoutMs, intervalSec, failThreshold, reference, expectedStatus)
 
         companion object {
             fun from(p: ProbeTarget) =
-                StoredProbe(p.id, p.url, p.timeoutMs, p.intervalSec, p.failThreshold, p.reference)
+                StoredProbe(p.id, p.url, p.timeoutMs, p.intervalSec, p.failThreshold, p.reference, p.expectedStatus)
         }
     }
 }

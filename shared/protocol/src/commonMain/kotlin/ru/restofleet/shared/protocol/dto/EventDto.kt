@@ -68,3 +68,45 @@ data class DebugSeqEventDto(
     val seq: Int,
     val batchId: String,
 ) : EventDto
+
+/**
+ * Пересечение порога (FR-AG-40, реш. 202, 218): шлётся только при входе в зону (`enter`) и выходе из неё (`exit`,
+ * с гистерезисом), а не на каждом тике. [metric]: `battery_low` (заряд, %, [limit] = `thresholds.batteryLowPct`),
+ * `temp_high` (температура батареи, °C, [limit] = `thresholds.tempHighC`), `thermal` (код `THERMAL_STATUS_*` 0..6,
+ * [limit] — порог `SEVERE` = 3).
+ */
+@Serializable
+@SerialName("threshold")
+data class ThresholdEventDto(
+    override val ts: Long,
+    /** `battery_low` | `temp_high` | `thermal` */
+    val metric: String,
+    /** `enter` | `exit` */
+    val state: String,
+    val value: Double,
+    val limit: Double,
+) : EventDto
+
+/** Смена приложения на переднем плане (FR-AG-41, реш. 220); `null` — приложение неизвестно (нет usage access). */
+@Serializable
+@SerialName("fg_changed")
+data class FgChangedEventDto(
+    override val ts: Long,
+    val from: String? = null,
+    val to: String? = null,
+) : EventDto
+
+/**
+ * Отслеживаемое приложение [pkg] не на переднем плане дольше [limitMin] минут (`thresholds.fgAbsentMin`, FR-AG-41,
+ * реш. 220). Шлётся один раз на эпизод отсутствия; возвращение видно по `fg_changed`. [sinceTs] — когда приложение
+ * ушло с экрана, [foregroundApp] — что на экране сейчас (если известно).
+ */
+@Serializable
+@SerialName("fg_absent")
+data class FgAbsentEventDto(
+    override val ts: Long,
+    val pkg: String,
+    val sinceTs: Long,
+    val limitMin: Int,
+    val foregroundApp: String? = null,
+) : EventDto

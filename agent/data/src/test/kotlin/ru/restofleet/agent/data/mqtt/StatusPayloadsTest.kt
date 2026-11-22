@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Test
 import ru.restofleet.agent.data.mqtt.mapping.Fixtures
+import ru.restofleet.agent.domain.model.DeviceRole
 import ru.restofleet.shared.protocol.RfJson
 
 class StatusPayloadsTest {
@@ -21,6 +22,14 @@ class StatusPayloadsTest {
 
         val expected = JsonObject((Fixtures.json("status-online") as JsonObject).filterKeys { it != "role" })
         assertThat(json(bytes)).isEqualTo(expected)
+    }
+
+    @Test
+    fun onlineWithRoleFromProvisioningMatchesTheFixture() {
+        // Реш. 210: роль из ответа /provision хранится с учёткой и уходит в status.role
+        val bytes = payloads().online("k-7f3a9c", 1_793_865_600_000, DeviceRole.KITCHEN)
+
+        assertThat(json(bytes)).isEqualTo(Fixtures.json("status-online"))
     }
 
     @Test

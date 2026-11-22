@@ -18,6 +18,7 @@ import ru.restofleet.agent.domain.usecase.ApplyDesiredShadow
 import ru.restofleet.agent.domain.usecase.FlushOutbox
 import ru.restofleet.agent.domain.usecase.HandleIncomingCommand
 import ru.restofleet.agent.domain.usecase.PublishEvent
+import ru.restofleet.agent.domain.usecase.PublishPackageChange
 import ru.restofleet.shared.kernel.Clock
 
 class SessionRuntimeTest {
@@ -45,7 +46,6 @@ class SessionRuntimeTest {
             }
         },
         { error("no probes expected") },
-        {},
     )
 
     private fun TestScopeRuntime(scope: kotlinx.coroutines.CoroutineScope): SessionRuntime {
@@ -54,7 +54,7 @@ class SessionRuntimeTest {
             mockk<FlushOutbox>(), MemoryOutbox(),
         )
         val pump = EventPump(scope, { kotlinx.coroutines.flow.emptyFlow() }, { kotlinx.coroutines.flow.emptyFlow() },
-            { emptySet() }, publishEvent, Clock { 1 })
+            { emptySet() }, publishEvent, PublishPackageChange(publishEvent, Clock { 1 }), Clock { 1 })
         return SessionRuntime(supervisor, pump, probeLoop(scope), publishEvent, Clock { 42 })
     }
 

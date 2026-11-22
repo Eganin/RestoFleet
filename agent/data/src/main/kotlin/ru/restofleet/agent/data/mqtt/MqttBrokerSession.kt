@@ -190,12 +190,12 @@ internal class MqttBrokerSession(
                 }
                 val events = launch {
                     connId = firstConnId
-                    onConnected(link, router, connId, endpoint)
+                    onConnected(link, router, connId, endpoint, settings)
                     for (event in link.events) {
                         when (event) {
                             is LinkEvent.Connected -> {
                                 connId = event.connId
-                                onConnected(link, router, connId, endpoint)
+                                onConnected(link, router, connId, endpoint, settings)
                             }
                             is LinkEvent.Lost -> {
                                 log("connection lost: ${event.error.code}")
@@ -223,10 +223,17 @@ internal class MqttBrokerSession(
         }
     }
 
-    private suspend fun onConnected(link: MqttLink, router: TopicRouter, connId: String, endpoint: String) {
+    private suspend fun onConnected(
+        link: MqttLink,
+        router: TopicRouter,
+        connId: String,
+        endpoint: String,
+        settings: BrokerSettings,
+    ) {
         val online = OutboundMessage(
             topic = router.statusTopic,
-            payload = statusPayloads.online(connId, clock.nowMillis()),
+            // status.role — из сохранённой учётки (реш. 210)
+            payload = statusPayloads.online(connId, clock.nowMillis(), settings.role),
             qos = STATUS_QOS,
             retain = true,
             correlationData = null,

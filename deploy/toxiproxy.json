@@ -1,0 +1,20 @@
+[
+  {
+    "name": "api",
+    "listen": "0.0.0.0:18443",
+    "upstream": "apk-host:443",
+    "enabled": true
+  },
+  {
+    "name": "mqtt",
+    "listen": "0.0.0.0:18883",
+    "upstream": "mosquitto:8883",
+    "enabled": true
+  },
+  {
+    "name": "rest",
+    "listen": "0.0.0.0:18080",
+    "upstream": "backend:8080",
+    "enabled": true
+  }
+]

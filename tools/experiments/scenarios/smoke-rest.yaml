@@ -1,0 +1,15 @@
+# Быстрая проверка симулятора и стенда (≈ 2 мин): 20 устройств REST (опрос 5 с), окно 30 с, пропажа 2 устройств.
+# Запуск: tools/experiments/run-experiment.sh run smoke-rest
+name: smoke-rest
+mode: rest
+pollIntervalSec: 5
+devices: 20
+rampPerSec: 20
+warmupSec: 5
+durationSec: 30
+commands: { perMinute: 60 }
+loss: { devices: 2, mode: silent, timeoutSec: 75 }
+endpoints:
+  api: http://backend-devices:8080
+  control: http://backend-ctl:8080
+  broker: { host: mosquitto, port: 8883 }

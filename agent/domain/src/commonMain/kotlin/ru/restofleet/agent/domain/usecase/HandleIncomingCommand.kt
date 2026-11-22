@@ -20,11 +20,12 @@ import kotlin.coroutines.cancellation.CancellationException
  * Идемпотентная обработка входящей команды. Повтор `cmdId` игнорируется без ответа. Иначе всегда сначала `received`
  * (P1), затем `markProcessed` и только потом исполнение (at-most-once для всех команд: после перезагрузки повтор
  * не исполнится; цена — при смерти процесса посреди исполнения итог теряется, сервер закроет команду по таймауту),
- * затем итог. Итог: `expired` при `expiresAt < now`, `invalid_params:<parseError>`, `unknown_type:<rawType>`, `timeout`
- * (потолок — [CommandTimeouts]), либо результат [ExecuteCommand]. Успешный итог `reboot` кладётся в [outbox], а не
- * публикуется напрямую (порт только планирует перезагрузку, решение 142). Исключение любого порта или энкодера не
- * роняет обработчик (решение 78): `failed`/`exception:<Класс>`; настоящая отмена и `Error` пробрасываются. Команды
- * исполняются последовательно вызывающим.
+ * затем итог. Итог: `expired` при `now > expiresAt + 5 мин` (допуск на расхождение часов устройства, реш. 206,
+ * OQ-1; основная защита — Message Expiry брокера, от часов не зависит), `invalid_params:<parseError>`,
+ * `unknown_type:<rawType>`, `timeout` (потолок — [CommandTimeouts]), либо результат [ExecuteCommand]. Успешный итог
+ * `reboot` кладётся в [outbox], а не публикуется напрямую (порт только планирует перезагрузку, решение 142).
+ * Исключение любого порта или энкодера не роняет обработчик (решение 78): `failed`/`exception:<Класс>`; настоящая
+ * отмена и `Error` пробрасываются. Команды исполняются последовательно вызывающим.
  */
 class HandleIncomingCommand(
     private val execute: ExecuteCommand,
@@ -66,7 +67,8 @@ class HandleIncomingCommand(
     private suspend fun resolve(cmd: IncomingCommand): CommandOutcome {
         val command = cmd.command
         return when {
-            cmd.expiresAt != null && cmd.expiresAt < clock.nowMillis() -> CommandOutcome.Failed(REASON_EXPIRED)
+            cmd.expiresAt != null && clock.nowMillis() > cmd.expiresAt + CLOCK_SKEW_TOLERANCE_MS ->
+                CommandOutcome.Failed(REASON_EXPIRED)
             command == null && cmd.parseError != null ->
                 CommandOutcome.Failed("$REASON_INVALID_PARAMS_PREFIX${cmd.parseError}")
             command == null -> CommandOutcome.Unsupported("$REASON_UNKNOWN_TYPE_PREFIX${cmd.rawType}")
@@ -114,6 +116,9 @@ class HandleIncomingCommand(
 
     private companion object {
         const val RESULT_QOS = 1
+
+        /** Допуск на уход часов устройства вперёд при сверке `expiresAt` (реш. 206). */
+        const val CLOCK_SKEW_TOLERANCE_MS = 5 * 60_000L
         const val REASON_EXPIRED = "expired"
         const val REASON_TIMEOUT = "timeout"
         const val REASON_INVALID_PARAMS_PREFIX = "invalid_params:"

@@ -1,0 +1,9 @@
+{
+  "version": 14,
+  "telemetry": { "intervalSec": 60 },
+  "thresholds": { "batteryLowPct": 15, "tempHighC": 50.0, "fgAbsentMin": 5 },
+  "watchedApps": [ "ru.restofleet.dummy.waiter" ],
+  "probes": [
+    { "id": "api", "type": "http", "url": "https://api.company.example/health", "intervalSec": 30, "timeoutMs": 5000, "failThreshold": 3, "reference": false, "expectedStatus": 204 }
+  ]
+}

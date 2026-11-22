@@ -5,9 +5,12 @@ import ru.restofleet.shared.protocol.dto.AgentLifecycleEventDto
 import ru.restofleet.shared.protocol.dto.CapabilityCheckEventDto
 import ru.restofleet.shared.protocol.dto.DebugSeqEventDto
 import ru.restofleet.shared.protocol.dto.EventDto
+import ru.restofleet.shared.protocol.dto.FgAbsentEventDto
+import ru.restofleet.shared.protocol.dto.FgChangedEventDto
 import ru.restofleet.shared.protocol.dto.NetChangedEventDto
 import ru.restofleet.shared.protocol.dto.PackageChangedEventDto
 import ru.restofleet.shared.protocol.dto.ProbeStateEventDto
+import ru.restofleet.shared.protocol.dto.ThresholdEventDto
 
 internal object EventMapper {
     fun toDto(event: AgentEvent): EventDto = when (event) {
@@ -35,5 +38,20 @@ internal object EventMapper {
             note = event.result.note,
         )
         is AgentEvent.DebugSeq -> DebugSeqEventDto(event.ts, event.seq, event.batchId)
+        is AgentEvent.ThresholdCrossed -> ThresholdEventDto(
+            ts = event.ts,
+            metric = event.metric.name.lowercase(),
+            state = if (event.entered) "enter" else "exit",
+            value = event.value,
+            limit = event.limit,
+        )
+        is AgentEvent.ForegroundChanged -> FgChangedEventDto(event.ts, event.from, event.to)
+        is AgentEvent.ForegroundAbsent -> FgAbsentEventDto(
+            ts = event.ts,
+            pkg = event.pkg,
+            sinceTs = event.sinceTs,
+            limitMin = event.limitMin,
+            foregroundApp = event.foregroundApp,
+        )
     }
 }

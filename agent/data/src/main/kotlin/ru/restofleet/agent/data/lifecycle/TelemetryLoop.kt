@@ -13,9 +13,10 @@ import ru.restofleet.agent.domain.usecase.CollectTelemetry
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * Один тик: снимок телеметрии → лог → метка heartbeat (L1) → публикация [publish] (MQTT, `PublishTelemetry`). Метка
- * ставится, только если сбор вернул снимок. Сбой публикации (Exception) изолирован: тик не падает, heartbeat уже
- * поставлен, в лог идёт только класс исключения; настоящая отмена пробрасывается.
+ * Один тик: снимок телеметрии → лог → метка heartbeat (L1) → публикация [publish] (MQTT, `PublishTelemetry`) →
+ * проверка порогов [evaluate] (`EvaluateThresholds`, FR-AG-40/41). Метка ставится, только если сбор вернул снимок.
+ * Сбой публикации или проверки порогов (Exception) изолирован: тик не падает, heartbeat уже поставлен, в лог идёт
+ * только класс исключения; настоящая отмена пробрасывается.
  */
 class TelemetryTick(
     private val collect: CollectTelemetry,
@@ -23,6 +24,7 @@ class TelemetryTick(
     private val watched: List<String>,
     private val log: (String) -> Unit = { Log.i(TAG, it) },
     private val publish: suspend (TelemetrySnapshot) -> Unit = {},
+    private val evaluate: suspend (TelemetrySnapshot) -> Unit = {},
 ) {
     suspend operator fun invoke() {
         val snapshot = collect(watched)
@@ -31,18 +33,19 @@ class TelemetryTick(
                 "unavailable=${snapshot.unavailable.keys.sorted()}",
         )
         heartbeat.append()
-        publishIsolated(snapshot)
+        isolated("publish") { publish(snapshot) }
+        isolated("thresholds") { evaluate(snapshot) }
     }
 
-    @Suppress("TooGenericExceptionCaught", "SwallowedException") // изоляция публикации (канон 78); Error не ловится
-    private suspend fun publishIsolated(snapshot: TelemetrySnapshot) {
+    @Suppress("TooGenericExceptionCaught", "SwallowedException") // изоляция шага (канон 78); Error не ловится
+    private suspend fun isolated(step: String, block: suspend () -> Unit) {
         try {
-            publish(snapshot)
+            block()
         } catch (e: CancellationException) {
             currentCoroutineContext().ensureActive()
-            log("publish failed: stray cancellation")
+            log("$step failed: stray cancellation")
         } catch (e: Exception) {
-            log("publish failed: ${e::class.java.simpleName}")
+            log("$step failed: ${e::class.java.simpleName}")
         }
     }
 

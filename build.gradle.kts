@@ -18,11 +18,18 @@ plugins {
 dependencies {
     kover(projects.shared.kernel)
     kover(projects.shared.protocol)
+    kover(projects.shared.shadow)
+    kover(projects.shared.probes)
     kover(projects.console.core.mvi)
     kover(projects.agent.domain)
     kover(projects.agent.data)
     kover(projects.agent.presentation)
     kover(projects.agent.app)
+    kover(projects.server.domain)
+    kover(projects.server.data)
+    kover(projects.server.api)
+    kover(projects.server.app)
+    kover(projects.server.simulator)
 }
 
 kover {

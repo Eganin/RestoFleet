@@ -14,7 +14,8 @@
         android:testOnly="true">
 
         <!--
-            Только debug: учётка брокера приходит командой adb (`am broadcast -a ru.restofleet.agent.DEV_CONFIG ...`).
+            Только debug: учётка брокера (DEV_CONFIG) или код регистрации (DEV_PROVISION) приходят командой adb
+            (`am broadcast -a ru.restofleet.agent.DEV_CONFIG ...`).
             Экспортирован, но защищён разрешением DUMP: его держит только оболочка adb, обычные приложения — нет.
             В release ресивера нет (проверяет verifyReleaseNoDebugSurface). В MVP-B учётку заменит QR (D7).
         -->
@@ -24,6 +25,8 @@
             android:permission="android.permission.DUMP">
             <intent-filter>
                 <action android:name="ru.restofleet.agent.DEV_CONFIG" />
+                <!-- Регистрация по одноразовому коду (код + baseUrl), как в мастере: автоматизация S1 (план 3.5) -->
+                <action android:name="ru.restofleet.agent.DEV_PROVISION" />
             </intent-filter>
         </receiver>
     </application>

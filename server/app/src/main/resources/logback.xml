@@ -1,0 +1,21 @@
+<configuration>
+    <!-- Бэкенд стенда: одна строка на событие в stdout (docker compose logs). Значения SQL (Exposed DEBUG) и
+         заголовки HTTP не пишутся: Exposed и Netty — WARN, журнал вызовов API — без Authorization и тел. -->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    <logger name="ru.restofleet" level="INFO"/>
+    <logger name="io.ktor" level="INFO"/>
+    <logger name="io.netty" level="WARN"/>
+    <logger name="Exposed" level="WARN"/>
+    <logger name="org.jetbrains.exposed" level="WARN"/>
+    <logger name="com.zaxxer.hikari" level="INFO"/>
+    <logger name="org.flywaydb" level="INFO"/>
+    <logger name="com.hivemq" level="WARN"/>
+    <logger name="org.koin" level="WARN"/>
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>

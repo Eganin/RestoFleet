@@ -44,4 +44,82 @@
     <string name="do_message_hash_fetched">Хэш подставлен</string>
     <string name="do_message_hash_failed">Не удалось получить хэш: %1$s</string>
     <string name="do_message_error">Ошибка: %1$s</string>
+
+    <!-- Общие строки мастера и экрана статуса (КМ3, план 3.6) -->
+    <string name="value_raw">%1$s</string>
+    <string name="value_none">—</string>
+    <string name="open_lab">Capability Lab</string>
+    <string name="perm_notifications">Уведомления</string>
+    <string name="perm_usage_access">Доступ к статистике использования</string>
+    <string name="perm_battery">Без оптимизации батареи</string>
+    <string name="perm_granted">выдано</string>
+    <string name="perm_missing">не выдано</string>
+    <string name="perm_unknown">нет данных</string>
+    <string name="perm_open_settings">Открыть</string>
+    <string name="role_kitchen">кухня</string>
+    <string name="role_hall">зал</string>
+    <string name="role_assembly">сборка</string>
+    <string name="role_unknown">не задана</string>
+    <string name="label_device_id">Устройство</string>
+    <string name="label_role">Роль</string>
+    <string name="label_restaurant">Ресторан</string>
+    <string name="label_broker">Брокер</string>
+
+    <!-- Мастер настройки -->
+    <string name="setup_title">Настройка агента</string>
+    <string name="setup_step_permissions">Шаг 1 из 3 · Разрешения</string>
+    <string name="setup_step_registration">Шаг 2 из 3 · Регистрация</string>
+    <string name="setup_step_done">Шаг 3 из 3 · Готово</string>
+    <string name="setup_permissions_hint">Разрешения нужны для телеметрии, проверок и уведомлений. Их можно выдать и позже — экран статуса покажет, чего не хватает.</string>
+    <string name="setup_registration_hint">Код выдаёт оператор (Swagger: POST /provisioning/tokens). Роль устройства задана кодом.</string>
+    <string name="setup_next">Далее</string>
+    <string name="setup_back">Назад</string>
+    <string name="setup_base_url">Адрес стенда</string>
+    <string name="setup_code">Код регистрации</string>
+    <string name="setup_submit">Зарегистрировать</string>
+    <string name="setup_submitting">Регистрация…</string>
+    <string name="setup_done_title">Устройство зарегистрировано</string>
+    <string name="setup_finish">К статусу</string>
+    <string name="setup_error_invalid_base_url">Адрес должен быть вида https://хост:порт</string>
+    <string name="setup_error_empty_code">Введите код</string>
+    <string name="setup_error_code_invalid">Код не найден</string>
+    <string name="setup_error_code_used">Код уже использован</string>
+    <string name="setup_error_code_expired">Срок кода истёк, запросите новый</string>
+    <string name="setup_error_rate_limited">Слишком много попыток, повторите позже</string>
+    <string name="setup_error_rate_limited_after">Слишком много попыток, повторите через %1$s с</string>
+    <string name="setup_error_server_unavailable">Стенд временно недоступен, повторите</string>
+    <string name="setup_error_rejected">Стенд отклонил запрос: %1$s</string>
+    <string name="setup_error_no_network">Нет связи со стендом</string>
+    <string name="setup_error_timeout">Стенд не ответил вовремя</string>
+    <string name="setup_error_tls">Сертификат стенда не доверен</string>
+    <string name="setup_error_ca_missing">В сборке нет CA стенда</string>
+    <string name="setup_error_invalid_response">Непонятный ответ стенда</string>
+    <string name="setup_error_storage">Учётка не сохранилась — код погашен, нужен новый</string>
+    <string name="setup_error_failed">Сбой: %1$s</string>
+
+    <!-- Экран статуса -->
+    <string name="status_title">Статус агента</string>
+    <string name="status_refresh">Обновить</string>
+    <string name="status_section_connection">Подключение</string>
+    <string name="status_section_device">Устройство</string>
+    <string name="status_section_permissions">Разрешения</string>
+    <string name="status_section_probes">Проверки доступности</string>
+    <string name="status_connected">подключён</string>
+    <string name="status_connecting">подключение…</string>
+    <string name="status_disconnected">нет подключения</string>
+    <string name="status_error">Причина: %1$s</string>
+    <string name="status_conn_id">connId</string>
+    <string name="status_mode">Режим</string>
+    <string name="status_mode_normal">обычный</string>
+    <string name="status_mode_device_owner">Device Owner</string>
+    <string name="status_outbox">Буфер (outbox)</string>
+    <string name="status_version">Версия агента</string>
+    <string name="status_not_registered">Учётки нет: пройдите настройку</string>
+    <string name="status_registration_unavailable">Учётка временно недоступна (Keystore), повтор подключения идёт сам</string>
+    <string name="status_no_probes">Проверок пока нет: цели задаются тенью</string>
+    <string name="status_probe_up">доступна</string>
+    <string name="status_probe_down">недоступна</string>
+    <string name="status_probe_unknown">нет данных</string>
+    <string name="status_probe_detail_ok">HTTP %1$s · %2$s мс</string>
+    <string name="status_probe_detail_fail">%1$s · неудач подряд: %2$s</string>
 </resources>

@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Сценарии MVP-A</title>
+<meta name="description" content="Каждый сценарий использования MVP-A RestoFleet: кто и зачем, как проходит, что под капотом, что показал MVP и как попробовать самому.">
+<style>
+:root {
+  --bg: #f6f6f3; --surface: #ffffff; --surface-2: #f0f0eb; --text: #1c1d1f; --muted: #5d6166; --border: #e0e0da;
+  --accent: #0a66c2; --accent-soft: #e5f0fb; --ok: #1d7a41; --ok-soft: #e3f4e9; --warn: #9a5b00; --warn-soft: #fbf0dc;
+  --na: #5f6670; --na-soft: #ececec; --code-bg: #f1f1ec; --code-text: #23262a; --shadow: 0 1px 2px rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111314; --surface: #1a1d1f; --surface-2: #212528; --text: #e7e7e4; --muted: #a2a7ab; --border: #2d3236;
+    --accent: #63aefc; --accent-soft: #15283b; --ok: #57c785; --ok-soft: #15301f; --warn: #f1b54f; --warn-soft: #362810;
+    --na: #a3a9b0; --na-soft: #272b2f; --code-bg: #202427; --code-text: #e1e3e4; --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111314; --surface: #1a1d1f; --surface-2: #212528; --text: #e7e7e4; --muted: #a2a7ab; --border: #2d3236;
+  --accent: #63aefc; --accent-soft: #15283b; --ok: #57c785; --ok-soft: #15301f; --warn: #f1b54f; --warn-soft: #362810;
+  --na: #a3a9b0; --na-soft: #272b2f; --code-bg: #202427; --code-text: #e1e3e4; --shadow: none;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: 12px; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px 64px; }
+header.hero { padding: 40px 0 20px; }
+.eyebrow { color: var(--muted); font-size: 14px; }
+h1 { font-size: 34px; line-height: 1.2; margin: 6px 0 12px; }
+h2 { font-size: 24px; margin: 48px 0 6px; padding-top: 10px; border-top: 1px solid var(--border); }
+h3 { font-size: 19px; margin: 0; line-height: 1.3; }
+h4 { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 14px 0 6px; }
+p { margin: 8px 0 10px; }
+a { color: var(--accent); }
+.lead { font-size: 18px; max-width: 780px; }
+.muted { color: var(--muted); } .small { font-size: 14px; }
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13.5px; }
+code { background: var(--code-bg); color: var(--code-text); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { position: relative; background: var(--code-bg); color: var(--code-text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 34px 16px 14px; margin: 8px 0 12px; overflow-x: auto; line-height: 1.5; }
+pre code { background: none; padding: 0; }
+.copy { position: absolute; top: 6px; right: 6px; font: 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--surface); color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; cursor: pointer; }
+.copy:hover { color: var(--text); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+nav.toc a { text-decoration: none; color: var(--text); font-size: 14px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; }
+nav.toc a:hover { border-color: var(--accent); color: var(--accent); }
+.grid { display: grid; gap: 12px; }
+.g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 860px) { .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .g2, .g4 { grid-template-columns: 1fr; } h1 { font-size: 28px; } }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; box-shadow: var(--shadow); min-width: 0; }
+.card b.role { display: block; margin-bottom: 4px; }
+.table-wrap { overflow-x: auto; margin: 10px 0 18px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th, td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+th { background: var(--surface-2); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: none; }
+td.nw { white-space: nowrap; }
+td a { text-decoration: none; }
+.b { display: inline-block; font-size: 12.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; margin: 1px 0; }
+.b.ok { color: var(--ok); background: var(--ok-soft); }
+.b.warn { color: var(--warn); background: var(--warn-soft); }
+.b.na { color: var(--na); background: var(--na-soft); }
+article.uc { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 18px 8px;
+  margin: 16px 0; box-shadow: var(--shadow); }
+article.uc > header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 6px; }
+.ucid { font: 600 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); background: var(--accent-soft);
+  padding: 3px 8px; border-radius: 6px; }
+.badges { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.who { color: var(--muted); margin: 4px 0 2px; }
+.cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; }
+@media (max-width: 760px) { .cols { grid-template-columns: 1fr; } .badges { margin-left: 0; } }
+ol, ul { margin: 4px 0 10px; padding-left: 22px; }
+li { margin: 3px 0; }
+.result { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; margin: 10px 0; font-size: 15px; }
+.limits { font-size: 14.5px; color: var(--muted); }
+details { margin: 8px 0 12px; }
+details summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+.callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+.callout.warn { border-color: var(--warn); background: var(--warn-soft); }
+footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">RestoFleet · MVP-A · сценарии использования · 11.11.2026</div>
+  <h1>Сценарии MVP-A: что умеет система и как это проверить</h1>
+  <p class="lead">Ниже разобран каждый сценарий, который MVP-A поддерживает уже сейчас. Для каждого указано, кому и зачем он нужен, как проходит, что происходит внутри, что показал MVP на эмуляторах и как повторить проверку самому.</p>
+  <nav class="toc" aria-label="Разделы">
+    <a href="#actors">Участники</a>
+    <a href="#summary">Сводка</a>
+    <a href="#prep">Подготовка</a>
+    <a href="#g-link">Связь</a>
+    <a href="#g-mon">Мониторинг</a>
+    <a href="#g-cfg">Настройка</a>
+    <a href="#g-cmd">Команды</a>
+    <a href="#g-do">Device Owner</a>
+    <a href="#g-plat">Проверка и безопасность</a>
+    <a href="#notes">Наблюдения</a>
+  </nav>
+</header>
+
+<h2 id="actors">Кто участвует</h2>
+<div class="grid g4">
+  <div class="card"><b class="role">Техник</b><span class="small">Ставит планшет в ресторане, выдаёт агенту учётку, назначает его владельцем устройства.</span></div>
+  <div class="card"><b class="role">Оператор / поддержка</b><span class="small">Следит за устройствами, шлёт настройки и команды. В MVP-A вместо бэкенда и консоли работает через <code>mosquitto_sub</code> и <code>mosquitto_pub</code>.</span></div>
+  <div class="card"><b class="role">Агент</b><span class="small">Android-приложение <code>ru.restofleet.agent</code> на планшете: собирает данные, выполняет команды.</span></div>
+  <div class="card"><b class="role">Брокер</b><span class="small">Mosquitto 2.1.2 на стенде: TLS 8883, учётки и права Dynamic Security.</span></div>
+</div>
+
+<h2 id="summary">Сводка сценариев</h2>
+<p class="muted small">Обозначения: <span class="b ok">✅ работает</span> <span class="b warn">⚠️ с ограничением</span> <span class="b na">⏳ не проверено</span> <span class="b na">— MVP-B</span>. Проверено на эмуляторах API 26 и 36, а также на API 36 в режиме Device Owner.</p>
+<div class="table-wrap"><table>
+  <tr><th>№</th><th>Сценарий</th><th>Кто</th><th>Итог</th><th>ID в матрице</th></tr>
+  <tr><td class="nw"><a href="#uc01">UC-01</a></td><td>Подключить устройство к платформе</td><td>Техник</td><td><span class="b ok">✅</span></td><td>L5, M1</td></tr>
+  <tr><td class="nw"><a href="#uc02">UC-02</a></td><td>Видеть, на связи ли устройство</td><td>Оператор</td><td><span class="b ok">✅</span></td><td>M1, M3</td></tr>
+  <tr><td class="nw"><a href="#uc03">UC-03</a></td><td>Не терять данные без связи</td><td>Агент</td><td><span class="b ok">✅</span></td><td>M7, P4</td></tr>
+  <tr><td class="nw"><a href="#uc04">UC-04</a></td><td>Работать без участия персонала</td><td>Агент</td><td><span class="b ok">✅ L2</span> <span class="b warn">⚠️ L4</span> <span class="b na">⏳ L3</span> <span class="b na">— L1</span></td><td>L1–L4</td></tr>
+  <tr><td class="nw"><a href="#uc05">UC-05</a></td><td>Следить за состоянием устройства</td><td>Оператор</td><td><span class="b ok">✅</span> <span class="b warn">⚠️ часть</span></td><td>R1–R9, R11, R14</td></tr>
+  <tr><td class="nw"><a href="#uc06">UC-06</a></td><td>Проверять доступность сервисов</td><td>Поддержка</td><td><span class="b ok">✅</span> <span class="b warn">⚠️ на 36</span></td><td>P1–P4</td></tr>
+  <tr><td class="nw"><a href="#uc07">UC-07</a></td><td>Узнавать о событиях устройства</td><td>Оператор</td><td><span class="b ok">✅</span></td><td>R12, R14</td></tr>
+  <tr><td class="nw"><a href="#uc08">UC-08</a></td><td>Настраивать агент удалённо</td><td>Оператор</td><td><span class="b ok">✅</span></td><td>M4</td></tr>
+  <tr><td class="nw"><a href="#uc09">UC-09</a></td><td>Надёжно доставлять команды</td><td>Оператор</td><td><span class="b ok">✅</span></td><td>M5, M6</td></tr>
+  <tr><td class="nw"><a href="#uc10">UC-10</a></td><td>Показать сообщение персоналу</td><td>Оператор</td><td><span class="b ok">✅</span></td><td>C1</td></tr>
+  <tr><td class="nw"><a href="#uc11">UC-11</a></td><td>Открыть нужное приложение</td><td>Оператор</td><td><span class="b warn">⚠️ C2</span> <span class="b ok">✅ C3</span></td><td>C2, C3</td></tr>
+  <tr><td class="nw"><a href="#uc12">UC-12</a></td><td>Подать звуковой сигнал</td><td>Оператор</td><td><span class="b ok">✅</span></td><td>C4</td></tr>
+  <tr><td class="nw"><a href="#uc13">UC-13</a></td><td>Сделать агента владельцем устройства</td><td>Техник</td><td><span class="b ok">✅</span></td><td>D1</td></tr>
+  <tr><td class="nw"><a href="#uc14">UC-14</a></td><td>Перезагрузить устройство удалённо</td><td>Оператор</td><td><span class="b ok">✅</span></td><td>D2</td></tr>
+  <tr><td class="nw"><a href="#uc15">UC-15</a></td><td>Установить или обновить приложение</td><td>Оператор</td><td><span class="b ok">✅</span></td><td>D3</td></tr>
+  <tr><td class="nw"><a href="#uc16">UC-16</a></td><td>Закрепить устройство на приложении (киоск)</td><td>Оператор</td><td><span class="b warn">⚠️</span></td><td>D4</td></tr>
+  <tr><td class="nw"><a href="#uc17">UC-17</a></td><td>Запустить приложение из фона</td><td>Оператор</td><td><span class="b ok">✅</span></td><td>D5</td></tr>
+  <tr><td class="nw"><a href="#uc18">UC-18</a></td><td>Выдать агенту разрешения без мастера</td><td>Агент</td><td><span class="b warn">⚠️</span></td><td>D6</td></tr>
+  <tr><td class="nw"><a href="#uc19">UC-19</a></td><td>Инвентаризация: серийный номер, температуры</td><td>Оператор</td><td><span class="b ok">✅ на 36</span></td><td>R10, R13</td></tr>
+  <tr><td class="nw"><a href="#uc20">UC-20</a></td><td>Проверить возможности устройства</td><td>Техник</td><td><span class="b ok">✅</span></td><td>Lab</td></tr>
+  <tr><td class="nw"><a href="#uc21">UC-21</a></td><td>Изолировать устройства и отзывать доступ</td><td>Брокер</td><td><span class="b ok">✅</span></td><td>M2, S3</td></tr>
+  <tr><td class="nw"><a href="#uc22">UC-22</a></td><td>Выдержать много устройств</td><td>Брокер</td><td><span class="b warn">⚠️ S1</span> <span class="b ok">✅ S2</span></td><td>S1, S2</td></tr>
+</table></div>
+
+<h2 id="prep">Подготовка к проверкам</h2>
+<p>Стенд поднят по <code>deploy/README.md</code>, агент собран (<code>./gradlew :agent:app:assembleDebug</code>) и запущен на эмуляторе. Пароли читаются из файлов и на экран не выводятся. Команды проверены в zsh и bash.</p>
+<p><b>Терминал A: подписка оператора на все сообщения устройства</b> (из каталога <code>deploy/</code>):</p>
+<pre><code>cd deploy
+PW=$(awk '$1=="operator"{print $2}' out/dev-credentials.txt)
+{ printf 'umask 077\nmkdir -p /tmp/rfopt\n'; for t in mosquitto_sub mosquitto_pub; do
+  printf "cat &gt; /tmp/rfopt/%s &lt;&lt;'EOF'\n-h localhost\n-p 8883\n-V mqttv5\n--cafile /mosquitto/certs/ca.crt\n-u operator\n-P %s\nEOF\n" "$t" "$PW"; done; } | docker compose exec -T mosquitto sh -s; unset PW
+O() { docker compose exec -T -e XDG_CONFIG_HOME=/tmp/rfopt mosquitto "$@"; }
+DEV=dev-emu-36          # для Device Owner: DEV=dev-do-36
+O mosquitto_sub -t "rf/v1/dev/$DEV/#" -F '%I %t %p'</code></pre>
+<p><b>Терминал B: учётка агенту и отправка команд</b> (из корня репозитория, затем <code>deploy/</code>):</p>
+<pre><code>DEV=dev-emu-36          # для Device Owner: DEV=dev-do-36
+PW="$(awk -v u="$DEV" '$1==u{print $2}' deploy/out/dev-credentials.txt)"
+printf 'am broadcast -a ru.restofleet.agent.DEV_CONFIG -n ru.restofleet.agent/.DevConfigReceiver --es host 10.0.2.2 --ei port 8883 --es deviceId %s --es password %s\n' "$DEV" "$PW" | adb shell sh
+unset PW
+
+cd deploy
+O() { docker compose exec -T -e XDG_CONFIG_HOME=/tmp/rfopt mosquitto "$@"; }
+rfcmd() { # rfcmd &lt;type&gt; '&lt;params JSON&gt;' [срок в секундах: по умолчанию 300, отрицательный — уже истёк]
+  python3 -I -c 'import json,sys,time;print(json.dumps({"cmdId":"c-man-%d"%(time.time()*1000),"type":sys.argv[1],"params":json.loads(sys.argv[2]),"expiresAt":int(time.time()*1000)+int(sys.argv[3])*1000},ensure_ascii=False),end="")' "$1" "$2" "${3:-300}" \
+  | O mosquitto_pub -q 1 -t "rf/v1/dev/$DEV/cmd/req" -D publish response-topic "rf/v1/dev/$DEV/cmd/res" \
+      -D publish correlation-data c-man -D publish message-expiry-interval 300 -s
+}</code></pre>
+<p class="small muted">Если нет нескольких эмуляторов, <code>adb</code> работает без <code>-s</code>. После проверок удалите опции оператора: <code>docker compose exec -T mosquitto rm -rf /tmp/rfopt</code>. Большую часть сценариев можно прогнать без ручных шагов: <code>tools/emulators/run-matrix.sh rf-api36 36 [--window]</code> и <code>tools/emulators/run-matrix.sh rf-api36-do 36 --do [--window]</code>. Весь MQTT-обмен прогона попадает в <code>logs/run-matrix/</code>.</p>
+
+<!-- ======================= СВЯЗЬ ======================= -->
+<h2 id="g-link">Подключение и связь</h2>
+
+<article class="uc" id="uc01">
+  <header><span class="ucid">UC-01</span><h3>Подключить устройство к платформе</h3><div class="badges"><span class="b ok">✅ L5</span><span class="b ok">✅ M1</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> техник при установке планшета. Устройству нужна собственная учётка брокера, чтобы отправлять данные и получать команды.</p>
+  <div class="cols">
+    <div><h4>Как проходит</h4><ol>
+      <li>На брокере создаётся клиент Dynamic Security с ролью <code>device</code>. Сейчас это делает <code>deploy/mosquitto/dynsec-dev.sh</code>, в продукте будет делать бэкенд при провижининге.</li>
+      <li>Агент получает учётку: адрес, порт, <code>deviceId</code> и пароль. В MVP-A она передаётся debug-командой через adb.</li>
+      <li>Агент шифрует и сохраняет учётку, после чего перезапускает MQTT-сессию.</li>
+      <li>Агент подключается по TLS и публикует <code>status: online</code>.</li>
+    </ol></div>
+    <div><h4>Под капотом</h4><ul>
+      <li><code>DevConfigReceiver</code> защищён разрешением <code>DUMP</code>, которое есть только у оболочки adb.</li>
+      <li><code>ConfigureBrokerCredentials</code> проверяет поля учётки.</li>
+      <li><code>KeystoreCredentialStore</code> шифрует учётку AES-GCM ключом из Android Keystore.</li>
+      <li><code>NotifyingCredentialStore</code> перезапускает сессию после смены учётки.</li>
+      <li>CA стенда встраивается в debug-сборку при сборке.</li>
+    </ul></div>
+  </div>
+  <div class="result"><b>Результат MVP-A:</b> учётка переживает <code>adb reboot</code> на API 26 и 36. В прогонах 11.11 агент вышел в сеть через 0–2 с после передачи учётки.</div>
+  <details><summary>Как попробовать</summary><p>Терминал B из раздела «Подготовка». Ожидается <code>Broadcast completed: result=-1, data="ok"</code>, а в терминале A — <code>status</code> с <code>online</code>.</p></details>
+  <p class="limits"><b>Ограничения:</b> передача через adb работает только в debug-сборке, в release этого приёмника нет. Внутри эмулятора пароль виден в аргументах <code>am broadcast</code>. Провижининг по QR (D7) и токену — MVP-B и курсовая.</p>
+</article>
+
+<article class="uc" id="uc02">
+  <header><span class="ucid">UC-02</span><h3>Видеть, на связи ли устройство</h3><div class="badges"><span class="b ok">✅ M3</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> поддержка. Нужно понимать, «живо» ли устройство, не звоня в ресторан.</p>
+  <div class="cols">
+    <div><h4>Как проходит</h4><ol>
+      <li>При подключении агент публикует retained <code>status</code> со <code>state: online</code> и новым <code>connId</code>.</li>
+      <li>При обрыве связи брокер сам публикует «завещание» (LWT) <code>offline</code> с <code>reason: lwt</code>.</li>
+      <li>При переподключении приходит <code>online</code> с другим <code>connId</code>. Запоздавший LWT старой сессии узнаётся по старому <code>connId</code>.</li>
+    </ol></div>
+    <div><h4>Под капотом</h4><ul>
+      <li>LWT задаётся заранее в CONNECT, keepalive 30 с.</li>
+      <li><code>connId</code> генерируется заново на каждую попытку подключения.</li>
+      <li>В <code>status</code> есть также <code>bootId</code>, модель, версия ОС и <code>mode</code> (<code>normal</code> или <code>device_owner</code>).</li>
+    </ul></div>
+  </div>
+  <div class="result"><b>Результат MVP-A:</b> после выключения сети <code>offline</code> пришёл через 23 и 43 с (ожидание ≈ 45 с, допуск ≤ 75 с).</div>
+  <details><summary>Как попробовать</summary>
+<pre><code>adb shell 'svc wifi disable; svc data disable'   # через 30–45 с в терминале A: offline, тот же connId
+adb shell 'svc wifi enable; svc data enable'     # online с новым connId</code></pre></details>
+  <p class="limits"><b>Ограничения:</b> <code>offline</code> приходит не сразу, а за время до полутора keepalive.</p>
+</article>
+
+<article class="uc" id="uc03">
+  <header><span class="ucid">UC-03</span><h3>Не терять данные без связи</h3><div class="badges"><span class="b ok">✅ M7</span><span class="b ok">✅ P4</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> поддержка. После обрыва нужно увидеть всё, что происходило, пока устройство было офлайн.</p>
+  <div class="cols">
+    <div><h4>Как проходит</h4><ol>
+      <li>Без связи каждое исходящее сообщение записывается в локальную очередь (outbox).</li>
+      <li>После подключения очередь досылается пачками по 50 в исходном порядке.</li>
+      <li>Запись удаляется только после подтверждения брокера (PUBACK).</li>
+    </ol></div>
+    <div><h4>Под капотом</h4><ul>
+      <li><code>PublishOrBuffer</code> и <code>FlushOutbox</code>, хранение — Room.</li>
+      <li>Вместимость 10 000 записей. При переполнении вытесняется наименее важное, первой уходит телеметрия.</li>
+      <li>Окончательный отказ брокера (PUBACK <code>0x87</code>, <code>0x90</code>, <code>0x97</code>, <code>0x99</code>) удаляет запись, чтобы она не блокировала очередь.</li>
+      <li>Итоги команд досылаются отдельно и не ждут телеметрию.</li>
+    </ul></div>
+  </div>
+  <div class="result"><b>Результат MVP-A:</b>
+    <ul>
+      <li>500 событий после 5,6 мин офлайна дошли без пропусков и дублей.</li>
+      <li>При остановке брокера на 125 с все 8 проб досланы по порядку.</li>
+      <li>В DO-прогоне 11.11 события ручной сессии, пока у агента не было учётки, пришли все разом через 10 минут, как только учётка появилась.</li>
+    </ul>
+  </div>
+  <details><summary>Как попробовать</summary>
+<pre><code>adb shell 'svc wifi disable; svc data disable'
+# в Capability Lab: «Отладка» → «Сгенерировать N событий»
+adb shell 'svc wifi enable; svc data enable'     # в терминале A: события debug_seq с непрерывным seq
+# простой брокера (подписка в терминале A при этом оборвётся, её нужно перезапустить):
+cd deploy &amp;&amp; docker compose stop mosquitto &amp;&amp; sleep 125 &amp;&amp; docker compose start mosquitto</code></pre></details>
+  <div class="limits"><b>Ограничения:</b>
+    <ul>
+      <li>Офлайн проверялся минутами, а не сутками.</li>
+      <li>У событий нет собственного идентификатора, поэтому при обрыве досылки возможен одиночный дубль.</li>
+      <li>После перезапуска агента <code>seq</code> телеметрии начинается с 1. См. также <a href="#notes">наблюдения</a> о задержке до 60 с.</li>
+    </ul>
+  </div>
+</article>
+
+<article class="uc" id="uc04">
+  <header><span class="ucid">UC-04</span><h3>Работать без участия персонала</h3><div class="badges"><span class="b ok">✅ L2</span><span class="b warn">⚠️ L4</span><span class="b na">⏳ L3</span><span class="b na">— L1</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> ресторан. Агент не должен требовать внимания сотрудников и должен сам подниматься после сбоев и перезагрузок.</p>
+  <div class="cols">
+    <div><h4>Как проходит</h4><ol>
+      <li>Агент работает как служба переднего плана с постоянным уведомлением.</li>
+      <li>После перезагрузки он запускается сам, приложение открывать не нужно.</li>
+      <li>Сторож WorkManager раз в 15 минут проверяет, жива ли служба.</li>
+      <li>Мастер разрешений просит выдать уведомления, Usage Access и исключение из оптимизации батареи.</li>
+    </ol></div>
+    <div><h4>Под капотом</h4><ul>
+      <li>Тип службы <code>specialUse</code>: на него не распространяется запрет Android 15 на запуск из <code>BOOT_COMPLETED</code>.</li>
+      <li><code>BootReceiver</code> и <code>WatchdogWorker</code>.</li>
+      <li><code>PARTIAL_WAKE_LOCK</code> держится, пока работает цикл.</li>
+      <li>Журнал жизненного цикла пишется в файл. В MQTT уходит событие <code>agent_lifecycle</code> (<code>start</code> или <code>boot</code>).</li>
+    </ul></div>
+  </div>
+  <div class="result"><b>Результат MVP-A:</b>
+    <ul>
+      <li>L2 ✅: агент снова в сети через 1–4 с после загрузки на API 26 и 36. На DO-планшете — через 23 с.</li>
+      <li>L4 ⚠️: Usage Access и исключение из оптимизации батареи выдаются только вручную.</li>
+      <li>L3 (сторож) не проверялся.</li>
+      <li>L1 (12 часов со спящим экраном) перенесён на реальный планшет.</li>
+    </ul>
+  </div>
+  <details><summary>Как попробовать</summary>
+<pre><code>adb reboot          # приложение не открывать; в терминале A — новый online не позже чем через 3 мин
+tools/emulators/run-matrix.sh rf-api36 36 --window    # то же автоматически: строка L2_reboot</code></pre></details>
+  <p class="limits"><b>Ограничения:</b> энергосбережение прошивок реальных производителей не проверено (MVP-B).</p>
+</article>
+
+<!-- ======================= МОНИТОРИНГ ======================= -->
+<h2 id="g-mon">Мониторинг</h2>
+
+<article class="uc" id="uc05">
+  <header><span class="ucid">UC-05</span><h3>Следить за состоянием устройства (телеметрия)</h3><div class="badges"><span class="b ok">✅ R1 R2 R4 R6 R7 R9 R14</span><span class="b warn">⚠️ R3 R5 R8 R11</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> поддержка. Нужно видеть заряд, перегрев, качество сети, свободную память и то, какое приложение открыто на кухне.</p>
+  <div class="cols">
+    <div><h4>Как проходит</h4><ol>
+      <li>Каждые <code>intervalSec</code> (по умолчанию 30 с, задаётся в <code>desired</code>) агент собирает считывания.</li>
+      <li>Результат публикуется в <code>telemetry</code>: при связи сразу, без связи — в очередь.</li>
+    </ol>
+    <h4>Что внутри</h4><ul>
+      <li><code>battery</code>: уровень, зарядка, источник, температура.</li>
+      <li><code>thermal</code>: статус и тепловой запас.</li>
+      <li><code>net</code>: тип, RSSI, <code>validated</code>.</li>
+      <li><code>storage.freeMb</code>, <code>memory.availMb</code>, <code>uptimeSec</code>.</li>
+      <li><code>foregroundApp</code> и версии отслеживаемых приложений.</li>
+      <li><code>seq</code> и <code>ts</code>.</li>
+    </ul></div>
+    <div><h4>Под капотом</h4><ul>
+      <li><code>CollectTelemetry</code> изолирует сбой каждого считывания: недоступное значение не роняет цикл и не ломает сообщение.</li>
+      <li>Сборщики находятся в <code>agent:data/collectors</code>.</li>
+    </ul></div>
+  </div>
+  <div class="result"><b>Результат MVP-A:</b> большая часть считываний работает на API 26 и 36. Ограничения (⚠️):
+    <ul>
+      <li>теплового статуса нет на API 26 (он есть с API 29);</li>
+      <li>SSID доступен только с геолокацией;</li>
+      <li>активное приложение — только с Usage Access;</li>
+      <li>датчика significant motion на эмуляторе нет.</li>
+    </ul>
+  </div>
+  <details><summary>Как попробовать</summary>
+<pre><code>O mosquitto_sub -t "rf/v1/dev/$DEV/telemetry" -F '%I %p'</code></pre></details>
+  <p class="limits"><b>Ограничения:</b> пороги из <code>desired</code> (<code>batteryLowPct</code>, <code>tempHighC</code>, <code>fgAbsentMin</code>) агент не проверяет, это задача бэкенда (практика). Реальные значения датчиков — MVP-B.</p>
+</article>
+
+<article class="uc" id="uc06">
+  <header><span class="ucid">UC-06</span><h3>Проверять доступность сервисов ресторана</h3><div class="badges"><span class="b ok">✅ P1–P4 на 26</span><span class="b warn">⚠️ P1 P2 на 36</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> поддержка. Нужно отличать «упал сервис компании» от «у ресторана пропал интернет» и видеть, на каком этапе рвётся соединение.</p>
+  <div class="cols">
+    <div><h4>Как проходит</h4><ol>
+      <li>Цели приходят в <code>desired.probes</code>: <code>id</code>, <code>url</code>, <code>intervalSec</code>, <code>timeoutMs</code>.</li>
+      <li>Каждая цель опрашивается по своему интервалу, первый раз — сразу.</li>
+      <li>Результат публикуется в <code>probe</code>: <code>ok</code>, HTTP-статус, длительность фаз <code>dnsMs</code>/<code>connectMs</code>/<code>tlsMs</code>/<code>ttfbMs</code> и класс ошибки.</li>
+      <li>Отдельно проверяется шлюз в локальной сети (P3).</li>
+      <li>При недоступном брокере пробы не останавливаются, результаты копятся в очереди (P4).</li>
+    </ol></div>
+    <div><h4>Под капотом</h4><ul>
+      <li>OkHttp и <code>EventListener</code> для замера фаз.</li>
+      <li>Классы ошибок: <code>dns_fail</code>, <code>timeout</code>, <code>conn_refused</code>, <code>tls_error</code>, <code>http_4xx/5xx</code>, <code>no_network</code>.</li>
+      <li><code>ProbeLoop</code> перезапускается при смене набора целей.</li>
+    </ul></div>
+  </div>
+  <div class="result"><b>Результат MVP-A:</b>
+    <ul>
+      <li>Классы ошибок и фазы соединения работают.</li>
+      <li>На API 36 тестовая цель Capability Lab по умолчанию упала по таймауту, а рабочие пробы цикла дают 200/204/200.</li>
+      <li>Пример из прогона 11.11: <code>gstatic</code> ответил 204 за 464 мс, из них TLS — 183 мс.</li>
+    </ul>
+  </div>
+  <details><summary>Как попробовать</summary>
+<pre><code>O mosquitto_sub -t "rf/v1/dev/$DEV/probe" -F '%I %p'
+# набор целей меняется через desired — см. UC-08</code></pre></details>
+  <p class="limits"><b>Ограничения:</b> событие <code>probe_state</code> (цель «упала» или «поднялась» после <code>failThreshold</code> неудач) описано в протоколе, но в MVP агент его не публикует. Это решает бэкенд по сырым результатам (решение 3.6b). Разрешение на локальную сеть в Android 17 не проверено.</p>
+</article>
+
+<article class="uc" id="uc07">
+  <header><span class="ucid">UC-07</span><h3>Узнавать о событиях устройства</h3><div class="badges"><span class="b ok">✅ R14</span><span class="b ok">✅ R12 (DO-прогон 11.11)</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> поддержка. Нужно знать, что сменилась сеть, обновилось приложение официанта или перезапустился агент.</p>
+  <div class="cols">
+    <div><h4>Какие события</h4><ul>
+      <li><code>net_changed</code>: тип сети, <code>validated</code>, RSSI.</li>
+      <li><code>package_changed</code>: <code>added</code>, <code>replaced</code> или <code>removed</code> для отслеживаемых приложений, с <code>versionCode</code>.</li>
+      <li><code>agent_lifecycle</code>: <code>start</code> или <code>boot</code>.</li>
+      <li><code>capability_check</code>: отправляется из Capability Lab.</li>
+      <li><code>debug_seq</code>: только для отладки.</li>
+    </ul></div>
+    <div><h4>Под капотом</h4><ul>
+      <li><code>EventPump</code> слушает сеть, пакеты и жизненный цикл.</li>
+      <li>События идут через outbox и потому не теряются.</li>
+      <li>Отслеживаемые приложения — статический список и <code>desired.watchedApps</code>.</li>
+    </ul></div>
+  </div>
+  <div class="result"><b>Результат MVP-A:</b> смена сети работает. В DO-прогоне 11.11 пришли <code>package_changed</code> <code>removed</code> → <code>added</code> (4.13) → <code>replaced</code> (4.14). В матрице на 10.11 у R12 стоит ⚠️ («событий в прогоне не было»), теперь событие наблюдалось.</div>
+  <details><summary>Как попробовать</summary>
+<pre><code>O mosquitto_sub -t "rf/v1/dev/$DEV/events" -F '%I %p'
+adb uninstall ru.restofleet.dummy.waiter      # package_changed removed (если приложение стояло)</code></pre></details>
+  <p class="limits"><b>Ограничения:</b> на одно изменение пакета приходит по два события (<code>removed</code> × 2, <code>replaced</code> × 2 в пределах миллисекунд). Бэкенду нужна дедупликация. События могут задерживаться до 60 с, см. <a href="#notes">наблюдения</a>.</p>
+</article>
+
+<!-- ======================= НАСТРОЙКА ======================= -->
+<h2 id="g-cfg">Удалённая настройка</h2>
+
+<article class="uc" id="uc08">
+  <header><span class="ucid">UC-08</span><h3>Настраивать агент удалённо (desired → reported)</h3><div class="badges"><span class="b ok">✅ M4</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> оператор, а в продукте — бэкенд. Нужно менять интервал телеметрии, список приложений и цели проб, не выезжая к устройству.</p>
+  <div class="cols">
+    <div><h4>Как проходит</h4><ol>
+      <li>Сервер публикует retained <code>shadow/desired</code> с номером версии.</li>
+      <li>Агент получает его при каждом подключении и применяет, только если версия новее уже применённой.</li>
+      <li>Агент отвечает <code>shadow/reported</code> с <code>appliedVersion</code>, <code>appliedAt</code> и <code>errors</code>.</li>
+    </ol></div>
+    <div><h4>Под капотом</h4><ul>
+      <li><code>ApplyDesiredShadow</code>.</li>
+      <li>Тень хранится в файле (<code>FileShadowStore</code>) и переживает перезапуск.</li>
+      <li>Неверный <code>intervalSec</code> (вне 10…3600) не применяется, остаётся прежний, причина пишется в <code>errors</code>.</li>
+      <li>Неверные имена пакетов попадают в <code>errors</code> как <code>watchedApps:invalid_name:&lt;имя&gt;</code>.</li>
+    </ul></div>
+  </div>
+  <div class="result"><b>Результат MVP-A:</b> v12 вернулась в <code>reported</code> как 12, в том числе после перезапуска. v13 с тремя целями применилась за &lt; 1 с.</div>
+  <details><summary>Как попробовать</summary>
+<p>Взять текущий <code>desired</code>, поднять версию на 1 и поменять интервал на 60 с:</p>
+<pre><code>O mosquitto_sub -t "rf/v1/dev/$DEV/shadow/desired" -C 1 -W 5 -F '%p' \
+  | python3 -I -c 'import json,sys;d=json.load(sys.stdin);d["version"]+=1;d["telemetry"]["intervalSec"]=60;print(json.dumps(d),end="")' \
+  | O mosquitto_pub -r -q 1 -t "rf/v1/dev/$DEV/shadow/desired" -s
+# в терминале A: shadow/reported с новым appliedVersion, телеметрия раз в 60 с</code></pre>
+<p class="small muted">У <code>dev-do-36</code> retained <code>desired</code> пока нет. Опубликуйте сначала фикстуру: <code>O mosquitto_pub -r -q 1 -t "rf/v1/dev/$DEV/shadow/desired" -s &lt; ../docs/protocol/fixtures/shadow-desired.json</code>. В её пробах адреса-заглушки <code>*.example</code>, поэтому они покажут <code>dns_fail</code>, и это тоже наглядно.</p></details>
+  <p class="limits"><b>Ограничения:</b> пороги агент не применяет, а только возвращает эхом. Слишком большая версия «заморозит» устройство: меньшие версии оно применять не будет. Поэтому поднимайте версию на 1.</p>
+</article>
+
+<!-- ======================= КОМАНДЫ ======================= -->
+<h2 id="g-cmd">Команды в обычном режиме</h2>
+
+<article class="uc" id="uc09">
+  <header><span class="ucid">UC-09</span><h3>Надёжно доставлять команды</h3><div class="badges"><span class="b ok">✅ M5</span><span class="b ok">✅ M6</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> оператор. Команда должна дойти ровно один раз, не выполниться устаревшей, а её результат должен вернуться отправителю.</p>
+  <div class="cols">
+    <div><h4>Как проходит</h4><ol>
+      <li>Команда публикуется в <code>cmd/req</code> со свойствами MQTT 5: <code>Response Topic</code>, <code>Correlation Data</code>, <code>Message Expiry</code>. В теле команды есть <code>cmdId</code> и <code>expiresAt</code>.</li>
+      <li>Агент сразу отвечает <code>received</code>.</li>
+      <li>Затем приходит итог: <code>succeeded</code> (с <code>result</code>), <code>failed</code> или <code>unsupported</code> (с <code>reason</code>).</li>
+      <li>Если устройство офлайн, команда ждёт его на брокере, пока не истечёт срок Message Expiry.</li>
+      <li>Команду с истёкшим <code>expiresAt</code> агент не выполняет и отвечает <code>failed</code>/<code>expired</code>.</li>
+    </ol></div>
+    <div><h4>Под капотом</h4><ul>
+      <li><code>HandleIncomingCommand</code>, <code>CommandMapper</code>, <code>ExecuteCommand</code>.</li>
+      <li>Подтверждение брокеру уходит после обработки, поэтому падение посреди работы команду не теряет.</li>
+      <li>Повторный <code>cmdId</code> не выполняется: журнал помнит 200 последних команд.</li>
+      <li><code>Capabilities</code> решает, можно ли выполнить команду. Если нельзя, приходит <code>unsupported</code> с причиной.</li>
+      <li>Команды: <code>ping</code>, <code>show_message</code>, <code>launch_app</code>, <code>beep</code>, а также <code>reboot</code>, <code>install_update</code>, <code>lock_task</code> — только для Device Owner.</li>
+    </ul></div>
+  </div>
+  <div class="result"><b>Результат MVP-A:</b>
+    <ul>
+      <li>Команда прошла путь <code>received</code> → <code>succeeded</code> за 30 мс, Correlation Data вернулась.</li>
+      <li>Агент был остановлен на 61 с, команда со сроком 300 с выполнилась после его старта.</li>
+      <li>Команда со сроком 30 с за то же время не была доставлена.</li>
+    </ul>
+  </div>
+  <details><summary>Как попробовать</summary>
+<pre><code>rfcmd ping '{}'                                         # received → succeeded
+rfcmd show_message '{"text":"Просрочено"}' -60          # failed, reason=expired
+adb shell am force-stop ru.restofleet.agent             # устройство «офлайн»
+rfcmd show_message '{"text":"Пока вас не было"}'
+adb shell am start -n ru.restofleet.agent/.MainActivity # команда выполнится после подключения
+rfcmd reboot '{}'                                       # на обычном устройстве: unsupported, requires_device_owner</code></pre></details>
+  <p class="limits"><b>Ограничения:</b> <code>expiresAt</code> сравнивается с часами устройства. Если часы уйдут вперёд больше чем на 5 минут, все команды получат <code>expired</code> (открытый вопрос OQ-1 в ТЗ).</p>
+</article>
+
+<article class="uc" id="uc10">
+  <header><span class="ucid">UC-10</span><h3>Показать сообщение персоналу (C1)</h3><div class="badges"><span class="b ok">✅</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> поддержка. Например: «Перезагрузите роутер» на кухонном планшете.</p>
+  <div class="cols">
+    <div><h4>Как проходит</h4><ol>
+      <li>Приходит команда <code>show_message</code> с параметрами <code>text</code> (1…1000 символов) и <code>level</code> (например, <code>warning</code>).</li>
+      <li>Агент показывает уведомление высокого приоритета, при необходимости полноэкранное.</li>
+    </ol></div>
+    <div><h4>Отказы</h4><ul>
+      <li><code>unsupported</code>: <code>empty_text</code> или <code>text_too_long</code>.</li>
+      <li>Под киоском — <code>failed</code>/<code>kiosk_active</code>, потому что уведомления там не видно.</li>
+    </ul></div>
+  </div>
+  <div class="result"><b>Результат MVP-A:</b> на API 36 уведомление показывается, в том числе на DO-эмуляторе.</div>
+  <details><summary>Как попробовать</summary>
+<pre><code>rfcmd show_message '{"text":"Перезагрузите роутер","level":"warning"}'
+# или в Capability Lab: «Команды» → «C1 Сообщение»</code></pre></details>
+</article>
+
+<article class="uc" id="uc11">
+  <header><span class="ucid">UC-11</span><h3>Открыть нужное приложение (C2, C3)</h3><div class="badges"><span class="b warn">⚠️ C2</span><span class="b ok">✅ C3</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> поддержка. Например, вернуть на экран приложение официанта или кухонную станцию.</p>
+  <div class="cols">
+    <div><h4>Как проходит</h4><ol>
+      <li>Приходит команда <code>launch_app</code> с <code>pkg</code> и необязательным <code>url</code> (только https).</li>
+      <li>Агент выбирает способ по своим возможностям. В <code>result.strategy</code> видно, каким способом он воспользовался.</li>
+    </ol></div>
+    <div><h4>Стратегии</h4><ul>
+      <li><code>DIRECT_DO</code>: агент — Device Owner, запуск сразу (см. UC-17).</li>
+      <li><code>DIRECT_OVERLAY</code>: выдано разрешение «поверх других окон», запуск без касаний.</li>
+      <li><code>VIA_NOTIFICATION</code>: остальные случаи — уведомление, приложение открывается по тапу.</li>
+    </ul></div>
+  </div>
+  <div class="result"><b>Результат MVP-A:</b>
+    <ul>
+      <li>C2 ⚠️: без overlay приложение открывается через уведомление, после тапа — на переднем плане.</li>
+      <li>C3 ✅: с overlay приложение открывается из фона через 30 с.</li>
+      <li>Открытие URL кухонной станции в Chrome не проверялось: в эмуляторе нет Chrome.</li>
+    </ul>
+  </div>
+  <details><summary>Как попробовать</summary>
+<pre><code>rfcmd launch_app '{"pkg":"ru.restofleet.dummy.waiter"}'
+# или в Capability Lab: «Пакет цели» = ru.restofleet.dummy.waiter → «C2 Запуск» / «C3 Запуск через 30 с» и сразу Home</code></pre></details>
+</article>
+
+<article class="uc" id="uc12">
+  <header><span class="ucid">UC-12</span><h3>Подать звуковой сигнал (C4)</h3><div class="badges"><span class="b ok">✅</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> поддержка. Нужно найти планшет или привлечь внимание кухни, даже если звук выключен.</p>
+  <p><code>beep</code> с <code>durationMs</code> от 1 до 30 000, иначе <code>unsupported</code>/<code>invalid_duration</code>. Звук идёт по потоку будильника, поэтому слышен и в беззвучном режиме.</p>
+  <div class="result"><b>Результат MVP-A:</b> на API 36 в беззвучном режиме поток <code>USAGE_ALARM</code> запущен (видно в <code>dumpsys audio</code>). Слышимость на реальном устройстве — MVP-B.</div>
+  <details><summary>Как попробовать</summary>
+<pre><code>rfcmd beep '{"durationMs":3000}'     # в эмуляторе с окном (--window) сигнал слышно</code></pre></details>
+</article>
+
+<!-- ======================= DEVICE OWNER ======================= -->
+<h2 id="g-do">Device Owner</h2>
+<p>Эти сценарии работают, только если агент — владелец устройства (Device Owner). Без этого команды <code>reboot</code>, <code>install_update</code> и <code>lock_task</code> получают <code>unsupported</code>/<code>requires_device_owner</code>. Проверено на AVD <code>rf-api36-do</code> (планшет, без аккаунтов). Почти все DO-сценарии прогоняет одна команда: <code>tools/emulators/run-matrix.sh rf-api36-do 36 --do --window</code>.</p>
+
+<article class="uc" id="uc13">
+  <header><span class="ucid">UC-13</span><h3>Сделать агента владельцем устройства (D1)</h3><div class="badges"><span class="b ok">✅</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> техник при вводе планшета в эксплуатацию. Без этого шага удалённое управление ограничено.</p>
+  <p>На устройстве без аккаунтов агент назначается командой <code>dpm set-device-owner</code>. На реальном планшете это делается после сброса к заводским настройкам, в продукте — через QR-провижининг. После назначения в <code>status</code> приходит <code>mode: device_owner</code>.</p>
+  <div class="result"><b>Результат MVP-A:</b> назначение работает на <code>rf-api36-do</code>. DO-прогон проверяет его и при необходимости назначает сам.</div>
+  <details><summary>Как попробовать</summary>
+<pre><code>adb shell dpm set-device-owner ru.restofleet.agent/.AdminReceiver   # на AVD без аккаунтов
+adb shell dumpsys device_policy | grep -A3 -i 'device owner'</code></pre></details>
+  <p class="limits"><b>Ограничения:</b> на устройстве с аккаунтами назначить нельзя. Регистрация по QR (D7) — MVP-B.</p>
+</article>
+
+<article class="uc" id="uc14">
+  <header><span class="ucid">UC-14</span><h3>Перезагрузить устройство удалённо (D2)</h3><div class="badges"><span class="b ok">✅</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> поддержка. Первое средство при зависшем планшете, без звонка в ресторан.</p>
+  <p>Команда <code>reboot</code> работает в два шага. Сначала итог записывается в outbox, затем через 3 с устройство перезагружается. Итог уходит до перезагрузки или досылается после неё. После загрузки агент поднимается сам.</p>
+  <div class="result"><b>Результат MVP-A (DO-прогон 11.11):</b> итог <code>succeeded</code>, устройство загрузилось за 28 с, агент вышел в сеть ещё через 23 с без открытия приложения.</div>
+  <details><summary>Как попробовать</summary>
+<pre><code>rfcmd reboot '{}'       # DEV=dev-do-36
+# или на экране «Владелец» (только debug): D2 с подтверждением</code></pre></details>
+</article>
+
+<article class="uc" id="uc15">
+  <header><span class="ucid">UC-15</span><h3>Установить или обновить приложение без участия персонала (D3)</h3><div class="badges"><span class="b ok">✅</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> поддержка. Нужно выкатить новую версию приложения официанта на все планшеты сразу.</p>
+  <div class="cols">
+    <div><h4>Как проходит</h4><ol>
+      <li>Приходит команда <code>install_update</code> с параметрами <code>package</code>, <code>url</code> (https) и <code>sha256</code> (64 hex-символа).</li>
+      <li>Агент скачивает APK, сверяет SHA-256 и ставит его через <code>PackageInstaller</code> без диалогов.</li>
+      <li>В <code>result</code> возвращаются <code>package</code>, <code>versionCode</code> и <code>versionName</code>. Параллельно приходит событие <code>package_changed</code>.</li>
+    </ol></div>
+    <div><h4>Отказы</h4><ul>
+      <li>Пакет не из списка отслеживаемых — <code>package_not_watched</code>. Это граница доверия.</li>
+      <li>Хэш не совпал — <code>hash_mismatch</code>.</li>
+      <li>Уже идёт установка — <code>install_in_progress</code>.</li>
+      <li>Неверные параметры — <code>invalid_package</code>, <code>invalid_url</code> или <code>invalid_sha256</code>.</li>
+    </ul></div>
+  </div>
+  <div class="result"><b>Результат MVP-A (DO-прогон 11.11):</b> установка 4.13 с нуля и обновление до 4.14 прошли со статусом <code>succeeded</code> и без диалогов, каждая примерно за 1,5 с.</div>
+  <details><summary>Как попробовать</summary>
+<pre><code>SHA=$(awk '{print $1}' apk/waiter-4.14.apk.sha256)      # из deploy/; APK собирает tools/dev/build-dummy-apk.sh 14
+rfcmd install_update "{\"package\":\"ru.restofleet.dummy.waiter\",\"url\":\"https://10.0.2.2:8443/waiter-4.14.apk\",\"sha256\":\"$SHA\"}"</code></pre></details>
+  <p class="limits"><b>Ограничения:</b> сервер, который шлёт <code>desired</code> и <code>install_update</code>, считается доверенным. Подписанный список разрешённых приложений — кандидат в требования ТЗ.</p>
+</article>
+
+<article class="uc" id="uc16">
+  <header><span class="ucid">UC-16</span><h3>Закрепить устройство на одном приложении (киоск, D4)</h3><div class="badges"><span class="b warn">⚠️</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> ресторан. Кухонный планшет должен показывать только кухонную станцию, без выхода в другие приложения.</p>
+  <ul>
+    <li>Команда <code>lock_task</code> принимает <code>pkg</code> и необязательный <code>url</code>.</li>
+    <li>В киоске кнопки Home и «Недавние» не выводят из приложения.</li>
+    <li>Под киоском <code>show_message</code> и запуск чужого приложения отвечают <code>failed</code>/<code>kiosk_active</code> вместо ложного успеха.</li>
+  </ul>
+  <div class="result"><b>Результат MVP-A:</b> киоск на dummy-waiter работает (lock task LOCKED). Chrome в киоске не проверялся.</div>
+  <details><summary>Как попробовать</summary>
+<pre><code>rfcmd lock_task '{"pkg":"ru.restofleet.dummy.waiter"}'
+rfcmd show_message '{"text":"Под киоском"}'              # failed, kiosk_active
+adb shell am force-stop ru.restofleet.dummy.waiter       # выход из киоска</code></pre></details>
+  <p class="limits"><b>Ограничения:</b> выйти из киоска можно только через adb. Восстановление киоска после перезагрузки и выход по команде — кандидаты в требования.</p>
+</article>
+
+<article class="uc" id="uc17">
+  <header><span class="ucid">UC-17</span><h3>Запустить приложение из фона без касаний (D5)</h3><div class="badges"><span class="b ok">✅</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> поддержка. Нужно вернуть рабочее приложение на экран, даже когда агент в фоне. Обычному приложению Android такое запрещает.</p>
+  <p>Та же команда <code>launch_app</code>, но под Device Owner агент выбирает стратегию <code>DIRECT_DO</code>.</p>
+  <div class="result"><b>Результат MVP-A (DO-прогон 11.11):</b> итог <code>succeeded</code> со <code>strategy: DIRECT_DO</code>, dummy-waiter оказался на переднем плане.</div>
+  <details><summary>Как попробовать</summary>
+<pre><code>adb shell input keyevent KEYCODE_HOME
+rfcmd launch_app '{"pkg":"ru.restofleet.dummy.waiter"}'</code></pre></details>
+</article>
+
+<article class="uc" id="uc18">
+  <header><span class="ucid">UC-18</span><h3>Выдать агенту разрешения без мастера (D6)</h3><div class="badges"><span class="b warn">⚠️</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> техник. Убирает ручные шаги настройки на каждом планшете.</p>
+  <p>Политикой Device Owner агент выдаёт себе геолокацию, уведомления и <code>READ_PHONE_STATE</code>. Usage Access так выдать нельзя, это ограничение Android.</p>
+  <div class="result"><b>Результат MVP-A:</b> три разрешения выданы, Usage Access — нет (это ожидаемо).</div>
+  <details><summary>Как попробовать</summary><p>Экран «Владелец» в debug-сборке → «Запустить все проверки DO».</p></details>
+  <p class="limits"><b>Ограничения:</b> в MVP выдача запускается только с debug-экрана. В release это будет шаг провижининга.</p>
+</article>
+
+<article class="uc" id="uc19">
+  <header><span class="ucid">UC-19</span><h3>Инвентаризация: серийный номер и температуры (R13, R10)</h3><div class="badges"><span class="b ok">✅ на 36 под DO</span><span class="b warn">⚠️ R13 на 26</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> поддержка и учёт. Нужно знать, какое именно устройство стоит в ресторане и не перегревается ли оно внутри.</p>
+  <ul>
+    <li><b>R13.</b> Серийный номер (<code>Build.getSerial()</code>) доступен Device Owner с выданным <code>READ_PHONE_STATE</code>. В Lab и отчёт он попадает только в маске.</li>
+    <li><b>R10.</b> Температуры через <code>HardwarePropertiesManager</code>. На эмуляторе: корпус 30,1 °C, батарея 30,2 °C, процессор пусто.</li>
+  </ul>
+  <div class="result"><b>Результат MVP-A:</b> оба считывания работают на API 36 под DO. Это проверки Capability Lab, в телеметрию они не входят.</div>
+  <details><summary>Как попробовать</summary><p>Capability Lab на <code>rf-api36-do</code> → «Запустить всё», строки R10 и R13.</p></details>
+</article>
+
+<!-- ======================= ПЛАТФОРМА ======================= -->
+<h2 id="g-plat">Проверка и безопасность</h2>
+
+<article class="uc" id="uc20">
+  <header><span class="ucid">UC-20</span><h3>Проверить возможности конкретного устройства (Capability Lab)</h3><div class="badges"><span class="b ok">✅</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> техник и разработчик. Нужно понять, что из требований реально работает на этой модели и версии Android, до того как на это опираться.</p>
+  <ul>
+    <li>43 проверки по группам: жизненный цикл, считывания, пробы, команды, Device Owner, MQTT, ресурсы.</li>
+    <li>У каждой проверки статус <code>ok</code>, <code>limited</code>, <code>unavailable</code> или <code>not_checked</code>, сырые значения и причина.</li>
+    <li>«Экспорт» сохраняет JSON-отчёт (без IMEI, MAC и серийного номера), «В MQTT» отправляет событие <code>capability_check</code>.</li>
+  </ul>
+  <div class="result"><b>Результат MVP-A:</b> отчёты Lab — основа матрицы осуществимости, они лежат в <code>docs/mvp-results/</code> (<code>api26-normal.json</code>, <code>api36-normal.json</code>, <code>api36-device_owner.json</code>). На реальных устройствах в MVP-B будет тот же экран.</div>
+  <details><summary>Как попробовать</summary><p>Lab → «Запустить всё» → «Экспорт» → «В MQTT». Автоматически экспорт делает <code>run-matrix.sh</code>.</p></details>
+</article>
+
+<article class="uc" id="uc21">
+  <header><span class="ucid">UC-21</span><h3>Изолировать устройства и отзывать доступ</h3><div class="badges"><span class="b ok">✅ M2</span><span class="b ok">✅ S3</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> безопасность. Украденный или взломанный планшет не должен ни читать чужие данные, ни выдавать себя за другое устройство, а его доступ должен отзываться мгновенно.</p>
+  <ul>
+    <li>Каждое устройство пишет и читает только топики <code>rf/v1/dev/&lt;своё имя&gt;/…</code>, право задаётся ACL роли <code>device</code> по <code>%u</code>.</li>
+    <li><code>clientId</code> обязан совпадать с именем учётки.</li>
+    <li>Публикация в чужой топик отклоняется кодом PUBACK <code>0x87</code> (<code>not_authorized</code>).</li>
+    <li><code>disableClient</code> разрывает текущую сессию и запрещает повторный вход.</li>
+  </ul>
+  <div class="result"><b>Результат MVP-A:</b> тест прав доступа проходит 16 из 16. <code>disableClient</code> разорвал сессию через 16 мс, повторный вход отклонён.</div>
+  <details><summary>Как попробовать</summary>
+<pre><code># в Capability Lab: «Отладка» → «Публикация в чужой топик» → «Чужой топик: not_authorized»
+cd deploy &amp;&amp; mosquitto/test-dynsec-dev.sh        # 16 PASS из 16</code></pre></details>
+  <p class="limits"><b>Ограничения:</b> отзыв доступа в продукте будет делать бэкенд (курсовая).</p>
+</article>
+
+<article class="uc" id="uc22">
+  <header><span class="ucid">UC-22</span><h3>Выдержать много устройств на одном брокере</h3><div class="badges"><span class="b warn">⚠️ S1</span><span class="b ok">✅ S2</span></div></header>
+  <p class="who"><b>Кто и зачем:</b> платформа. Это нужно для эксперимента в курсовой и для симулятора тысяч устройств.</p>
+  <div class="result"><b>Результат MVP-A:</b>
+    <ul>
+      <li>1000 MQTT-клиентов в одном JVM-процессе 3 минуты: потерь 0, heap ≈ 114 МБ, 32,9 сообщ/с.</li>
+      <li>Брокер при этом занимал 37 МиБ при загрузке CPU ≈ 1 %.</li>
+      <li>1000 учёток DynSec создаются за 0,56 с, после рестарта брокер становится healthy через 5,5 с.</li>
+    </ul>
+  </div>
+  <details><summary>Как попробовать</summary><p>По <code>spikes/broker-load/README.md</code>. Пароль администратора там передаётся через окружение, а не через аргументы. После спайка удалите учётки <code>spike-*</code> и прогоните <code>test-dynsec-dev.sh</code>.</p></details>
+  <p class="limits"><b>Ограничения:</b> 10 000 клиентов не запускались, это экстраполяция: heap ≤ 1,1 ГБ, ≈ 80 % ядра. На macOS ограничение — примерно 16 000 эфемерных портов. Полный замер перенесён на практику.</p>
+</article>
+
+<!-- ======================= НАБЛЮДЕНИЯ ======================= -->
+<h2 id="notes">Наблюдения из прогонов 11.11</h2>
+<div class="callout warn">
+  <ul>
+    <li><b>Задержка событий до 60 с при живой связи.</b> <code>PublishOrBuffer</code> отправляет сообщение сразу, только если outbox пуст. Если там что-то осталось, новое сообщение встаёт в очередь, а очередь досылается при подключении и затем раз в 60 с. Итоги команд идут с приоритетом и этого не ждут. В DO-прогоне события установки (<code>package_changed</code>) пришли через 62 с, уже после перезагрузки. Для курсовой стоит решить, допустимо ли это, или досылать очередь сразу после её опустошения.</li>
+    <li><b>Двойные <code>package_changed</code>.</b> На одно удаление или обновление приходит по два события.</li>
+    <li><b><code>seq</code> телеметрии сбрасывается</b> при перезапуске агента. <code>bootId</code> есть в <code>status</code>, но в телеметрии его нет.</li>
+    <li><b>Долгий выход в сеть после перезагрузки на DO-планшете:</b> 23 с против 2–4 с на обычном AVD.</li>
+    <li><b>Сторож L3 не проверен</b> ни в одном прогоне.</li>
+  </ul>
+</div>
+
+<footer>
+  RestoFleet · MVP-A · 11.11.2026.
+  <ul>
+    <li>Источники: <code>docs/stages/0-mvp-feasibility.md</code>, <code>docs/architecture.md</code>, код <code>agent/*</code>, прогоны <code>logs/run-matrix/</code> и <code>docs/mvp-results/</code>.</li>
+    <li>Общий обзор MVP: <code>swarm-report/mvp-a-explainer-2026-11-11.html</code>.</li>
+  </ul>
+</footer>
+
+</div>
+<script>
+(function () {
+  var blocks = document.querySelectorAll('pre');
+  for (var i = 0; i < blocks.length; i++) {
+    (function (pre) {
+      var btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'copy'; btn.textContent = 'Копировать';
+      btn.addEventListener('click', function () {
+        var code = pre.querySelector('code');
+        var text = (code || pre).textContent;
+        var done = function () { btn.textContent = 'Скопировано'; setTimeout(function () { btn.textContent = 'Копировать'; }, 1500); };
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done, function () { btn.textContent = 'Не удалось'; });
+          } else {
+            var ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+            document.execCommand('copy'); document.body.removeChild(ta); done();
+          }
+        } catch (e) { btn.textContent = 'Не удалось'; }
+      });
+      pre.appendChild(btn);
+    })(blocks[i]);
+  }
+})();
+</script>
+</body>
+</html>

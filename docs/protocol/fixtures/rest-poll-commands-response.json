@@ -1,0 +1,6 @@
+{
+  "commands": [
+    { "cmdId": "c-01J9ZE", "type": "ping", "params": {}, "expiresAt": 1793866100000 },
+    { "cmdId": "c-01J9ZF", "type": "show_message", "params": { "text": "Проверьте Wi-Fi", "level": "info" }, "expiresAt": 1793866100000 }
+  ]
+}

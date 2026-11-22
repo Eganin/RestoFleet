@@ -1,0 +1,183 @@
+package ru.restofleet.server.data.support
+
+import com.hivemq.client.mqtt.datatypes.MqttQos
+import com.hivemq.client.mqtt.mqtt5.Mqtt5BlockingClient
+import com.hivemq.client.mqtt.mqtt5.Mqtt5Client
+import com.hivemq.client.mqtt.mqtt5.exceptions.Mqtt5ConnAckException
+import com.hivemq.client.mqtt.mqtt5.message.connect.connack.Mqtt5ConnAckReasonCode
+import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5Publish
+import org.testcontainers.containers.GenericContainer
+import org.testcontainers.containers.wait.strategy.Wait
+import org.testcontainers.images.builder.Transferable
+import org.testcontainers.utility.DockerImageName
+import ru.restofleet.server.data.config.MqttConfig
+import java.io.File
+import java.time.Duration
+import java.util.UUID
+import java.util.concurrent.TimeUnit
+
+/**
+ * Mosquitto 2.1.2 (образ стенда) с Dynamic Security для интеграционных тестов. Конфиг —
+ * `deploy/mosquitto/mosquitto.conf` стенда с **одним** отличием: листенер TCP 1883 без TLS (реш. 232), поэтому
+ * пределы брокера (размер пакета, очереди сессий, память) в тестах те же, что на стенде. Роли `device` и
+ * `backend-service` применяются тем же `deploy/mosquitto/dynsec-roles.sh`, что и на стенде (реш. 231), клиент
+ * `backend` создаётся так же, как в `dynsec-dev.sh`. Пароли — только тестовые. Один контейнер на JVM; состояние
+ * DynSec общее, поэтому тесты берут уникальные `deviceId`. [restart] перезапускает процесс брокера внутри контейнера
+ * (порт не меняется).
+ */
+object TestBroker {
+    const val IMAGE = "eclipse-mosquitto:2.1.2-alpine"
+    private const val PORT = 1883
+    private const val ADMIN_PASSWORD = "admin-test-only"
+    const val BACKEND_PASSWORD = "backend-test-only"
+    private const val RESTART_TIMEOUT_MS = 30_000L
+    private const val RESTART_POLL_MS = 100L
+
+    /** Строки TLS-листенера стенда, которых в тестовом конфиге нет. */
+    private val TLS_KEYS = setOf("cafile", "certfile", "keyfile", "tls_version")
+
+    /** Конфиг стенда: листенер 8883 (TLS) заменён на TCP [PORT], строки сертификатов убраны. */
+    private val CONF: String by lazy {
+        File(System.getProperty("rf.deployDir"), "mosquitto/mosquitto.conf").readLines()
+            .filterNot { it.substringBefore(' ') in TLS_KEYS }
+            .map { if (it.startsWith("listener ")) "listener $PORT" else it }
+            .joinToString("\n")
+    }
+
+    private val container: GenericContainer<*> by lazy {
+        GenericContainer(DockerImageName.parse(IMAGE))
+            .withExposedPorts(PORT)
+            .withCopyToContainer(Transferable.of(CONF), "/mosquitto/config/mosquitto.conf")
+            .withCommand(
+                "sh", "-c",
+                "mosquitto_ctrl dynsec init /mosquitto/data/dynamic-security.json admin '$ADMIN_PASSWORD' && " +
+                    "chown -R 1883:1883 /mosquitto/data && " +
+                    // Цикл вместо exec: [restart] завершает процесс брокера по SIGTERM (как `docker compose restart`:
+                    // persistence сохраняется), и цикл поднимает его снова на том же порту контейнера
+                    "while :; do /usr/sbin/mosquitto -c /mosquitto/config/mosquitto.conf; sleep 0.2; done",
+            )
+            .waitingFor(Wait.forLogMessage(".*running.*", 1).withStartupTimeout(Duration.ofSeconds(60)))
+            .also {
+                it.start()
+                applyRoles(it)
+            }
+    }
+
+    val host: String get() = container.host
+
+    val port: Int get() = container.getMappedPort(PORT)
+
+    /** Конфигурация бэкенда; [clientId] уникален по умолчанию, чтобы тесты не вытесняли друг друга. */
+    fun backendConfig(clientId: String = "backend-${UUID.randomUUID()}", sessionExpirySec: Long = 3_600) = MqttConfig(
+        host = host,
+        port = port,
+        username = "backend",
+        password = BACKEND_PASSWORD,
+        clientId = clientId,
+        caFile = null,
+        sessionExpirySec = sessionExpirySec,
+        requestTimeoutMs = 5_000,
+        publishTimeoutMs = 5_000,
+    )
+
+    /** Роли продукта из `deploy/mosquitto/dynsec-roles.sh` + клиент `backend` (как в `dynsec-dev.sh`). */
+    private fun applyRoles(broker: GenericContainer<*>) {
+        val roles = File(System.getProperty("rf.deployDir"), "mosquitto/dynsec-roles.sh").readText()
+        // backend без clientid: тесты подключают несколько экземпляров (на стенде clientid = backend; реш. 243)
+        val script = """
+            set -eu
+            ctrl() { mosquitto_ctrl -h localhost -p $PORT -u admin -P '$ADMIN_PASSWORD' "${'$'}@"; }
+            run() {
+              out="${'$'}(ctrl dynsec "${'$'}@" 2>&1)" || { echo "FAIL: dynsec ${'$'}1 ${'$'}2: ${'$'}out"; exit 1; }
+              case "${'$'}out" in *rror*) echo "FAIL: dynsec ${'$'}1 ${'$'}2: ${'$'}out"; exit 1 ;; esac
+            }
+            try() { ctrl dynsec "${'$'}@" >/dev/null 2>&1 || true; }
+            has_role() { ctrl dynsec listRoles 2>&1 | grep -qx "${'$'}1"; }
+            $roles
+            run createClient backend -p '$BACKEND_PASSWORD'
+            run addClientRole backend backend-service
+            echo ROLES_APPLIED
+        """.trimIndent()
+        val result = broker.execInContainer("sh", "-c", script)
+        check(result.exitCode == 0 && "ROLES_APPLIED" in result.stdout) {
+            "DynSec roles were not applied: ${result.stdout.takeLast(500)} ${result.stderr.takeLast(500)}"
+        }
+    }
+
+    /** Права роли в DynSec (`getRole`) — для проверок, что тест опирается на роли из файла. */
+    fun describeRole(role: String): String =
+        container.execInContainer(
+            "mosquitto_ctrl", "-h", "localhost", "-p", "$PORT", "-u", "admin", "-P", ADMIN_PASSWORD,
+            "dynsec", "getRole", role,
+        ).stdout
+
+    /**
+     * Перезапуск брокера, как `docker compose restart mosquitto`: SIGTERM (сессии и подписки пишутся в persistence),
+     * новый процесс читает их при старте. Возвращается, когда новый процесс принимает подключения.
+     */
+    fun restart() {
+        val before = brokerPid()
+        check(before.isNotEmpty()) { "mosquitto is not running" }
+        container.execInContainer("kill", "-TERM", before)
+        val deadline = System.currentTimeMillis() + RESTART_TIMEOUT_MS
+        while (System.currentTimeMillis() < deadline) {
+            val now = brokerPid()
+            if (now.isNotEmpty() && now != before && acceptsConnections()) return
+            Thread.sleep(RESTART_POLL_MS)
+        }
+        error("mosquitto did not come back after restart")
+    }
+
+    private fun brokerPid(): String = container.execInContainer("pidof", "mosquitto").stdout.trim()
+
+    private fun acceptsConnections(): Boolean = try {
+        purgeSession("probe-${UUID.randomUUID()}")
+        true
+    } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
+        false
+    }
+
+    /**
+     * Удаляет постоянную сессию бэкенда после теста: в shared-группе `backend` Mosquitto раздаёт сообщения и
+     * отключённым участникам с живой сессией — иначе следующий тест не получил бы часть своих сообщений.
+     */
+    fun purgeSession(clientId: String) {
+        val c = Mqtt5Client.builder().identifier(clientId).serverHost(host).serverPort(port).buildBlocking()
+        c.connectWith()
+            .cleanStart(true)
+            .sessionExpiryInterval(0)
+            .simpleAuth().username("backend").password(BACKEND_PASSWORD.toByteArray()).applySimpleAuth()
+            .send()
+        c.disconnect()
+    }
+
+    /** Клиент «устройства» на HiveMQ (как агент: MQTT 5, постоянная сессия). */
+    fun deviceClient(clientId: String): Mqtt5BlockingClient = Mqtt5Client.builder()
+        .identifier(clientId)
+        .serverHost(host)
+        .serverPort(port)
+        .buildBlocking()
+
+    /** Подключение с постоянной сессией; `null` — успех, иначе код отказа CONNACK. */
+    fun Mqtt5BlockingClient.connectAs(
+        username: String,
+        password: String,
+        cleanStart: Boolean = false,
+    ): Mqtt5ConnAckReasonCode? = try {
+        connectWith()
+            .cleanStart(cleanStart)
+            .sessionExpiryInterval(3_600)
+            .simpleAuth().username(username).password(password.toByteArray()).applySimpleAuth()
+            .send()
+        null
+    } catch (e: Mqtt5ConnAckException) {
+        e.mqttMessage.reasonCode
+    }
+
+    /** Ждёт сообщение не дольше [timeoutMs]; `null` — не пришло. */
+    fun Mqtt5BlockingClient.Mqtt5Publishes.next(timeoutMs: Long): Mqtt5Publish? =
+        receive(timeoutMs, TimeUnit.MILLISECONDS).orElse(null)
+
+    fun Mqtt5BlockingClient.publishQos1(topic: String, payload: String, retain: Boolean = false) =
+        publishWith().topic(topic).qos(MqttQos.AT_LEAST_ONCE).retain(retain).payload(payload.toByteArray()).send()
+}

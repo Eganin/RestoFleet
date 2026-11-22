@@ -20,7 +20,7 @@ import ru.restofleet.agent.presentation.lab.viewmodel.LabEffect.OpenSystemSettin
 import ru.restofleet.agent.presentation.lab.viewmodel.LabEffect.ShowMessage
 import ru.restofleet.agent.presentation.lab.viewmodel.LabIntent.User
 import ru.restofleet.agent.presentation.lab.viewmodel.model.LabFilter
-import ru.restofleet.agent.presentation.lab.viewmodel.model.SettingsTarget
+import ru.restofleet.agent.presentation.common.SettingsTarget
 import ru.restofleet.agent.domain.capability.AgentMode
 import ru.restofleet.agent.domain.capability.CapabilityCheck
 import ru.restofleet.agent.domain.capability.CheckId

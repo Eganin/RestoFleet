@@ -1,12 +1,14 @@
 package ru.restofleet.agent.data.mqtt
 
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Test
 import ru.restofleet.agent.data.mqtt.mapping.EventMapper
 import ru.restofleet.agent.data.mqtt.mapping.Fixtures
 import ru.restofleet.agent.data.mqtt.mapping.ProbeMapper
+import ru.restofleet.agent.data.mqtt.mapping.ShadowMapper
 import ru.restofleet.agent.data.mqtt.mapping.TelemetryMapper
 import ru.restofleet.agent.domain.command.CommandOutcome
 import ru.restofleet.agent.domain.model.AgentEvent
@@ -20,6 +22,7 @@ import ru.restofleet.agent.domain.model.Thresholds
 import ru.restofleet.shared.protocol.RfJson
 import ru.restofleet.shared.protocol.dto.EventDto
 import ru.restofleet.shared.protocol.dto.ProbeReportDto
+import ru.restofleet.shared.protocol.dto.ShadowDesiredDto
 import ru.restofleet.shared.protocol.dto.TelemetryDto
 import org.junit.Assert.assertThrows
 
@@ -90,6 +93,29 @@ class JsonPayloadEncoderTest {
         val bytes = encoder.reported(shadow, 1_793_865_605_000, emptyList())
 
         assertThat(json(bytes)).isEqualTo(Fixtures.json("shadow-reported"))
+    }
+
+    @Test
+    fun reportedEchoesTheDesiredProbesIncludingExpectedStatus() {
+        // Эхо desired → reported без потерь: delta(desired, reported) пуста (реш. 219, 224)
+        val desired = Fixtures.decode("shadow-desired-expected-status", ShadowDesiredDto.serializer())
+        val shadow = ShadowMapper.fromDto(desired)
+
+        val reported = json(encoder.reported(shadow, 7, emptyList()))
+        val desiredJson = Fixtures.json("shadow-desired-expected-status") as JsonObject
+
+        listOf("version", "telemetry", "thresholds", "watchedApps", "probes").forEach { key ->
+            assertWithMessage(key).that(reported[key]).isEqualTo(desiredJson[key])
+        }
+    }
+
+    @Test
+    fun reportedWithoutExpectedStatusOmitsTheField() {
+        val shadow = DesiredShadow(3, 30, emptyList(), listOf(ProbeTarget("api", "https://a.example/", 5000)))
+
+        val probe = json(encoder.reported(shadow, 7, emptyList()))["probes"].toString()
+
+        assertThat(probe).doesNotContain("expectedStatus")
     }
 
     @Test

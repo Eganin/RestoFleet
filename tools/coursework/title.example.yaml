@@ -1,0 +1,25 @@
+# Реквизиты титульного листа для build_docx.py (решение 322).
+#
+# Скопируйте файл в title.local.yaml рядом с ним и впишите свои данные:
+#   cp tools/coursework/title.example.yaml tools/coursework/title.local.yaml
+# title.local.yaml — в .gitignore: репозиторий публичный, персональные данные в него не попадают.
+# Без title.local.yaml генератор ставит эти же заглушки. Другой файл — ключ --title.
+#
+# Все поля необязательны: не указанное поле остаётся заглушкой. Пустая строка "" убирает строку титула
+# у ministry, university, institute, department; строку дисциплины — если пусты оба discipline_label и discipline;
+# у group — «, группа …»; у city и year — только своё значение. Неизвестное поле — ошибка сборки.
+
+ministry: "[Наименование министерства]"
+university: "[Наименование вуза]"
+institute: "[Институт/факультет]"
+department: "[Кафедра]"
+# строка «по дисциплине …»; для отчёта по практике — например, "по производственной практике" и discipline: ""
+discipline_label: "по дисциплине"
+discipline: "[Дисциплина]"
+# строки «Студент: <student>, группа <group>» и «Руководитель: <supervisor>»
+student: "[ФИО студента]"
+group: "[группа]"
+supervisor: "[ФИО, должность]"
+# нижняя строка «<city> <year>»
+city: "[Город]"
+year: "2026"

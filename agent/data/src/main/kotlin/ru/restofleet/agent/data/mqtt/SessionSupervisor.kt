@@ -2,11 +2,14 @@ package ru.restofleet.agent.data.mqtt
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import ru.restofleet.agent.domain.model.FlushScope
@@ -27,8 +30,9 @@ import kotlin.coroutines.cancellation.CancellationException
  *   и события коллектор не ждёт: досылка отпускает замок между пачками, итог уходит сразу или после текущей пачки
  *   (решение 172);
  * - `desired`: `ApplyDesiredShadow`, ack после возврата;
- * - досылка при каждом новом подключении ([connectedEpoch], уже после `online` и подписок) и раз в
- *   [flushIntervalMs], пока есть связь и outbox не пуст.
+ * - досылка при каждом новом подключении ([connectedEpoch], уже после `online` и подписок), по запросу
+ *   [flushRequests] (сообщение легло в outbox при живой связи, реш. 203 — без ожидания таймера) и раз в
+ *   [flushIntervalMs] как страховка, пока есть связь и outbox не пуст.
  * Команды исполняются строго последовательно: один коллектор.
  */
 class SessionSupervisor internal constructor(
@@ -39,6 +43,7 @@ class SessionSupervisor internal constructor(
     private val applyDesired: ApplyDesiredShadow,
     private val flush: FlushOutbox,
     private val outbox: Outbox,
+    private val flushRequests: Flow<Unit> = flow { awaitCancellation() },
     private val flushIntervalMs: Long = DEFAULT_FLUSH_INTERVAL_MS,
     private val log: (String) -> Unit = {},
 ) {
@@ -53,6 +58,7 @@ class SessionSupervisor internal constructor(
             scope.launch { collectCommands() },
             scope.launch { collectDesired() },
             scope.launch { flushOnEveryConnection() },
+            scope.launch { flushOnRequest() },
             scope.launch { flushPeriodically() },
         )
     }
@@ -84,6 +90,12 @@ class SessionSupervisor internal constructor(
         }
     }
 
+    private suspend fun flushOnRequest() {
+        flushRequests.collectResilient("request-flush") {
+            isolated("requested-flush") { if (connectedWithPending()) flush() }
+        }
+    }
+
     private suspend fun flushPeriodically() {
         while (currentCoroutineContext().isActive) {
             delay(flushIntervalMs)
@@ -94,7 +106,7 @@ class SessionSupervisor internal constructor(
     private suspend fun connectedWithPending() = session.state.value == SessionState.CONNECTED && outbox.size() > 0
 
     /** Сбой самого потока (не обработчика) не должен гасить цикл навсегда: повтор через секунду. */
-    private suspend fun <T> kotlinx.coroutines.flow.Flow<T>.collectResilient(name: String, block: suspend (T) -> Unit) {
+    private suspend fun <T> Flow<T>.collectResilient(name: String, block: suspend (T) -> Unit) {
         while (currentCoroutineContext().isActive) {
             isolated(name) { collect { block(it) } }
             delay(RESTART_DELAY_MS)

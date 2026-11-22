@@ -1,0 +1,1 @@
+{ "type": "fg_absent", "ts": 1793866360000, "pkg": "com.android.chrome", "sinceTs": 1793865760000, "limitMin": 10, "foregroundApp": "com.android.settings" }

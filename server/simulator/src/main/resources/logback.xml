@@ -1,0 +1,17 @@
+<configuration>
+    <!-- Симулятор: прогресс и итог печатает сам (stdout); библиотеки — только предупреждения. DEBUG Netty/HiveMQ
+         на 5 000 клиентов съедал бы CPU симулятора и искажал замер. Пароли и токены не логируются нигде. -->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    <logger name="io.netty" level="WARN"/>
+    <logger name="com.hivemq" level="WARN"/>
+    <logger name="okhttp3" level="WARN"/>
+    <logger name="org.koin" level="WARN"/>
+    <logger name="org.testcontainers" level="INFO"/>
+    <root level="WARN">
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>

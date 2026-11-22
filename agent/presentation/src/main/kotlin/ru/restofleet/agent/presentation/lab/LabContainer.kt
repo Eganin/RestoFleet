@@ -12,7 +12,7 @@ import ru.restofleet.agent.presentation.common.ObserveEffects
 import ru.restofleet.agent.presentation.lab.viewmodel.LabEffect
 import ru.restofleet.agent.presentation.lab.viewmodel.LabViewModel
 import ru.restofleet.agent.presentation.lab.viewmodel.mapper.toStringSpec
-import ru.restofleet.agent.presentation.lab.viewmodel.model.SettingsTarget
+import ru.restofleet.agent.presentation.common.SettingsTarget
 
 /**
  * Склейка ViewModel и экрана: состояние — через `collectAsStateWithLifecycle`, эффекты — через [ObserveEffects].

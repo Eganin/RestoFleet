@@ -1,0 +1,6 @@
+# Dev-seed пользователей стенда. Пароля в файле НЕТ: `passwordSecret` — имя файла в каталоге секретов
+# (`/run/secrets` в контейнере `seed`, `deploy/out` при запуске с хоста — `--secrets-dir`). Файл
+# `deploy/out/admin-password` (600) создаёт `deploy/prepare-stand.sh`. Поле `password:` разбор отклоняет.
+users:
+  - login: admin
+    passwordSecret: admin-password

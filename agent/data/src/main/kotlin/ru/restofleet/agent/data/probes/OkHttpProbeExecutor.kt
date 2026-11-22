@@ -24,7 +24,8 @@ import kotlin.coroutines.resumeWithException
  * прогон Lab); отмена корутины отменяет вызов. Не бросает: сбои превращаются в [ProbeResult] с классом ошибки,
  * [CancellationException] и [Error] пробрасываются. Редиректы не выполняются, ретраи выключены, кэша и пула
  * соединений нет.
- * Доверие сертификатам — у [baseClient] (в продакшене системное хранилище).
+ * Доверие сертификатам — у [baseClient] (в продакшене системное хранилище). Успех по HTTP-коду — с учётом
+ * `expectedStatus` цели (реш. 219).
  */
 class OkHttpProbeExecutor(
     private val baseClient: OkHttpClient,
@@ -61,7 +62,7 @@ class OkHttpProbeExecutor(
         val totalMs = (nanoTime() - started) / NANOS_IN_MS
         val status = outcome.getOrNull()
         val error = if (status != null) {
-            ProbeErrorClassifier.fromStatus(status)
+            ProbeErrorClassifier.fromStatus(status, target.expectedStatus)
         } else {
             ProbeErrorClassifier.fromThrowable(outcome.exceptionOrNull()!!, isNetworkAvailable())
         }
