@@ -15,3 +15,6 @@ include(":console:feature:restaurants:restaurants-domain", ":console:feature:res
 include(":console:feature:device-details:device-details-domain", ":console:feature:device-details:device-details-data", ":console:feature:device-details:device-details-ui", ":console:feature:device-details:device-details-component")
 include(":console:feature:commands:commands-domain", ":console:feature:commands:commands-data", ":console:feature:commands:commands-ui", ":console:feature:commands:commands-component")
 include(":console:feature:shadow:shadow-domain", ":console:feature:shadow:shadow-data", ":console:feature:shadow:shadow-ui", ":console:feature:shadow:shadow-component")
+include(":console:feature:alerts:alerts-domain", ":console:feature:alerts:alerts-data", ":console:feature:alerts:alerts-ui", ":console:feature:alerts:alerts-component")
+include(":console:feature:incidents:incidents-domain", ":console:feature:incidents:incidents-data", ":console:feature:incidents:incidents-ui", ":console:feature:incidents:incidents-component")
+include(":console:feature:provisioning:provisioning-domain", ":console:feature:provisioning:provisioning-data", ":console:feature:provisioning:provisioning-ui", ":console:feature:provisioning:provisioning-component")

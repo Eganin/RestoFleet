@@ -68,6 +68,18 @@ dependencies {
     kover(projects.console.feature.shadow.shadowData)
     kover(projects.console.feature.shadow.shadowUi)
     kover(projects.console.feature.shadow.shadowComponent)
+    kover(projects.console.feature.alerts.alertsDomain)
+    kover(projects.console.feature.alerts.alertsData)
+    kover(projects.console.feature.alerts.alertsUi)
+    kover(projects.console.feature.alerts.alertsComponent)
+    kover(projects.console.feature.incidents.incidentsDomain)
+    kover(projects.console.feature.incidents.incidentsData)
+    kover(projects.console.feature.incidents.incidentsUi)
+    kover(projects.console.feature.incidents.incidentsComponent)
+    kover(projects.console.feature.provisioning.provisioningDomain)
+    kover(projects.console.feature.provisioning.provisioningData)
+    kover(projects.console.feature.provisioning.provisioningUi)
+    kover(projects.console.feature.provisioning.provisioningComponent)
     // end console
 }
 

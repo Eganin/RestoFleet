@@ -36,6 +36,15 @@ class ConsoleArchitectureTest {
     }
 
     @Test
+    fun allFeaturesOfStageArePresent() {
+        // FR-CN-01…10 (реш. 401): потеря фичи при слиянии или переименовании ловится здесь
+        assertWithMessage("features").that(features.map { it.name }).containsAtLeast(
+            "auth", "dashboard", "restaurants", "devices", "device-details", "shadow", "commands",
+            "alerts", "incidents", "provisioning",
+        )
+    }
+
+    @Test
     fun everyFeatureHasFourModules() {
         features.forEach { feature ->
             listOf("domain", "data", "ui", "component").forEach { layer ->

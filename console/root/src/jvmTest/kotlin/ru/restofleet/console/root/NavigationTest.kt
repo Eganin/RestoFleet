@@ -178,4 +178,15 @@ class NavigationTest {
         ).inOrder()
         assertThat(PlaceholderComponent("x")).isNotNull()
     }
+
+    @Test
+    fun `alerts host switches between alerts and incidents`() {
+        val host = AlertsHostComponent(Marker("alerts"), Marker("incidents"))
+        assertThat(host.section.value).isEqualTo(AlertsHostComponent.Section.Alerts)
+
+        host.select(AlertsHostComponent.Section.Incidents)
+
+        assertThat(host.section.value).isEqualTo(AlertsHostComponent.Section.Incidents)
+        assertThat(AlertsHostComponent.Section.entries.map { it.title }).containsExactly("Тревоги", "Инциденты").inOrder()
+    }
 }
