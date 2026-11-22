@@ -1,6 +1,7 @@
 package ru.restofleet.console.core.mvi
 
 import com.arkivanov.essenty.instancekeeper.InstanceKeeper
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,7 +22,7 @@ import ru.restofleet.console.core.mvi.contract.MviState
  */
 abstract class BaseMviViewModel<S : MviState, U, I : MviIntent, A : MviAction, E : MviEffect>(
     private val store: MviStore<S, U, A>,
-    protected val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+    protected val scope: CoroutineScope = defaultViewModelScope(),
 ) : InstanceKeeper.Instance {
 
     private val effects = Channel<E>(Channel.UNLIMITED)
@@ -45,3 +46,13 @@ abstract class BaseMviViewModel<S : MviState, U, I : MviIntent, A : MviAction, E
         scope.cancel()
     }
 }
+
+/**
+ * Scope ViewModel по умолчанию (реш. 61, 79, 86): Main, `SupervisorJob` и обработчик необработанных исключений —
+ * падение одной корутины не роняет приложение и не отменяет соседей. Ошибки операций возвращаются как `Outcome`.
+ */
+fun defaultViewModelScope(
+    onUnhandled: (Throwable) -> Unit = {},
+): CoroutineScope = CoroutineScope(
+    SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, e -> onUnhandled(e) },
+)
