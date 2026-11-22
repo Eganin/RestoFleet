@@ -12,6 +12,7 @@ import kotlinx.serialization.SerializationException
 import ru.restofleet.server.api.CommandUseCases
 import ru.restofleet.server.api.error.ApiException
 import ru.restofleet.server.api.error.orThrow
+import ru.restofleet.server.api.http.page
 import ru.restofleet.server.api.http.parseJsonObject
 import ru.restofleet.server.api.http.pathDeviceId
 import ru.restofleet.server.api.http.pathParam
@@ -22,6 +23,7 @@ import ru.restofleet.shared.protocol.ShadowJson
 import ru.restofleet.shared.protocol.dto.CommandRequestDto
 import ru.restofleet.shared.protocol.rest.ApiErrorDto
 import ru.restofleet.shared.protocol.rest.console.CommandDto
+import ru.restofleet.shared.protocol.rest.console.ItemsDto
 import ru.restofleet.shared.protocol.rest.console.SendCommandRequestDto
 
 /**
@@ -41,6 +43,10 @@ fun Route.commandRoutes(useCases: CommandUseCases) {
         ).orThrow()
         call.response.header(HttpHeaders.Location, "/api/v1/commands/${command.cmdId}")
         call.respond(HttpStatusCode.Created, command.toDto())
+    }
+    get("/devices/{id}/commands") {
+        val history = useCases.history(call.pathDeviceId(), call.page()).orThrow()
+        call.respond(ItemsDto(history.map { it.toDto() }))
     }
     get("/commands/{cmdId}") {
         call.respond(useCases.get(call.pathParam("cmdId")).orThrow().toDto())

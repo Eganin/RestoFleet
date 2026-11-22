@@ -20,22 +20,26 @@ import ru.restofleet.shared.kernel.Outcome
 
 class DeviceUseCasesTest {
     private val w = World()
-    private val list = ListDevices(w.devices, w.tx)
-    private val get = GetDevice(w.devices, w.telemetry, w.sessions, w.tx)
+    private val list = ListDevices(w.devices, w.restaurants, w.telemetry, w.sessions, w.alerts, w.tx)
+    private val get = GetDevice(w.devices, w.telemetry, w.sessions, w.restaurants, w.alerts, w.tx)
     private val decommission = DecommissionDevice(
-        w.devices, w.credentials, w.sessions, w.commands, w.broker, w.publisher, w.cache, w.tx, w.clock,
+        w.devices, w.credentials, w.sessions, w.commands, w.alerts, w.conditions, w.broker, w.publisher, w.cache, w.tx,
+        w.clock,
     )
+
+    private suspend fun listed(filter: DeviceFilter, page: PageRequest = PageRequest.of()) =
+        list(filter, page).map { it.device }
 
     @Test
     fun listFiltersAndPages() = runTest {
         val a = w.device("d-a", createdAt = 1, status = DeviceStatus.ONLINE)
         val b = w.device("d-b", createdAt = 2)
         val c = w.device("d-c", restaurantId = "r-2", createdAt = 3)
-        assertThat(list(DeviceFilter())).containsExactly(a, b, c).inOrder()
-        assertThat(list(DeviceFilter(restaurantId = RestaurantId("r-2")))).containsExactly(c)
-        assertThat(list(DeviceFilter(status = DeviceStatus.ONLINE))).containsExactly(a)
-        assertThat(list(DeviceFilter(role = DeviceRole.HALL))).isEmpty()
-        assertThat(list(DeviceFilter(), PageRequest.of(limit = 1, offset = 1))).containsExactly(b)
+        assertThat(listed(DeviceFilter())).containsExactly(a, b, c).inOrder()
+        assertThat(listed(DeviceFilter(restaurantId = RestaurantId("r-2")))).containsExactly(c)
+        assertThat(listed(DeviceFilter(status = DeviceStatus.ONLINE))).containsExactly(a)
+        assertThat(listed(DeviceFilter(role = DeviceRole.HALL))).isEmpty()
+        assertThat(listed(DeviceFilter(), PageRequest.of(limit = 1, offset = 1))).containsExactly(b)
     }
 
     @Test

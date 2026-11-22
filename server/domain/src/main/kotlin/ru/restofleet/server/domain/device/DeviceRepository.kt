@@ -13,6 +13,11 @@ interface DeviceRepository {
 
     suspend fun findById(id: DeviceId): Device?
 
+    suspend fun findByIds(ids: Collection<DeviceId>): List<Device>
+
+    /** Без выведенных; [offlineSince] — граница «ушли в офлайн недавно» (по `last_seen_at`). */
+    suspend fun counts(offlineSince: Long): DeviceCounts
+
     /** Упорядочено по времени регистрации, затем по id. */
     suspend fun list(filter: DeviceFilter, page: PageRequest): List<Device>
 

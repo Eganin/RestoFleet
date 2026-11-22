@@ -17,7 +17,7 @@ import ru.restofleet.shared.kernel.Outcome
 
 class IngestUseCasesTest {
     private val w = World()
-    private val ingest = IngestBatch(w.devices, w.telemetry, w.tx, w.clock)
+    private val ingest = w.ingestBatch()
     private val telemetryHistory = GetTelemetryHistory(w.devices, w.telemetry, w.tx)
     private val probeHistory = GetProbeHistory(w.devices, w.telemetry, w.tx)
     private val eventHistory = GetEventHistory(w.devices, w.telemetry, w.tx)

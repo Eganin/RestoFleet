@@ -22,6 +22,7 @@ data class AppConfig(
     val auth: AuthSection = AuthSection(),
     val rateLimit: RateLimitSection = RateLimitSection(),
     val jobs: JobsSection = JobsSection(),
+    val alerts: AlertsSection = AlertsSection(),
     /** Каталог секретов для `seed` (`passwordSecret` в `users.yaml`): в контейнере — `/run/secrets`. */
     val secretsDir: String = "/run/secrets",
 )
@@ -60,6 +61,9 @@ data class ProvisioningSection(
 )
 
 data class PollingSection(val staleAfterMs: Long = 90_000)
+
+/** Пороги, которые проверяет бэкенд (реш. 415): R-06 — вход < [freeMbEnter], выход ≥ [freeMbExit]. */
+data class AlertsSection(val freeMbEnter: Long = 500, val freeMbExit: Long = 600)
 
 data class AuthSection(val refreshTtlDays: Long = 7)
 

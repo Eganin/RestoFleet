@@ -1,5 +1,6 @@
 package ru.restofleet.server.domain.command
 
+import ru.restofleet.server.domain.common.PageRequest
 import ru.restofleet.shared.kernel.DeviceId
 import ru.restofleet.shared.shadow.ShadowDocument
 
@@ -132,6 +133,9 @@ interface CommandRepository {
     suspend fun insert(command: Command)
 
     suspend fun find(cmdId: String): Command?
+
+    /** История устройства, новые сначала (`created_at`, затем `cmd_id`). */
+    suspend fun listByDevice(deviceId: DeviceId, page: PageRequest): List<Command>
 
     /** С блокировкой строки до конца транзакции. */
     suspend fun findForUpdate(cmdId: String): Command?

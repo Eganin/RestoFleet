@@ -44,3 +44,28 @@
 - WS: токен только в заголовке `Authorization` upgrade-запроса; 4401 → refresh и переподключение, 1013 → переподключение и перечитать REST, 1008 — не переподключаться сразу; после каждого подключения — перечитать состояние.
 - Тексты (объяснение инцидента, строка проблемного ресторана, строка тревоги) строит консоль по `details` и `evidence`.
 - toml: свои строки — только в блоки «# Консоль (поток B)»; Kover — только внутри блока `// console` корневого `build.gradle.kts`.
+- 22.11 — ПМ1 закоммичен (`53be7e9`), оркестратор влил поток C (`677bb21`), поток B стартовал. Начат ПМ2: домен `alert/` — факты-условия (`alert_conditions`, реш. 443), `RuleEngine` (чистая функция), `AlertProcessor` в транзакции приёма, порт `EventBus`.
+- 22.11 — ПМ2 в рабочей копии: домен `alert/` (`RuleEngine` 37 строк таблицы, `AlertProcessor`, ack/resolve, `GetSummary`/`SummaryBuilder`), `realtime/EventBus`, `incident/ProbeStateRepository`; `IngestBatch`/`HandleStatus` зовут правила в транзакции; `V2__alerts.sql` (alerts, alert_conditions, probe_states), репозитории Exposed, `SharedFlowEventBus`, сигналы событий в декодере; API `GET /alerts`, `PATCH /alerts/{id}`, `GET /summary`, `GET /devices/{id}/commands`, `GET /devices?q=&version=&problems=`; `x-planned` сняты с них. Rulings 443–449. Тесты модулей зелёные; запущен гейт.
+- 22.11 — ПМ2: гейт №1 rc=1 (Koin тестов без `RuleParams`, тест миграций ждал V1, detekt: сложность `HandleStatus`, имя файла, `TooManyFunctions`), №2 rc=1 (Konsist: вложенный класс в пакете `usecase`), №3 — rc=0. Коммит ПМ2.
+
+## ПМ2. Тревоги R-01…R-06
+
+**Итог.** Правила работают в транзакции приёма (реш. 414): `IngestBatch` и `HandleStatus` вызывают `AlertProcessor`, события шины уходят после commit.
+
+| Что | Где |
+|---|---|
+| Модель, порты, `RuleEngine`, `AlertProcessor`, `SummaryBuilder` | `server/domain/.../alert/` |
+| Use cases `ListAlerts`, `AcknowledgeAlert`, `ResolveAlert`, `GetSummary`, `ListDeviceCommands`; `ListDevices`/`GetDevice` с полями консоли | `alert/usecase/`, `command/usecase/`, `device/usecase/` |
+| Порт шины, состояние проб для агрегатора | `realtime/EventBus.kt`, `incident/ProbeStateRepository.kt` |
+| Миграция | `server/data/src/main/resources/db/migration/V2__alerts.sql` |
+| Репозитории, шина | `data/db/ExposedAlertRepositories.kt`, `data/realtime/SharedFlowEventBus.kt` |
+| Сигналы событий для правил | `data/ingest/DeviceMessageDecoder.kt` (`DeviceSignal`) |
+| API | `server/api/.../alert/AlertRoutes.kt`, `AlertMappers.kt`; `GET /devices/{id}/commands`; `GET /devices?q=&version=&problems=` |
+
+**Тесты.** `RuleEngineTest` — таблица из 37 строк (R-01…R-06, границы 499/500/599/600 МБ, повторы, ручное закрытие без повторного открытия, подтверждённая и закрытая тревога); `AlertUseCasesTest` (повторная доставка без дублей, вход и выход в одной пачке, сбой commit — ни записи, ни событий, R-01 по `status`, чужой `connId`, жизненный цикл ack → resolve, 409/400/404); `SummaryBuilderTest`; `DeviceConsoleTest`; Testcontainers: `AlertRepositoriesTest`, `IngestProcessorOnPostgresTest` (телеметрия `freeMb=400` → R-06 в БД и `AlertChanged` в шине — приёмка плана), `DeviceMessageDecoderTest`; `AlertRoutesTest` (401, 400, 404, 409, маппинг DTO).
+
+**Метрики:** гейт rc=0; 1 946 тестов, 0 упавших; строки проекта 96,7 %, пакеты `server.domain.alert`, `alert.usecase`, `realtime`, `server.api.alert`, `server.data.realtime` — 100 %.
+
+**Отклонения:** автор действия — `login`, а не `sub` (реш. 446); шина считает потерю новых событий, а не вытеснение старых (реш. 445); `ackBy` в DTO описан соответственно.
+
+**Не проверено:** на стенде не запускалось (валидация — ПМ11); поведение при > 1 000 незакрытых тревог в сводке — только по коду (реш. 449).

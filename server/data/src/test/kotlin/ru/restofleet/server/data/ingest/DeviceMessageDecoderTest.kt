@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import ru.restofleet.server.domain.command.ReportedCommandStatus
 import ru.restofleet.server.domain.device.DeviceInfo
+import ru.restofleet.server.domain.ingest.DeviceSignal
 import ru.restofleet.server.domain.presence.PresenceState
 import ru.restofleet.shared.kernel.DeviceId
 import ru.restofleet.shared.protocol.DeviceChannel
@@ -267,5 +268,20 @@ class DeviceMessageDecoderTest {
         assertThat(decoded.reason).doesNotContain("secret-value")
         val status = decode(DeviceChannel.STATUS, "{not json") as Decoded.Undecodable
         assertThat(status.reason).startsWith("bad_json:status:")
+    }
+
+    @Test
+    fun `alert-relevant events carry a typed signal, others do not`() {
+        fun signal(name: String) = (decode(DeviceChannel.EVENTS, fixture(name)) as Decoded.Event).event.signal
+
+        assertThat(signal("event-threshold-enter"))
+            .isEqualTo(DeviceSignal.Threshold("battery_low", enter = true, value = 19.0, limit = 20.0))
+        assertThat((signal("event-threshold-exit") as DeviceSignal.Threshold).enter).isFalse()
+        assertThat(signal("event-fg-absent")).isEqualTo(
+            DeviceSignal.FgAbsent("com.android.chrome", 1793865760000, 10, "com.android.settings"),
+        )
+        assertThat(signal("event-fg-changed")).isEqualTo(DeviceSignal.FgChanged("com.android.settings"))
+        assertThat(signal("event-probe-state")).isEqualTo(DeviceSignal.ProbeState("api", true, "timeout", 3))
+        assertThat(signal("event-net-changed")).isNull()
     }
 }

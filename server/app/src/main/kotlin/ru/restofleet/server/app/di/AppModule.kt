@@ -5,6 +5,7 @@ import org.koin.core.Koin
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
+import ru.restofleet.server.api.AlertUseCases
 import ru.restofleet.server.api.ApiUseCases
 import ru.restofleet.server.api.AuthUseCases
 import ru.restofleet.server.api.CommandUseCases
@@ -43,6 +44,7 @@ fun appModule(runtime: RuntimeConfig): Module = module {
     single { runtime.provisioning }
     single { runtime.polling }
     single { runtime.auth }
+    single { runtime.rules }
     runtime.api?.let { api -> single { api } }
     single<DevicePayloadDecoder> { DataPayloadDecoder(get()) }
     single<IngestLifecycle> { MqttIngest(get()) }
@@ -88,10 +90,11 @@ fun apiUseCases(koin: Koin): ApiUseCases = with(koin) {
         restaurants = RestaurantUseCases(get(), get(), get(), get()),
         devices = DeviceUseCases(get(), get(), get(), get(), get(), get()),
         shadows = ShadowUseCases(get(), get()),
-        commands = CommandUseCases(get(), get()),
+        commands = CommandUseCases(get(), get(), get()),
         provisioning = ProvisioningUseCases(get(), get()),
         poll = PollUseCases(get(), get(), get(), get(), get()),
         health = get(),
+        alerts = AlertUseCases(get(), get(), get(), get()),
     )
 }
 

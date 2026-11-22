@@ -36,12 +36,13 @@ class ApiTestKit(
     val restaurants = RestaurantUseCases(mockk(), mockk(), mockk(), mockk())
     val devices = DeviceUseCases(mockk(), mockk(), mockk(), mockk(), mockk(), mockk())
     val shadows = ShadowUseCases(mockk(), mockk())
-    val commands = CommandUseCases(mockk(), mockk())
+    val commands = CommandUseCases(mockk(), mockk(), mockk())
     val provisioning = ProvisioningUseCases(mockk(), mockk())
     val poll = PollUseCases(mockk(), mockk(), mockk(), mockk(), mockk())
     val health = mockk<CheckHealth>()
+    val alerts = AlertUseCases(mockk(), mockk(), mockk(), mockk())
 
-    val useCases = ApiUseCases(auth, restaurants, devices, shadows, commands, provisioning, poll, health)
+    val useCases = ApiUseCases(auth, restaurants, devices, shadows, commands, provisioning, poll, health, alerts)
 
     val admin = User("u-1", "admin", "hash", User.ROLE_ADMIN, 0)
 

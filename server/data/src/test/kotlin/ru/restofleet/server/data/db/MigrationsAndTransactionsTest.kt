@@ -13,19 +13,20 @@ import kotlin.test.assertFailsWith
 internal class MigrationsAndTransactionsTest : PostgresTest() {
 
     @Test
-    fun `V1 creates every table of the coursework model and a second migrate is a no-op`() {
+    fun `migrations create every table of the model and a second migrate is a no-op`() {
         val tables = TestDatabase.scalar(
             "SELECT string_agg(table_name, ',' ORDER BY table_name) FROM information_schema.tables " +
                 "WHERE table_schema = 'public' AND table_name <> 'flyway_schema_history'",
         )!!.split(',')
 
-        assertThat(TestDatabase.migrated).isEqualTo(1)
+        assertThat(TestDatabase.migrated).isEqualTo(MIGRATIONS)
         assertThat(tables).containsExactly(
-            "commands", "device_credentials", "device_sessions", "devices", "events", "probe_results",
-            "provisioning_tokens", "refresh_tokens", "restaurants", "shadows", "telemetry", "users",
+            "alert_conditions", "alerts", "commands", "device_credentials", "device_sessions", "devices", "events",
+            "probe_results", "probe_states", "provisioning_tokens", "refresh_tokens", "restaurants", "shadows",
+            "telemetry", "users",
         )
         assertThat(Migrations.migrate(TestDatabase.dataSource)).isEqualTo(0)
-        assertThat(TestDatabase.scalar("SELECT max(version) FROM flyway_schema_history")).isEqualTo("1")
+        assertThat(TestDatabase.scalar("SELECT max(version) FROM flyway_schema_history")).isEqualTo("$MIGRATIONS")
     }
 
     @Test
@@ -77,5 +78,10 @@ internal class MigrationsAndTransactionsTest : PostgresTest() {
 
         assertThat(attempts).isEqualTo(1)
         assertThat(tx { restaurants.findByCode("NEW") }).isNull()
+    }
+
+    private companion object {
+        /** V1 — курсовая, V2 — тревоги (ПМ2). */
+        const val MIGRATIONS = 2
     }
 }

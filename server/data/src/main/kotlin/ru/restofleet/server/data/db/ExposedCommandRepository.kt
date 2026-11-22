@@ -3,6 +3,7 @@ package ru.restofleet.server.data.db
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
@@ -18,6 +19,7 @@ import ru.restofleet.server.domain.command.Command
 import ru.restofleet.server.domain.command.CommandReasons
 import ru.restofleet.server.domain.command.CommandRepository
 import ru.restofleet.server.domain.command.CommandStatus
+import ru.restofleet.server.domain.common.PageRequest
 import ru.restofleet.shared.kernel.DeviceId
 import ru.restofleet.shared.protocol.RfJson
 
@@ -40,6 +42,13 @@ internal class ExposedCommandRepository : CommandRepository {
 
     override suspend fun find(cmdId: String): Command? =
         CommandsTable.selectAll().where { CommandsTable.cmdId eq cmdId }.singleOrNull()?.toCommand()
+
+    override suspend fun listByDevice(deviceId: DeviceId, page: PageRequest): List<Command> = CommandsTable.selectAll()
+        .where { CommandsTable.deviceId eq deviceId.value }
+        .orderBy(CommandsTable.createdAt to SortOrder.DESC, CommandsTable.cmdId to SortOrder.DESC)
+        .limit(page.limit)
+        .offset(page.offset)
+        .map { it.toCommand() }
 
     override suspend fun findForUpdate(cmdId: String): Command? = CommandsTable.selectAll()
         .where { CommandsTable.cmdId eq cmdId }

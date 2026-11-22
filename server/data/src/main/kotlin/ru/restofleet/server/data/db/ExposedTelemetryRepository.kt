@@ -7,6 +7,7 @@ import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greaterEq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -25,6 +26,7 @@ import java.time.OffsetDateTime
  * `telemetry`, `probe_results`, `events`: пакетная вставка; телеметрия и пробы — `ON CONFLICT DO NOTHING` по
  * первичному ключу (реш. 205), число записанных — по строкам `RETURNING`.
  */
+@Suppress("TooManyFunctions") // операции порта TelemetryRepository (запись, история, последние точки) и маппинг строк
 internal class ExposedTelemetryRepository : TelemetryRepository {
     override suspend fun insertTelemetry(items: List<TelemetrySnapshot>): Int =
         TelemetryTable.batchInsert(items, ignore = true, shouldReturnGeneratedValues = true) { t ->
@@ -75,6 +77,17 @@ internal class ExposedTelemetryRepository : TelemetryRepository {
         .limit(1)
         .singleOrNull()
         ?.toSnapshot()
+
+    /** `SELECT DISTINCT ON (device_id) … ORDER BY device_id, ts DESC` — один проход по индексу ключа. */
+    override suspend fun latestFor(ids: Collection<DeviceId>): Map<DeviceId, TelemetrySnapshot> {
+        if (ids.isEmpty()) return emptyMap()
+        return TelemetryTable.selectAll()
+            .where { TelemetryTable.deviceId inList ids.map { it.value } }
+            .withDistinctOn(TelemetryTable.deviceId)
+            .orderBy(TelemetryTable.deviceId to SortOrder.ASC, TelemetryTable.ts to SortOrder.DESC)
+            .map { it.toSnapshot() }
+            .associateBy { it.deviceId }
+    }
 
     override suspend fun telemetry(deviceId: DeviceId, range: TimeRange, page: PageRequest): List<TelemetrySnapshot> =
         TelemetryTable.selectAll()

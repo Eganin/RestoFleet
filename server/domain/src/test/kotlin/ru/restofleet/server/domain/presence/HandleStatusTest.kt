@@ -14,7 +14,7 @@ import ru.restofleet.server.domain.presence.usecase.HandleStatus
 
 class HandleStatusTest {
     private val w = World()
-    private val handle = HandleStatus(w.devices, w.sessions, w.shadows, w.publisher, w.tx, w.clock)
+    private val handle = w.handleStatus()
     private val id = deviceId("d-1")
 
     private fun online(connId: String, info: DeviceInfo? = null) = StatusReport(

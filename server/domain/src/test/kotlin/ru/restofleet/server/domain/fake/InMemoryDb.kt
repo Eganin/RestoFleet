@@ -1,5 +1,8 @@
 package ru.restofleet.server.domain.fake
 
+import ru.restofleet.server.domain.alert.Alert
+import ru.restofleet.server.domain.alert.Condition
+import ru.restofleet.server.domain.alert.ConditionKey
 import ru.restofleet.server.domain.auth.RefreshToken
 import ru.restofleet.server.domain.auth.User
 import ru.restofleet.server.domain.command.Command
@@ -31,6 +34,9 @@ data class DbState(
     val commands: Map<String, Command> = emptyMap(),
     val users: Map<String, User> = emptyMap(),
     val refreshTokens: Map<String, RefreshToken> = emptyMap(),
+    val alerts: Map<String, Alert> = emptyMap(),
+    val conditions: Map<ConditionKey, Condition> = emptyMap(),
+    val probeStates: Map<Pair<DeviceId, String>, StoredProbeState> = emptyMap(),
 )
 
 /**

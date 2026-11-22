@@ -20,6 +20,7 @@ import ru.restofleet.server.domain.common.TimeRange
 import ru.restofleet.server.domain.device.DecommissionResult
 import ru.restofleet.server.domain.device.DeviceDetails
 import ru.restofleet.server.domain.device.DeviceFilter
+import ru.restofleet.server.domain.device.DeviceOverview
 import ru.restofleet.server.domain.device.DeviceRole
 import ru.restofleet.server.domain.device.DeviceStatus
 import ru.restofleet.server.domain.ingest.DeviceEvent
@@ -107,7 +108,8 @@ class RegistryRoutesTest {
     @Test
     fun `device list passes filters and paging`() = kit.run {
         val filter = DeviceFilter(RestaurantId(Samples.RESTAURANT_ID), DeviceRole.KITCHEN, DeviceStatus.ONLINE)
-        coEvery { kit.devices.list(filter, PageRequest.of(10, 20)) } returns listOf(Samples.device)
+        coEvery { kit.devices.list(filter, PageRequest.of(10, 20)) } returns
+            listOf(DeviceOverview(Samples.device, null, null, null, emptyList()))
 
         val response = client.get(
             "/api/v1/devices?restaurant=${Samples.RESTAURANT_ID}&role=kitchen&status=online&limit=10&offset=20",

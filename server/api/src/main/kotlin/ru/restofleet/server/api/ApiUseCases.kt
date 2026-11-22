@@ -1,10 +1,15 @@
 package ru.restofleet.server.api
 
+import ru.restofleet.server.domain.alert.usecase.AcknowledgeAlert
+import ru.restofleet.server.domain.alert.usecase.GetSummary
+import ru.restofleet.server.domain.alert.usecase.ListAlerts
+import ru.restofleet.server.domain.alert.usecase.ResolveAlert
 import ru.restofleet.server.domain.auth.usecase.Login
 import ru.restofleet.server.domain.auth.usecase.RefreshSession
 import ru.restofleet.server.domain.command.CommandReport
 import ru.restofleet.server.domain.command.usecase.GetCommand
 import ru.restofleet.server.domain.command.usecase.HandleCommandResult
+import ru.restofleet.server.domain.command.usecase.ListDeviceCommands
 import ru.restofleet.server.domain.command.usecase.SendCommand
 import ru.restofleet.server.domain.device.usecase.DecommissionDevice
 import ru.restofleet.server.domain.device.usecase.GetDevice
@@ -41,6 +46,7 @@ class ApiUseCases(
     val provisioning: ProvisioningUseCases,
     val poll: PollUseCases,
     val health: CheckHealth,
+    val alerts: AlertUseCases,
 )
 
 class AuthUseCases(val login: Login, val refresh: RefreshSession)
@@ -63,7 +69,14 @@ class DeviceUseCases(
 
 class ShadowUseCases(val get: GetShadow, val update: UpdateDesired)
 
-class CommandUseCases(val send: SendCommand, val get: GetCommand)
+class CommandUseCases(val send: SendCommand, val get: GetCommand, val history: ListDeviceCommands)
+
+class AlertUseCases(
+    val list: ListAlerts,
+    val acknowledge: AcknowledgeAlert,
+    val resolve: ResolveAlert,
+    val summary: GetSummary,
+)
 
 class ProvisioningUseCases(val issue: IssueProvisioningTokens, val provision: ProvisionDevice)
 

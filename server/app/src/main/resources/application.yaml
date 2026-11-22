@@ -30,6 +30,10 @@ polling:
   staleAfterMs: 90000
 auth:
   refreshTtlDays: 7
+# Пороги, которые проверяет бэкенд (реш. 415): R-06 — свободно < 500 МБ, закрытие от 600 МБ
+alerts:
+  freeMbEnter: 500
+  freeMbExit: 600
 rateLimit:
   loginPerMinute: 10
   provisionPerMinute: 60

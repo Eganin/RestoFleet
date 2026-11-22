@@ -7,6 +7,7 @@ import ru.restofleet.server.data.config.DataConfig
 import ru.restofleet.server.data.config.DatabaseConfig
 import ru.restofleet.server.data.config.MqttConfig
 import ru.restofleet.server.domain.auth.AuthSettings
+import ru.restofleet.server.domain.alert.RuleParams
 import ru.restofleet.server.domain.polling.PollingSettings
 import ru.restofleet.server.domain.provisioning.BrokerEndpoint
 import ru.restofleet.server.domain.provisioning.ProvisioningSettings
@@ -24,6 +25,7 @@ class RuntimeConfig private constructor(
     val polling: PollingSettings,
     val auth: AuthSettings,
     val jobs: JobsSection,
+    val rules: RuleParams,
 ) {
     companion object {
         private const val MS_PER_MINUTE = 60_000L
@@ -84,6 +86,7 @@ class RuntimeConfig private constructor(
             polling = PollingSettings(staleAfterMillis = config.polling.staleAfterMs),
             auth = AuthSettings(refreshTtlMillis = config.auth.refreshTtlDays * MS_PER_DAY),
             jobs = config.jobs,
+            rules = RuleParams(freeMbEnter = config.alerts.freeMbEnter, freeMbExit = config.alerts.freeMbExit),
         )
     }
 }

@@ -1,7 +1,9 @@
 package ru.restofleet.server.domain.device
 
+import ru.restofleet.server.domain.alert.Alert
 import ru.restofleet.server.domain.ingest.TelemetrySnapshot
 import ru.restofleet.server.domain.presence.DeviceSession
+import ru.restofleet.server.domain.restaurant.Restaurant
 import ru.restofleet.server.domain.restaurant.RestaurantId
 import ru.restofleet.shared.kernel.DeviceId
 
@@ -68,11 +70,18 @@ data class Device(
     val isDecommissioned: Boolean get() = status == DeviceStatus.DECOMMISSIONED
 }
 
-/** Фильтр списка (`GET /devices?restaurant=&role=&status=`); `null` — без условия. */
+/**
+ * Фильтр списка (`GET /devices?restaurant=&role=&status=&q=&version=&problems=`); `null` — без условия.
+ * [query] — подстрока без учёта регистра в имени устройства, коде и названии ресторана, модели (`%`, `_` —
+ * буквально); [agentVersion] — точная версия агента (реш. 424); [problemsOnly] — есть незакрытая неподавленная тревога.
+ */
 data class DeviceFilter(
     val restaurantId: RestaurantId? = null,
     val role: DeviceRole? = null,
     val status: DeviceStatus? = null,
+    val query: String? = null,
+    val agentVersion: String? = null,
+    val problemsOnly: Boolean = false,
 )
 
 /** Что сообщило устройство о себе при подключении (`status: online`). */
@@ -85,9 +94,33 @@ data class DeviceAnnouncement(
 /** Итог вывода из эксплуатации; [retainedCleared] = `false` — retained остались, повторный вызов дочистит. */
 data class DecommissionResult(val device: Device, val retainedCleared: Boolean)
 
-/** Карточка устройства: реестр, последняя телеметрия и последняя MQTT-сессия. */
+/** Карточка устройства: реестр, ресторан, последняя телеметрия, последняя MQTT-сессия и незакрытые тревоги. */
 data class DeviceDetails(
     val device: Device,
     val lastTelemetry: TelemetrySnapshot?,
     val lastSession: DeviceSession?,
+    val restaurant: Restaurant? = null,
+    val alerts: List<Alert> = emptyList(),
+)
+
+/**
+ * Строка списка устройств консоли (реш. 437): ресторан, последняя телеметрия, причина закрытия последней сессии и
+ * незакрытые неподавленные тревоги — сначала критичные, затем новые.
+ */
+data class DeviceOverview(
+    val device: Device,
+    val restaurant: Restaurant?,
+    val lastTelemetry: TelemetrySnapshot?,
+    val lastSessionReason: String?,
+    val alerts: List<Alert>,
+)
+
+/** Счётчики устройств для сводки (без выведенных из эксплуатации). */
+data class DeviceCounts(
+    val total: Int,
+    val online: Int,
+    val offline: Int,
+    /** Офлайн-устройства, последний раз виденные не раньше заданного момента. */
+    val offlineRecently: Int,
+    val byRestaurant: Map<RestaurantId, Int>,
 )

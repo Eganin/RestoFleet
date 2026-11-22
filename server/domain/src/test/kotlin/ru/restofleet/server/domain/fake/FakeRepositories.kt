@@ -12,6 +12,7 @@ import ru.restofleet.server.domain.common.PageRequest
 import ru.restofleet.server.domain.common.TimeRange
 import ru.restofleet.server.domain.device.CredentialRepository
 import ru.restofleet.server.domain.device.Device
+import ru.restofleet.server.domain.device.DeviceCounts
 import ru.restofleet.server.domain.device.DeviceAnnouncement
 import ru.restofleet.server.domain.device.DeviceFilter
 import ru.restofleet.server.domain.device.DeviceRepository
@@ -54,11 +55,31 @@ class FakeDeviceRepository(private val db: InMemoryDb) : DeviceRepository {
 
     override suspend fun findById(id: DeviceId): Device? = db.read { it.devices[id] }
 
+    override suspend fun findByIds(ids: Collection<DeviceId>): List<Device> =
+        db.read { s -> ids.mapNotNull { s.devices[it] } }
+
+    override suspend fun counts(offlineSince: Long): DeviceCounts = db.read { s ->
+        val live = s.devices.values.filterNot { it.isDecommissioned }
+        DeviceCounts(
+            total = live.size,
+            online = live.count { it.status == DeviceStatus.ONLINE },
+            offline = live.count { it.status == DeviceStatus.OFFLINE },
+            offlineRecently = live.count { it.status == DeviceStatus.OFFLINE && (it.lastSeenAt ?: 0) >= offlineSince },
+            byRestaurant = live.groupingBy { it.restaurantId }.eachCount(),
+        )
+    }
+
     override suspend fun list(filter: DeviceFilter, page: PageRequest): List<Device> = db.read { s ->
         s.devices.values
             .filter { filter.restaurantId == null || it.restaurantId == filter.restaurantId }
             .filter { filter.role == null || it.role == filter.role }
             .filter { filter.status == null || it.status == filter.status }
+            .filter { filter.agentVersion == null || it.agentVersion == filter.agentVersion }
+            .filter { d -> filter.query == null || matches(d, s.restaurants[d.restaurantId], filter.query) }
+            .filter { d ->
+                !filter.problemsOnly ||
+                    s.alerts.values.any { it.deviceId == d.id && it.isActive && it.parentIncidentId == null }
+            }
             .sortedWith(compareBy({ it.createdAt }, { it.id.value }))
             .drop(page.offset.toInt())
             .take(page.limit)
@@ -106,6 +127,10 @@ class FakeDeviceRepository(private val db: InMemoryDb) : DeviceRepository {
             s.copy(devices = s.devices + (id to d.copy(status = DeviceStatus.DECOMMISSIONED, decommissionedAt = at)))
         }
     }
+
+    private fun matches(device: Device, restaurant: Restaurant?, query: String): Boolean =
+        listOfNotNull(device.name, restaurant?.code, restaurant?.name, device.info?.model)
+            .any { it.contains(query, ignoreCase = true) }
 
     private fun change(id: DeviceId, transform: (Device) -> Device) = db.update { s ->
         val d = s.devices[id]
@@ -160,6 +185,9 @@ class FakeSessionRepository(private val db: InMemoryDb) : SessionRepository {
 
     override suspend fun latest(deviceId: DeviceId): DeviceSession? =
         db.read { s -> s.sessions.filter { it.deviceId == deviceId }.maxByOrNull { it.connectedAt } }
+
+    override suspend fun latestFor(ids: Collection<DeviceId>): Map<DeviceId, DeviceSession> =
+        ids.mapNotNull { id -> latest(id)?.let { id to it } }.toMap()
 
     override suspend fun close(deviceId: DeviceId, connId: String, at: Long, reason: String) = db.update { s ->
         s.copy(
@@ -246,6 +274,9 @@ class FakeTelemetryRepository(private val db: InMemoryDb) : TelemetryRepository 
     override suspend fun latest(deviceId: DeviceId): TelemetrySnapshot? =
         db.read { s -> s.telemetry.filter { it.deviceId == deviceId }.maxByOrNull { it.ts } }
 
+    override suspend fun latestFor(ids: Collection<DeviceId>): Map<DeviceId, TelemetrySnapshot> =
+        ids.mapNotNull { id -> latest(id)?.let { id to it } }.toMap()
+
     override suspend fun telemetry(deviceId: DeviceId, range: TimeRange, page: PageRequest): List<TelemetrySnapshot> =
         db.read { s -> s.telemetry.filter { it.deviceId == deviceId &&
             range.has(it.ts) }.sortedByDescending { it.ts }.page(page) }
@@ -285,6 +316,12 @@ class FakeCommandRepository(private val db: InMemoryDb) : CommandRepository {
     override suspend fun find(cmdId: String): Command? = db.read { it.commands[cmdId] }
 
     override suspend fun findForUpdate(cmdId: String): Command? = find(cmdId)
+
+    override suspend fun listByDevice(deviceId: DeviceId, page: PageRequest): List<Command> = db.read { s ->
+        s.commands.values.filter { it.deviceId == deviceId }
+            .sortedWith(compareByDescending<Command> { it.createdAt }.thenByDescending { it.cmdId })
+            .drop(page.offset.toInt()).take(page.limit)
+    }
 
     override suspend fun update(command: Command) = insert(command)
 
