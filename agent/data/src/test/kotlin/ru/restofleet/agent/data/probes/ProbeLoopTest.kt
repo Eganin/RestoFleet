@@ -50,6 +50,7 @@ class ProbeLoopTest {
         },
         schedule = schedule,
         log = { logs += it },
+        nowMs = { testScheduler.currentTime },
     )
 
     private fun ids() = published.map { it.single().targetId }
@@ -85,6 +86,39 @@ class ProbeLoopTest {
         advanceTimeBy(31_000)
 
         assertThat(ids()).containsExactly("a", "a", "b", "b").inOrder()
+    }
+
+    // R-15: смена набора целей не даёт внеочередную пробу уже проверявшейся цели
+    @Test
+    fun changedTargetSetKeepsTheIntervalOfTheTargetsThatStay() = runTest {
+        val store = Store(shadow(1, target("a", 30)))
+        loop(store).start()
+        advanceTimeBy(10_000)
+        assertThat(ids()).containsExactly("a")
+
+        store.save(shadow(2, target("a", 30), target("b", 30)))
+        runCurrent()
+        assertThat(ids()).containsExactly("a", "b").inOrder()
+
+        advanceTimeBy(19_999)
+        assertThat(ids().count { it == "a" }).isEqualTo(1)
+        advanceTimeBy(2)
+        assertThat(ids().count { it == "a" }).isEqualTo(2)
+    }
+
+    @Test
+    fun targetRemovedAndReturnedWaitsForItsInterval() = runTest {
+        val store = Store(shadow(1, target("a", 30)))
+        loop(store).start()
+        advanceTimeBy(5_000)
+        store.save(shadow(2))
+        advanceTimeBy(5_000)
+        store.save(shadow(3, target("a", 30)))
+        runCurrent()
+        assertThat(ids()).containsExactly("a")
+
+        advanceTimeBy(20_001)
+        assertThat(ids()).containsExactly("a", "a")
     }
 
     @Test

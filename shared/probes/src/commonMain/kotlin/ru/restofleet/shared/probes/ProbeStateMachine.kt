@@ -43,6 +43,12 @@ class ProbeStateMachine(failThreshold: Int = DEFAULT_FAIL_THRESHOLD) {
         return if (consecutiveFailures >= failThreshold) moveTo(ProbeState.DOWN, error) else null
     }
 
+    /** Независимая копия с тем же состоянием: «что будет, если учесть итог» без изменения этого автомата. */
+    fun copy(): ProbeStateMachine = ProbeStateMachine(failThreshold).also {
+        it.state = state
+        it.consecutiveFailures = consecutiveFailures
+    }
+
     /** Итог пробы целиком: неудача без класса считается [ProbeErrorClass.OTHER]. */
     fun record(ok: Boolean, error: ProbeErrorClass?): Transition? =
         if (ok) onSuccess() else onFailure(error ?: ProbeErrorClass.OTHER)

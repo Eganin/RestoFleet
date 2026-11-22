@@ -30,14 +30,23 @@ class ProbeStates {
     /** По одной записи на цель, по `id`; цели, убранные из тени, остаются до перезапуска (фильтрует читатель). */
     val statuses: StateFlow<List<ProbeStatus>> = _statuses.asStateFlow()
 
+    /**
+     * Переход, который даст [record], без записи (R-14): `RunProbes` ставит событие в outbox и только потом учитывает
+     * итог, так что сбой outbox не теряет переход — следующая проба получит его снова.
+     */
+    fun preview(target: ProbeTarget, result: ProbeResult): Transition? =
+        (existing(target) ?: ProbeStateMachine(threshold(target))).copy().record(result.ok, result.error)
+
     /** Учитывает итог пробы; переход — только при смене состояния. */
     fun record(target: ProbeTarget, result: ProbeResult): Transition? {
-        val threshold = target.failThreshold.coerceAtLeast(1)
-        val machine = machines[target.id]?.takeIf { it.failThreshold == threshold }
-            ?: ProbeStateMachine(threshold).also { machines[target.id] = it }
+        val machine = existing(target) ?: ProbeStateMachine(threshold(target)).also { machines[target.id] = it }
         val transition = machine.record(result.ok, result.error)
         val status = ProbeStatus(target.id, machine.state, machine.consecutiveFailures, result)
         _statuses.value = (_statuses.value.filterNot { it.targetId == target.id } + status).sortedBy { it.targetId }
         return transition
     }
+
+    private fun threshold(target: ProbeTarget) = target.failThreshold.coerceAtLeast(1)
+
+    private fun existing(target: ProbeTarget) = machines[target.id]?.takeIf { it.failThreshold == threshold(target) }
 }

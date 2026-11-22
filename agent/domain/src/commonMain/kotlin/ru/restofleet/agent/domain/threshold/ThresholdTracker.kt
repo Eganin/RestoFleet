@@ -17,6 +17,16 @@ import ru.restofleet.agent.domain.model.Thresholds
 class ThresholdTracker {
     private val inZone = mutableSetOf<ThresholdMetric>()
 
+    /** Снимок зон (R-14): [restore] возвращает его, если событие не удалось поставить в outbox. */
+    fun checkpoint(): Checkpoint = Checkpoint(inZone.toSet())
+
+    fun restore(checkpoint: Checkpoint) {
+        inZone.clear()
+        inZone += checkpoint.zones
+    }
+
+    class Checkpoint internal constructor(internal val zones: Set<ThresholdMetric>)
+
     fun evaluate(snapshot: TelemetrySnapshot, limits: Thresholds): List<ThresholdCrossed> {
         val battery = snapshot.battery
         val batteryLimit = limits.batteryLowPct.toDouble()

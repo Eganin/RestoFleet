@@ -17,6 +17,23 @@ class ForegroundTracker {
     private val absentSince = mutableMapOf<String, Long>()
     private val reported = mutableSetOf<String>()
 
+    /** Снимок состояния (R-14): [restore] возвращает его, если событие не удалось поставить в outbox. */
+    fun checkpoint(): Checkpoint = Checkpoint(current, absentSince.toMap(), reported.toSet())
+
+    fun restore(checkpoint: Checkpoint) {
+        current = checkpoint.current
+        absentSince.clear()
+        absentSince += checkpoint.absentSince
+        reported.clear()
+        reported += checkpoint.reported
+    }
+
+    class Checkpoint internal constructor(
+        internal val current: String?,
+        internal val absentSince: Map<String, Long>,
+        internal val reported: Set<String>,
+    )
+
     fun evaluate(ts: Long, foreground: ForegroundApp?, watched: List<String>, limitMin: Int): List<AgentEvent> {
         if (foreground == null) return emptyList()
         val events = mutableListOf<AgentEvent>()

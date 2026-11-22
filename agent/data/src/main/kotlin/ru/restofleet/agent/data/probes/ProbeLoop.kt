@@ -14,13 +14,16 @@ import kotlinx.coroutines.launch
 import ru.restofleet.agent.domain.model.ProbeTarget
 import ru.restofleet.agent.domain.port.ShadowStore
 import ru.restofleet.shared.probes.ProbeSchedule
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Расписание плановых проб: цели из сохранённой тени, каждая проверяется раз в свой `intervalSec`, но не чаще
  * минимума [schedule] (`shared:probes`, НФТ «нагрузка проверок», реш. 228: 30 с, на стенде 5 с); первая проба сразу.
  * Сам прогон — [run] (`RunProbes`: автомат `up ↔ down`, `probe_state`, отчёт `probe`, офлайн — outbox). Смена набора
- * целей перезапускает цикл; прочие изменения тени (интервал телеметрии, пороги) его не трогают. Каждый прогон
+ * целей перезапускает цикл; прочие изменения тени (интервал телеметрии, пороги) его не трогают. Интервал держится и
+ * через смену набора (R-15): цель с тем же адресом проверяется не раньше `последняя проба + интервал`, новая — сразу;
+ * время — монотонное [nowMs]. Каждый прогон
  * изолирован (канон 78: сбой не останавливает цикл, `Error` не ловится), в лог идёт только класс исключения.
  */
 class ProbeLoop(
@@ -29,8 +32,12 @@ class ProbeLoop(
     private val run: suspend (ProbeTarget) -> Unit,
     private val schedule: ProbeSchedule = ProbeSchedule(),
     private val log: (String) -> Unit = {},
+    private val nowMs: () -> Long = { System.nanoTime() / NANOS_IN_MS },
 ) {
     private var job: Job? = null
+
+    /** Момент последней пробы по адресу цели (R-15); переживает перезапуск цикла при смене набора целей. */
+    private val lastRun = ConcurrentHashMap<String, Long>()
 
     @Synchronized
     fun start() {
@@ -63,7 +70,9 @@ class ProbeLoop(
 
     private suspend fun runTarget(target: ProbeTarget) {
         val intervalMs = schedule.intervalMs(target.intervalSec)
+        lastRun[target.url]?.let { last -> (last + intervalMs - nowMs()).takeIf { it > 0 }?.let { delay(it) } }
         while (currentCoroutineContext().isActive) {
+            lastRun[target.url] = nowMs()
             guarded("probe") { run(target) }
             delay(intervalMs)
         }
@@ -83,5 +92,6 @@ class ProbeLoop(
 
     private companion object {
         const val RESTART_DELAY_MS = 10_000L
+        const val NANOS_IN_MS = 1_000_000L
     }
 }

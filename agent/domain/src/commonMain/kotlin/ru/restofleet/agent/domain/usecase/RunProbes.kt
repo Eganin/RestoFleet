@@ -35,7 +35,8 @@ class RunProbes(
         val results = coroutineScope { targets.map { async { executor.probe(it) } }.awaitAll() }
         mutex.withLock {
             targets.zip(results).forEach { (target, result) ->
-                states.record(target, result)?.let { transition ->
+                // R-14: сначала событие в outbox, потом смена состояния — сбой outbox не теряет переход
+                states.preview(target, result)?.let { transition ->
                     publishEvent(
                         AgentEvent.ProbeStateChanged(
                             ts = result.ts,
@@ -46,6 +47,7 @@ class RunProbes(
                         ),
                     )
                 }
+                states.record(target, result)
             }
         }
         publishProbes(results)
