@@ -4,6 +4,7 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.flow.map
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.Module
 import org.koin.core.qualifier.named
@@ -32,6 +33,7 @@ import ru.restofleet.agent.data.shadow.FileShadowStore
 import ru.restofleet.agent.domain.capability.CapabilityCheck
 import ru.restofleet.agent.domain.diagnostics.DiagnosticsCommands
 import ru.restofleet.agent.domain.diagnostics.OnDemandChecks
+import ru.restofleet.agent.domain.model.NetworkType
 import ru.restofleet.agent.domain.port.BrokerSession
 import ru.restofleet.agent.domain.port.ConnectionMonitor
 import ru.restofleet.agent.domain.port.FlushTrigger
@@ -106,6 +108,8 @@ val mqttModule: Module = module {
             statusPayloads = get(),
             scope = get(SESSION_SCOPE),
             log = { Log.i(TAG, it) },
+            // V-4: возврат сети прерывает паузу переподключения
+            networkAvailable = { get<NetworkChangeObserver>().changes().map { it.type != NetworkType.NONE } },
         )
     }
     single<BrokerSession> { get<MqttBrokerSession>() }

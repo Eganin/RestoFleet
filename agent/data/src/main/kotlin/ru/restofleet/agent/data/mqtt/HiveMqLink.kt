@@ -120,7 +120,7 @@ internal class HiveMqLink(
 
     override suspend fun publish(message: OutboundMessage): Outcome<Unit, MqttError> {
         if (!client.state.isConnected) return Outcome.Failure(MqttError.NotConnected)
-        return try {
+        return awaitPublish {
             val publish = Mqtt5Publish.builder()
                 .topic(message.topic)
                 .payload(message.payload)
@@ -128,14 +128,7 @@ internal class HiveMqLink(
                 .retain(message.retain)
                 .apply { message.correlationData?.let { correlationData(it) } }
                 .build()
-            // Ошибочный PUBACK HiveMQ 1.4.2 отдаёт исключением Mqtt5PubAckException: его разбирает MqttErrorMapper
-            val result = withTimeoutOrNull(PUBLISH_TIMEOUT_MS) { client.publish(publish).await() }
-            if (result == null) Outcome.Failure(MqttError.Failed("publish_timeout")) else Outcome.Success(Unit)
-        } catch (e: CancellationException) {
-            currentCoroutineContext().ensureActive()
-            Outcome.Failure(MqttErrorMapper.fromConnect(e))
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            Outcome.Failure(MqttErrorMapper.fromConnect(e))
+            client.publish(publish).await()
         }
     }
 
@@ -210,7 +203,26 @@ internal class HiveMqLink(
     private companion object {
         const val RECONNECT_INITIAL_S = 1L
         const val RECONNECT_MAX_S = 120L
-        const val PUBLISH_TIMEOUT_MS = 10_000L
         const val CLOSE_TIMEOUT_MS = 3_000L
     }
+}
+
+/** Предел ожидания PUBACK (FR-AG-79): после него публикация — `publish_timeout`, сообщение остаётся в outbox. */
+internal const val PUBLISH_TIMEOUT_MS = 10_000L
+
+/**
+ * Ожидание публикации не дольше [timeoutMs] (FR-AG-79). Ошибочный PUBACK HiveMQ 1.4.2 отдаёт исключением
+ * `Mqtt5PubAckException` — его разбирает [MqttErrorMapper]. Настоящая отмена пробрасывается.
+ */
+internal suspend fun awaitPublish(
+    timeoutMs: Long = PUBLISH_TIMEOUT_MS,
+    send: suspend () -> Unit,
+): Outcome<Unit, MqttError> = try {
+    val result = withTimeoutOrNull(timeoutMs) { send() }
+    if (result == null) Outcome.Failure(MqttError.Failed("publish_timeout")) else Outcome.Success(Unit)
+} catch (e: CancellationException) {
+    currentCoroutineContext().ensureActive()
+    Outcome.Failure(MqttErrorMapper.fromConnect(e))
+} catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+    Outcome.Failure(MqttErrorMapper.fromConnect(e))
 }

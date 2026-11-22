@@ -2,6 +2,7 @@ package ru.restofleet.agent.data.mqtt
 
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
@@ -11,6 +12,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -49,6 +52,10 @@ data class SessionStatus(
  * Потерянное соединение клиент восстанавливает сам и сообщает `Connected` с новым `connId`. Смена учётки во время
  * работы: `offline`/`reconfigure`, закрытие, новое подключение.
  *
+ * Возврат сети (V-4, [networkAvailable] → [NetworkReturns]) прерывает паузу 1..120 с ретрайного отказа, а у
+ * потерянного соединения — паузу автопереподключения клиента: клиент закрывается без `offline` (связи нет, сработает
+ * will) и подключение начинается сразу. Пауза `auth_failed` и ожидание смены учётки возвратом сети не прерываются.
+ *
  * Входящие команды и `desired` отдаются холодными потоками [commands]/[desired] для одного потребителя: ack брокеру
  * уходит после возврата потребителя (`emit` не возвращается, пока блок `collect` не завершён). Если процесс умрёт до
  * ack, брокер передоставит сообщение, дубль команды отбросит `ProcessedCommands`.
@@ -66,12 +73,16 @@ internal class MqttBrokerSession(
     private val statusPayloads: StatusPayloads,
     private val scope: CoroutineScope,
     private val log: (String) -> Unit = {},
+    /** Есть ли сеть сейчас (`NetworkChangeObserver`); холодный поток собирается на время работы цикла. */
+    private val networkAvailable: () -> Flow<Boolean> = { emptyFlow() },
 ) : BrokerSession, MessagePublisher {
     private val _status = MutableStateFlow(SessionStatus(SessionState.DISCONNECTED))
     private val _state = MutableStateFlow(SessionState.DISCONNECTED)
     private val _epoch = MutableStateFlow(0)
     private val incomingRouter = IncomingRouter(log)
     private val prerequisites = SessionPrerequisites(credentials, caSource, log)
+    private val returns = NetworkReturns()
+    private val waits = ReconnectWaits(changes, returns)
 
     @Volatile private var active: Active? = null
     private var job: Job? = null
@@ -120,15 +131,21 @@ internal class MqttBrokerSession(
      * маршрутизация входящих) не убивает цикл и не роняет процесс, а даёт `internal_error` и паузу 1..120 с.
      * Настоящая отмена и `Error` пробрасываются.
      */
-    private suspend fun runLoop() {
+    private suspend fun runLoop() = coroutineScope {
+        // UNDISPATCHED: текущее состояние сети учтено до первой паузы, иначе оно прервало бы её как «возврат»
+        val network = launch(start = CoroutineStart.UNDISPATCHED) {
+            networkAvailable().catch { log("network observer failed: ${it::class.java.simpleName}") }
+                .collect(returns::onNetwork)
+        }
         val pauses = ReconnectPauses()
         while (currentCoroutineContext().isActive) {
             val seen = changes.current()
             val crash = isolatedIteration { iteration(seen, pauses) } ?: continue
             log("session iteration failed: ${crash.detail}")
             publishStatus(SessionState.DISCONNECTED, crash)
-            changes.pauseAfter(crash, seen, pauses)
+            waits.pauseAfter(crash, seen, pauses)
         }
+        network.cancel()
     }
 
     /** Учётка -> CA -> подключение; нет учётки или CA — статус с причиной и пауза по [ReconnectPauses]. */
@@ -139,7 +156,7 @@ internal class MqttBrokerSession(
         if (settings != null && trust is Outcome.Success) return attempt(settings, trust.value, seen, pauses)
         val error = (loaded as? Outcome.Failure)?.error ?: (trust as Outcome.Failure).error
         publishStatus(SessionState.DISCONNECTED, error, settings?.let(::endpointOf))
-        changes.pauseAfter(error, seen, pauses)
+        waits.pauseAfter(error, seen, pauses)
     }
 
     private suspend fun attempt(
@@ -155,14 +172,14 @@ internal class MqttBrokerSession(
                 link.closeQuietly(log)
                 log("connect failed: ${first.error.code}")
                 publishStatus(SessionState.DISCONNECTED, first.error, endpointOf(settings))
-                changes.pauseAfter(first.error, seen, pauses)
+                waits.pauseAfter(first.error, seen, pauses)
             }
             is Outcome.Success -> {
                 pauses.reset()
                 val end = serve(link, settings, first.value, seen)
                 if (end is Ended.WithError) {
                     publishStatus(SessionState.DISCONNECTED, end.error, endpointOf(settings))
-                    changes.pauseAfter(end.error, seen, pauses)
+                    waits.pauseAfter(end.error, seen, pauses)
                 }
             }
         }
@@ -170,6 +187,9 @@ internal class MqttBrokerSession(
 
     private sealed interface Ended {
         data object Reconfigure : Ended
+
+        /** Сеть вернулась, пока клиент ждал автопереподключения: новое подключение без паузы (V-4). */
+        data object NetworkBack : Ended
         data class WithError(val error: MqttError) : Ended
     }
 
@@ -187,6 +207,10 @@ internal class MqttBrokerSession(
                 val watcher = launch {
                     changes.awaitChangeFrom(seen)
                     ended.complete(Ended.Reconfigure)
+                }
+                val network = launch {
+                    waits.awaitNetworkBack { _state.value == SessionState.CONNECTING }
+                    ended.complete(Ended.NetworkBack)
                 }
                 val events = launch {
                     connId = firstConnId
@@ -211,8 +235,13 @@ internal class MqttBrokerSession(
                 }
                 val result = ended.await()
                 if (result is Ended.Reconfigure) goodbyeReason = RECONFIGURE_REASON
+                if (result is Ended.NetworkBack) {
+                    log("network is back: reconnecting now")
+                    goodbyeReason = null
+                }
                 readers.cancel()
                 watcher.cancel()
+                network.cancel()
                 events.cancel()
                 result
             }
@@ -275,12 +304,6 @@ internal class MqttBrokerSession(
 }
 
 private fun endpointOf(s: BrokerSettings) = "${s.host}:${s.port}"
-
-/** Пауза по [ReconnectPauses] (`null` — ждать смены учётки); любую паузу прерывает смена учётки. */
-private suspend fun CredentialChanges.pauseAfter(error: MqttError, seen: Long, pauses: ReconnectPauses) {
-    val pause = pauses.next(error)
-    if (pause != null) awaitChangeOrTimeout(seen, pause) else awaitChangeFrom(seen)
-}
 
 /** Изоляция итерации цикла (решение 175): `null` — без сбоя; в причину попадает только класс исключения. */
 @Suppress("TooGenericExceptionCaught", "SwallowedException") // изоляция итерации (канон 78)
