@@ -1,10 +1,12 @@
 package ru.restofleet.console.feature.shadow.ui.viewmodel
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import ru.restofleet.console.core.mvi.BaseMviViewModel
 import ru.restofleet.console.core.mvi.MviStore
 import ru.restofleet.console.core.mvi.defaultViewModelScope
+import ru.restofleet.console.feature.shadow.domain.AwaitShadowApplied
 import ru.restofleet.console.feature.shadow.domain.LoadShadow
 import ru.restofleet.console.feature.shadow.domain.RenderEditableJson
 import ru.restofleet.console.feature.shadow.domain.SaveResult
@@ -20,11 +22,14 @@ class ShadowViewModel(
     private val saveForm: SaveShadowForm,
     private val saveJson: SaveShadowJson,
     private val renderJson: RenderEditableJson,
+    private val awaitApplied: AwaitShadowApplied,
     scope: CoroutineScope = defaultViewModelScope(),
 ) : BaseMviViewModel<ShadowSession, ShadowUiState, ShadowIntent, ShadowAction, ShadowEffect>(
     store = MviStore(ShadowSession(), ShadowReducer(), ShadowUiStateMapper()::map),
     scope = scope,
 ) {
+    private var watch: Job? = null
+
     init {
         load()
     }
@@ -53,6 +58,12 @@ class ShadowViewModel(
         }
     }
 
+    /** V-4: экран сам переходит в «Применено», когда агент применил desired. */
+    private fun followUntilApplied() {
+        watch?.cancel()
+        watch = scope.launch { awaitApplied(deviceId).collect { reduce(ShadowAction.Loaded(it)) } }
+    }
+
     private fun save() {
         val s = state
         val shadow = s.state ?: return
@@ -65,7 +76,10 @@ class ShadowViewModel(
                 ShadowMode.View -> SaveResult.NoChanges
             }
             when (result) {
-                is SaveResult.Saved -> reduce(ShadowAction.Saved(result.state))
+                is SaveResult.Saved -> {
+                    reduce(ShadowAction.Saved(result.state))
+                    if (result.state.pending) followUntilApplied()
+                }
                 SaveResult.NoChanges -> reduce(ShadowAction.NothingToSave)
                 is SaveResult.Invalid -> reduce(ShadowAction.Rejected(result.errors))
                 is SaveResult.Failed -> reduce(ShadowAction.SaveFailed(result.error))

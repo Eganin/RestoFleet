@@ -36,6 +36,8 @@ kotlin {
             implementation(libs.turbine)
             implementation(libs.mockk)
             implementation(projects.console.core.testing)
+            implementation(libs.compose.mp.ui.test)
+            implementation(libs.compose.mp.desktop.macos.arm64)
         }
     }
 }

@@ -8,6 +8,7 @@ import ru.restofleet.console.feature.shadow.component.ShadowComponentFactory
 import ru.restofleet.console.feature.shadow.data.ShadowApi
 import ru.restofleet.console.feature.shadow.data.ShadowJsonCodec
 import ru.restofleet.console.feature.shadow.data.ShadowRepositoryImpl
+import ru.restofleet.console.feature.shadow.domain.AwaitShadowApplied
 import ru.restofleet.console.feature.shadow.domain.BuildDesiredPatch
 import ru.restofleet.console.feature.shadow.domain.LoadShadow
 import ru.restofleet.console.feature.shadow.domain.RenderEditableJson
@@ -28,9 +29,10 @@ val shadowModule = module {
     factory { SaveShadowForm(get(), get()) }
     factory { SaveShadowJson(get(), get()) }
     factory { RenderEditableJson(get()) }
+    factory { AwaitShadowApplied(get()) }
     single<ShadowComponentFactory> {
         ShadowComponentFactory { context, deviceId ->
-            ShadowComponent(context) { ShadowViewModel(deviceId, get(), get(), get(), get()) }
+            ShadowComponent(context) { ShadowViewModel(deviceId, get(), get(), get(), get(), get()) }
         }
     }
 }

@@ -39,6 +39,22 @@ class EvaluateTest(unittest.TestCase):
         self.assertEqual(outside["correct"], 0)
         self.assertEqual(outside["matrix"][("backend_local", "none")], 1)
 
+    def test_incident_of_the_previous_round_closed_before_the_row_does_not_match(self):
+        # V-5: раунды каждые 5 мин, инцидент прошлого раунда закрыт за 84 с до начала строки — допуск только вперёд
+        row = [truth("S8-01", "none", 10 * MIN, 12 * MIN)]
+        previous = [incident("backend_global", ["S8-01"], 6 * MIN, 10 * MIN - 84 * 1000)]
+        r = accuracy.evaluate(row, previous, [])
+        self.assertEqual(r["correct"], 1)
+        dev = [truth("S8-02", "device", 10 * MIN, 12 * MIN, device="d-1")]
+        self.assertEqual(accuracy.evaluate(dev, [], [alert("d-1", 7 * MIN, 9 * MIN)])["correct"], 0)
+
+    def test_tolerance_still_covers_detection_and_closing_delay_after_the_row(self):
+        row = [truth("S8-01", "backend_global", 10 * MIN, 12 * MIN)]
+        late_start = [incident("backend_global", ["S8-01"], 12 * MIN + 2 * MIN, 16 * MIN)]
+        still_open = [incident("backend_global", ["S8-01"], 9 * MIN, 11 * MIN)]
+        self.assertEqual(accuracy.evaluate(row, late_start, [])["correct"], 1)
+        self.assertEqual(accuracy.evaluate(row, still_open, [])["correct"], 1)
+
     def test_wrong_class_is_recorded_in_the_matrix(self):
         r = accuracy.evaluate([truth("S8-03", "restaurant_network", 0, MIN)],
                               [incident("backend_local", ["S8-03"], 0, MIN)], [])

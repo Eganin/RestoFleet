@@ -6,8 +6,10 @@ import ru.restofleet.console.core.designsystem.StatusTone
 @Immutable
 data class CounterUi(val label: String, val value: String, val caption: String?, val tone: StatusTone?)
 
+/** [key] — уникальный ключ строки в списке (V-1). */
 @Immutable
 data class ProblemUi(
+    val key: String,
     val restaurantId: String,
     val restaurantName: String,
     val line: String,
@@ -16,8 +18,10 @@ data class ProblemUi(
     val deviceId: String?,
 )
 
+/** [key] — уникальный ключ строки в списке: id тревоги (V-1). */
 @Immutable
 data class RecentUi(
+    val key: String,
     val deviceId: String,
     val title: String,
     val where: String,

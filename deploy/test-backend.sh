@@ -108,10 +108,21 @@ pass "upgrade /api/v1/ws без токена → 401"
 
 # --- 3. ресторан и код регистрации ---
 suffix="$(date +%s)"
-printf '{"code":"SMOKE-%s","name":"Smoke","city":"Тест","timezone":"Europe/Moscow"}' "$suffix" >"$tmp/restaurant.json"
-[ "$(api POST /api/v1/restaurants "$tmp/restaurant.json" auth)" = 201 ] || fail "ресторан: $(cat "$tmp/resp")"
-restaurant_id="$(jget "$tmp/resp" id)"
-pass "ресторан SMOKE-$suffix создан"
+# Один ресторан SMOKE на все прогоны (V-10, реш. 540): удаления ресторанов в API нет, а новый ресторан на каждый
+# прогон копился в списках консоли. Если он уже есть (409), берётся его id; устройство прогона выводится в шаге 9.
+printf '{"code":"SMOKE","name":"Smoke (test-backend.sh)","city":"Тест","timezone":"Europe/Moscow"}' >"$tmp/restaurant.json"
+created="$(api POST /api/v1/restaurants "$tmp/restaurant.json" auth)"
+case "$created" in
+  201) restaurant_id="$(jget "$tmp/resp" id)" ;;
+  409)
+    [ "$(api GET /api/v1/restaurants "" auth)" = 200 ] || fail "список ресторанов: $(cat "$tmp/resp")"
+    restaurant_id="$(python3 -I -c 'import json,sys
+print(next((r["id"] for r in json.load(open(sys.argv[1]))["items"] if r["code"] == "SMOKE"), ""))' "$tmp/resp")"
+    ;;
+  *) fail "ресторан: $(cat "$tmp/resp")" ;;
+esac
+[ -n "$restaurant_id" ] || fail "ресторан SMOKE не найден"
+pass "ресторан SMOKE готов (повторный прогон его не дублирует)"
 printf '{"restaurantId":"%s","role":"kitchen","name":"Smoke-кухня"}' "$restaurant_id" >"$tmp/token.json"
 [ "$(api POST /api/v1/provisioning/tokens "$tmp/token.json" auth)" = 201 ] || fail "код: $(jget "$tmp/resp" code)"
 jget "$tmp/resp" code >"$tmp/provisioning-code"

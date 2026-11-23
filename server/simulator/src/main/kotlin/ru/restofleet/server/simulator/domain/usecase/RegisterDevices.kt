@@ -8,6 +8,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import ru.restofleet.server.simulator.domain.model.RegistrationReport
 import ru.restofleet.server.simulator.domain.model.RegistrationRequest
+import ru.restofleet.server.simulator.domain.model.Slot
 import ru.restofleet.server.simulator.domain.plan.DevicePlan
 import ru.restofleet.server.simulator.domain.port.ControlApi
 import ru.restofleet.server.simulator.domain.port.CredentialStore
@@ -18,7 +19,8 @@ import ru.restofleet.shared.kernel.Clock
 
 /**
  * Регистрация виртуальных устройств тем же путём, что агент (FR-SM-08, арх. разд. 10): недостающие до
- * [RegistrationRequest.devices] устройства раскладываются по ресторанам ([DevicePlan]), коды выпускаются пакетами
+ * [RegistrationRequest.devices] устройства раскладываются по ресторанам ([DevicePlan.missing] — недостающие
+ * слоты плана), коды выпускаются пакетами
  * (`tokens:batch`, ≤ 1000 за вызов, по ресторану и роли) и гасятся `/provision` параллельно. Учётки дописываются в
  * кэш по порядку слотов пачками — после обрыва дорегистрация продолжит с места остановки, а уже записанные учётки
  * переиспользуются обоими режимами. Временные отказы (429, 503, сеть) повторяются с паузой.
@@ -32,12 +34,15 @@ class RegisterDevices(
 ) {
     suspend operator fun invoke(request: RegistrationRequest): RegistrationReport {
         val started = clock.nowMillis()
-        val cached = store.load().size
+        val stored = store.load()
+        val cached = stored.size
         val failures = mutableMapOf<String, Int>()
         var registered = 0
         if (cached < request.devices) {
             val restaurants = request.restaurantIds ?: control.restaurants()
-            val slots = DevicePlan.slots(restaurants, request.mix, cached, request.devices)
+            val slots = DevicePlan.missing(
+                restaurants, request.mix, stored.map { Slot(it.restaurantId, it.role) }, request.devices,
+            ).take(request.devices - cached)
             val codes = arrayOfNulls<String>(slots.size)
             slots.withIndex().groupBy({ it.value }, { it.index }).forEach { (slot, indices) ->
                 indices.chunked(MAX_BATCH).forEach { chunk ->

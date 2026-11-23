@@ -198,6 +198,35 @@ class IncidentLifecycleTest {
         assertThat(tick()).isEqualTo(0)
     }
 
+    /**
+     * V-6: рестораны восстанавливаются в разные тики — состав глобального инцидента накапливается (охват за время
+     * жизни), а «сейчас затронутые» — в доказательствах и в сводке.
+     */
+    @Test
+    fun globalIncidentKeepsEveryRestaurantItEverCoveredWhileEvidenceAndSummaryShowTheCurrentOnes() = runTest {
+        restaurantIds.forEach { api(it, down = true) }
+        advance()
+        val global = open().single()
+        assertThat(global.restaurants).hasSize(12)
+
+        restaurantIds.take(6).forEach { api(it, down = false) }
+        advance()
+        val narrowed = w.db.state.incidents.getValue(global.id)
+        assertThat(narrowed.isOpen).isTrue()
+        assertThat(narrowed.restaurants.map { it.value }).containsExactlyElementsIn(restaurantIds)
+        assertThat(narrowed.evidence.restaurants.map { it.restaurantId.value })
+            .containsExactlyElementsIn(restaurantIds.drop(6))
+        val summary = GetSummary(w.fleet, w.alerts, w.restaurants, w.incidents, w.tx, w.clock)()
+        assertThat(summary.problems.map { it.restaurant.id.value }).containsExactlyElementsIn(restaurantIds.drop(6))
+
+        allHealthy()
+        advance()
+        advance()
+        val closed = w.db.state.incidents.getValue(global.id)
+        assertThat(closed.resolveReason).isEqualTo(ResolveReason.CLEARED)
+        assertThat(closed.restaurants).hasSize(12)
+    }
+
     /** RV-5: подтверждение, закоммиченное между чтением открытых инцидентов и записью тика, не затирается. */
     @Test
     fun acknowledgementCommittedWhileTheTickRunsIsKept() = runTest {

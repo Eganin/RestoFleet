@@ -52,8 +52,9 @@ object SummaryBuilder {
         val active = alerts.filter { it.alert.isActive && it.alert.parentIncidentId == null }
         val byId = restaurants.associateBy { it.id }
         val open = incidents.filter { it.isOpen }
+        // Затронутые сейчас — по доказательствам последнего тика; `restaurants` — охват за жизнь инцидента (V-6)
         val fromIncidents = open.flatMap { incident ->
-            incident.restaurants.mapNotNull { id ->
+            incident.evidence.restaurants.map { it.restaurantId }.mapNotNull { id ->
                 byId[id]?.let { problemOf(it, incident, devices.byRestaurant[id] ?: 0) }
             }
         }.distinctBy { it.restaurant.id }
