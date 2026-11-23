@@ -84,11 +84,19 @@ pass "вход admin (JWT)"
 printf '{"refreshToken":"%s"}' "$(cat "$tmp/refresh-token")" >"$tmp/refresh1.json"
 [ "$(api POST /api/v1/auth/refresh "$tmp/refresh1.json")" = 200 ] || fail "refresh: $(jget "$tmp/resp" code)"
 jget "$tmp/resp" refreshToken >"$tmp/refresh-token-2"
-printf '{"refreshToken":"%s"}' "$(cat "$tmp/refresh-token-2")" >"$tmp/refresh2.json"
 pass "POST /auth/refresh: новая пара"
-[ "$(api POST /api/v1/auth/refresh "$tmp/refresh1.json")" = 401 ] || fail "повтор погашенного refresh не 401"
-[ "$(api POST /api/v1/auth/refresh "$tmp/refresh2.json")" = 401 ] || fail "после повтора погашенного свежий refresh жив"
-pass "повтор погашенного refresh → 401 и отзыв всех токенов пользователя"
+# Окно повтора (реш. 531, RV-4): ответ потерян, преемник не использован → тот же токен даёт новую пару
+[ "$(api POST /api/v1/auth/refresh "$tmp/refresh1.json")" = 200 ] || fail "повтор refresh в окне не 200: $(jget "$tmp/resp" code)"
+jget "$tmp/resp" refreshToken >"$tmp/refresh-token-3"
+printf '{"refreshToken":"%s"}' "$(cat "$tmp/refresh-token-3")" >"$tmp/refresh2.json"
+pass "повтор refresh в окне 60 с при неиспользованном преемнике → 200 (потерянный ответ)"
+[ "$(api POST /api/v1/auth/refresh "$tmp/refresh2.json")" = 200 ] || fail "refresh новой пары: $(jget "$tmp/resp" code)"
+jget "$tmp/resp" refreshToken >"$tmp/refresh-token-4"
+printf '{"refreshToken":"%s"}' "$(cat "$tmp/refresh-token-4")" >"$tmp/refresh3.json"
+# Преемник уже использован → повтор исходного токена — признак кражи (реш. 239)
+[ "$(api POST /api/v1/auth/refresh "$tmp/refresh1.json")" = 401 ] || fail "повтор refresh после использования преемника не 401"
+[ "$(api POST /api/v1/auth/refresh "$tmp/refresh3.json")" = 401 ] || fail "после повтора погашенного свежий refresh жив"
+pass "повтор refresh после использования преемника → 401 и отзыв всех токенов пользователя"
 if [ -s out/support-password ]; then
   printf '{"login":"support","password":"%s"}' "$(cat out/support-password)" >"$tmp/login-support.json"
   [ "$(api POST /api/v1/auth/login "$tmp/login-support.json")" = 200 ] || fail "вход support: $(jget "$tmp/resp" code)"
@@ -265,7 +273,8 @@ pass "выведенная учётка: брокер отказывает в п
 patterns="$tmp/patterns"
 {
   cat out/admin-password out/jwt-secret out/postgres-password out/backend-mqtt-password
-  cat "$tmp/device-password" "$tmp/provisioning-code" "$tmp/access-token" "$tmp/refresh-token" "$tmp/refresh-token-2"
+  cat "$tmp/device-password" "$tmp/provisioning-code" "$tmp/access-token" "$tmp/refresh-token" \
+    "$tmp/refresh-token-2" "$tmp/refresh-token-3" "$tmp/refresh-token-4"
   if [ -s "$tmp/refresh-token-support" ]; then cat "$tmp/refresh-token-support" out/support-password; fi
 } | grep -v '^$' >"$patterns"
 leaks="$(docker compose logs --no-color backend migrate 2>/dev/null | grep -cFf "$patterns" || true)"
