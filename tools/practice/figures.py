@@ -6,7 +6,11 @@
   it-landscape      — 1.3, ИТ-ландшафт на уровне блоков по ТЗ 1, 3.1, 3.2, 15 (внутреннее устройство не раскрывается);
   bpmn-as-is        — 2.2, обработка обращения «бэкенд не работает» по допущению architecture.md разд. 1;
   incident-pipeline — 3.1, поток данных подсистемы тревог и инцидентов по плану П (ПМ2, ПМ3);
-  bpmn-to-be        — 5.1, тот же процесс с RestoFleet.
+  bpmn-to-be        — 5.1, тот же процесс с RestoFleet;
+и три рисунка главы 4 из снимков экрана Android-консоли валидации (docs/reports/2-practice/img/, без копий):
+  console-main      — 4.2, обзор, список устройств, карточка устройства (проверки);
+  console-alerts    — 4.2, тревоги: лента, закрытие с комментарием, закрытые автоматически;
+  console-incidents — 4.2, инциденты: список, карточки «бэкенд глобально» и «бэкенд локально».
 
 Запуск (matplotlib — из venv вне репозитория, см. tools/coursework/README.md):
   /tmp/rf-venv/bin/python -I tools/practice/figures.py               # все схемы
@@ -364,11 +368,58 @@ def bpmn_to_be():
     return c.save("bpmn-to-be")
 
 
+# ---------- 4.2 Экраны Android-консоли (снимки валидации) ----------
+
+SHOTS = ROOT / "docs" / "reports" / "2-practice" / "img"
+SHOT_CROP_TOP, SHOT_CROP_BOTTOM = 90, 150     # px снимка 1080×2400: строка состояния и системная навигация
+
+
+def screens(fig_id, names):
+    """Снимки рядом, подписи «а)», «б)», «в)»; высота снимка в отчёте — 8 см (254 dpi)."""
+    from matplotlib import font_manager
+    from PIL import Image, ImageDraw, ImageFont
+
+    shots = []
+    for name in names:
+        im = Image.open(SHOTS / f"p-android-{name}.png").convert("RGB")
+        shots.append(im.crop((0, SHOT_CROP_TOP, im.width, im.height - SHOT_CROP_BOTTOM)))
+    h = 800                                    # px: 8 см при 254 dpi
+    shots = [im.resize((round(im.width * h / im.height), h), Image.LANCZOS) for im in shots]
+    gap, label_h, dpi = 80, 70, 254
+    canvas = Image.new("RGB", (sum(im.width for im in shots) + gap * (len(shots) - 1), h + label_h), "white")
+    font = ImageFont.truetype(font_manager.findfont("DejaVu Sans"), round(10 / 72 * dpi))
+    draw = ImageDraw.Draw(canvas)
+    x = 0
+    for im, label in zip(shots, ("а)", "б)", "в)", "г)")):
+        canvas.paste(im, (x, 0))
+        draw.rectangle((x, 0, x + im.width - 1, h - 1), outline=(150, 150, 150), width=2)
+        draw.text((x + im.width / 2, h + label_h / 2), label, fill=(34, 34, 34), font=font, anchor="mm")
+        x += im.width + gap
+    path = SRC / "img" / f"{fig_id}.png"
+    canvas.save(path, dpi=(dpi, dpi), optimize=True)
+    return path
+
+
+def console_main():
+    return screens("console-main", ("02-dashboard-r08", "06-devices", "11-checks"))
+
+
+def console_alerts():
+    return screens("console-alerts", ("13-alerts", "15-alert-resolve-dialog", "14-alerts-resolved-auto"))
+
+
+def console_incidents():
+    return screens("console-incidents", ("03-incidents", "04-incident-r08", "04b-incident-r09"))
+
+
 FIGURES = {
     "it-landscape": it_landscape,
     "bpmn-as-is": bpmn_as_is,
     "incident-pipeline": incident_pipeline,
     "bpmn-to-be": bpmn_to_be,
+    "console-main": console_main,
+    "console-alerts": console_alerts,
+    "console-incidents": console_incidents,
 }
 
 

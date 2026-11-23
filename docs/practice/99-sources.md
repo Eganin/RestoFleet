@@ -11,3 +11,13 @@
 9. Jones, M. RFC 7519. JSON Web Token (JWT) / M. Jones, J. Bradley, N. Sakimura. — IETF, 2015. — URL: https://www.rfc-editor.org/rfc/rfc7519 (дата обращения: 22.11.2026). — Текст : электронный.
 10. Hardt, D. RFC 6749. The OAuth 2.0 Authorization Framework / D. Hardt. — IETF, 2012. — URL: https://www.rfc-editor.org/rfc/rfc6749 (дата обращения: 22.11.2026). — Текст : электронный.
 11. Lodderstedt, T. RFC 9700. Best Current Practice for OAuth 2.0 Security / T. Lodderstedt, J. Bradley, A. Labunets, D. Fett. — IETF, 2025. — URL: https://www.rfc-editor.org/rfc/rfc9700 (дата обращения: 22.11.2026). — Текст : электронный.
+12. Ktor Documentation // JetBrains. — URL: https://ktor.io/docs/ (дата обращения: 11.11.2026). — Текст : электронный.
+13. Exposed Documentation // JetBrains. — URL: https://www.jetbrains.com/help/exposed/home.html (дата обращения: 11.11.2026). — Текст : электронный.
+14. Compose Multiplatform // JetBrains. — URL: https://kotlinlang.org/compose-multiplatform/ (дата обращения: 23.11.2026). — Текст : электронный.
+15. Мартин, Р. Чистая архитектура. Искусство разработки программного обеспечения / Р. Мартин ; перевод с английского. — Санкт-Петербург : Питер, 2018. — 352 с. — (Библиотека программиста). — ISBN 978-5-4461-0772-8. — Текст : непосредственный.
+16. Ivanov, A. Decompose : репозиторий / A. Ivanov // GitHub. — URL: https://github.com/arkivanov/Decompose (дата обращения: 23.11.2026). — Текст : электронный.
+17. Koin Documentation. — URL: https://insert-koin.io/docs/ (дата обращения: 11.11.2026). — Текст : электронный.
+18. Testcontainers for Java. — URL: https://java.testcontainers.org/ (дата обращения: 11.11.2026). — Текст : электронный.
+19. Kover : репозиторий // GitHub. — URL: https://github.com/Kotlin/kotlinx-kover (дата обращения: 11.11.2026). — Текст : электронный.
+20. What is Konsist? // Konsist Documentation. — URL: https://docs.konsist.lemonappdev.com/ (дата обращения: 11.11.2026). — Текст : электронный.
+21. Toxiproxy : репозиторий // GitHub. — URL: https://github.com/Shopify/toxiproxy (дата обращения: 11.11.2026). — Текст : электронный.
