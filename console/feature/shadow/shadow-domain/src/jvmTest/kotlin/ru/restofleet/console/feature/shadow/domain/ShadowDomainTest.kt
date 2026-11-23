@@ -1,6 +1,8 @@
 package ru.restofleet.console.feature.shadow.domain
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import ru.restofleet.console.core.common.ConsoleError
@@ -159,5 +161,27 @@ class ShadowDomainTest {
     @Test
     fun `load delegates`() = runTest {
         assertThat(LoadShadow(Repo(Outcome.Success(state())))("d")).isEqualTo(Outcome.Success(state()))
+    }
+
+    /** V-4: события тени в WS нет — после сохранения тень перечитывается, пока агент не применит desired. */
+    @Test
+    fun `await applied polls until the shadow is no longer pending and gives up after the limit`() = runTest {
+        val repo = Repo(Outcome.Success(state(pending = true)))
+        val await = AwaitShadowApplied(repo, intervalMs = 1_000, attempts = 3)
+        val seen = mutableListOf<Boolean>()
+        val job = launch { await("d").collect { seen += it.pending } }
+        advanceTimeBy(1_001)
+        repo.result = Outcome.Failure(ConsoleError.Network)
+        advanceTimeBy(1_000)
+        repo.result = Outcome.Success(state(pending = false))
+        advanceTimeBy(1_000)
+        // после «применено» опрос заканчивается сам, не дожидаясь лимита попыток
+        assertThat(job.isCompleted).isTrue()
+        assertThat(seen).containsExactly(true, false).inOrder()
+
+        val stuck = mutableListOf<Boolean>()
+        repo.result = Outcome.Success(state(pending = true))
+        AwaitShadowApplied(repo, intervalMs = 1_000, attempts = 3)("d").collect { stuck += it.pending }
+        assertThat(stuck).containsExactly(true, true, true)
     }
 }

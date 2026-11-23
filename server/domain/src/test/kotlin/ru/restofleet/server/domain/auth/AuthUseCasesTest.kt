@@ -14,7 +14,8 @@ class AuthUseCasesTest {
     private val w = World()
     private val upsert = UpsertUser(w.users, w.hasher, w.tx, w.ids, w.clock)
     private val login = Login(w.users, w.sessionIssuer, w.hasher, w.tx, w.clock)
-    private val refresh = RefreshSession(w.refreshTokens, w.users, w.sessionIssuer, w.digest, w.tx, w.clock)
+    private val refresh =
+        RefreshSession(w.refreshTokens, w.users, w.sessionIssuer, w.digest, w.tx, w.clock, w.authSettings)
 
     private val password = "correct horse battery"
 
@@ -76,6 +77,7 @@ class AuthUseCasesTest {
         upsert("admin", password)
         val first = (login("admin", password) as Outcome.Success).value
         val second = (refresh(first.refreshToken) as Outcome.Success).value
+        w.clock.now += AuthSettings.DEFAULT_REUSE_GRACE_MS + 1
         assertThat(refresh(first.refreshToken)).isEqualTo(Outcome.Failure(ServerError.Unauthorized))
         assertThat(refresh(second.refreshToken)).isEqualTo(Outcome.Failure(ServerError.Unauthorized))
         assertThat(w.db.state.refreshTokens.values.all { it.revokedAt != null }).isTrue()

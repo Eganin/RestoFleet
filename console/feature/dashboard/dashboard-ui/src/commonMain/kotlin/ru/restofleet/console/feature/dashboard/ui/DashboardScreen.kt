@@ -59,7 +59,7 @@ fun DashboardScreen(state: DashboardUiState, onIntent: (DashboardIntent) -> Unit
                 }
             }
             item { Section("Рестораны с проблемами") { onIntent(DashboardIntent.User.OpenAlerts) } }
-            items(state.problems, key = { it.restaurantId + it.ruleId }) { p ->
+            items(state.problems, key = { it.key }) { p ->
                 Row(
                     Modifier.fillMaxWidth().clickable {
                         if (p.deviceId != null) {
@@ -79,7 +79,7 @@ fun DashboardScreen(state: DashboardUiState, onIntent: (DashboardIntent) -> Unit
                 }
             }
             item { Section("Последние события", null) }
-            items(state.recent, key = { it.deviceId + it.ruleId + it.ago }) { r ->
+            items(state.recent, key = { it.key }) { r ->
                 Row(
                     Modifier.fillMaxWidth().clickable { onIntent(DashboardIntent.User.OpenDevice(r.deviceId)) }
                         .padding(vertical = RfSpacing.S),

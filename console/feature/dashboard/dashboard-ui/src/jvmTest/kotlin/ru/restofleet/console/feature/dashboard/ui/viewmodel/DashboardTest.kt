@@ -97,6 +97,18 @@ class DashboardTest {
         assertThat(ui.recent.single().tone).isEqualTo(StatusTone.Crit)
     }
 
+    /** V-1: две R-01 одного устройства с одинаковым «N мин назад» и две проблемы ресторана по одному правилу. */
+    @Test
+    fun `mapper gives every row a unique list key`() {
+        val again = alert.copy(id = "a2")
+        val kds = problem.copy(target = "kds")
+        val ui = mapper.map(DashboardSession(false, Dashboard(summary(list = listOf(problem, kds, problem)), listOf(alert, again, alert), now)))
+        assertThat(ui.recent.map { it.ago }.distinct()).hasSize(1)
+        assertThat(ui.recent.map { it.key }.toSet()).hasSize(3)
+        assertThat(ui.recent.first().key).contains("a1")
+        assertThat(ui.problems.map { it.key }.toSet()).hasSize(3)
+    }
+
     @Test
     fun `mapper shows spinner only without data and maps errors`() {
         assertThat(mapper.map(DashboardSession()).loading).isTrue()

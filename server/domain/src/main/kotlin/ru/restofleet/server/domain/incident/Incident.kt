@@ -90,7 +90,15 @@ data class IncidentFilter(val open: Boolean? = null, val range: TimeRange = Time
 interface IncidentRepository {
     suspend fun insert(incident: Incident)
 
+    /** Полная запись строки — только для строки, взятой [findForUpdate] в той же транзакции (подтверждение). */
     suspend fun update(incident: Incident)
+
+    /**
+     * Запись тика (RV-5): только его столбцы — рестораны, доказательства, `missed_ticks`, `resolved_at`,
+     * `resolve_reason`. Тик читает открытые инциденты без блокировки, поэтому подтверждение и комментарий, записанные
+     * после чтения, не затираются.
+     */
+    suspend fun updateEvaluation(incident: Incident)
 
     suspend fun findForUpdate(id: String): Incident?
 

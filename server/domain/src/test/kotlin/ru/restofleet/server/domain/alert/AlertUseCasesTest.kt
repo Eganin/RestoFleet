@@ -146,6 +146,54 @@ class AlertUseCasesTest {
         assertThat(w.db.state.alerts.values.single().auto).isTrue()
     }
 
+    /** RV-5: автозакрытие не затирает подтверждение, комментарий и родителя, записанные после чтения тревог. */
+    @Test
+    fun autoResolveKeepsAcknowledgementAndParentCommittedMeanwhile() = runTest {
+        ingest(DeviceDataBatch(telemetry = listOf(telemetry(10, freeMb = 400))))
+        val id = stored().single().id
+        w.alerts.afterActiveRead = {
+            w.seed { s ->
+                val acked = s.alerts.getValue(id).copy(
+                    state = AlertState.ACKNOWLEDGED, ackBy = "support", ackAt = 15, comment = "чистим",
+                    parentIncidentId = "i-1",
+                )
+                s.copy(alerts = s.alerts + (id to acked))
+            }
+        }
+
+        ingest(DeviceDataBatch(telemetry = listOf(telemetry(20, freeMb = 700))))
+
+        val alert = w.db.state.alerts.getValue(id)
+        assertThat(alert.state).isEqualTo(AlertState.RESOLVED)
+        assertThat(alert.auto).isTrue()
+        assertThat(alert.resolvedAt).isEqualTo(20)
+        assertThat(alert.ackBy).isEqualTo("support")
+        assertThat(alert.comment).isEqualTo("чистим")
+        assertThat(alert.parentIncidentId).isEqualTo("i-1")
+    }
+
+    /** RV-5: ручное закрытие, закоммиченное после чтения, автозакрытие не переписывает. */
+    @Test
+    fun autoResolveDoesNotOverwriteAManualResolveCommittedMeanwhile() = runTest {
+        ingest(DeviceDataBatch(telemetry = listOf(telemetry(10, freeMb = 400))))
+        val id = stored().single().id
+        w.alerts.afterActiveRead = {
+            w.seed { s ->
+                val closed = s.alerts.getValue(id).copy(
+                    state = AlertState.RESOLVED, resolvedAt = 15, resolvedBy = "support", comment = "очищено вручную",
+                )
+                s.copy(alerts = s.alerts + (id to closed))
+            }
+        }
+
+        ingest(DeviceDataBatch(telemetry = listOf(telemetry(20, freeMb = 700))))
+
+        val alert = w.db.state.alerts.getValue(id)
+        assertThat(alert.auto).isFalse()
+        assertThat(alert.resolvedAt).isEqualTo(15)
+        assertThat(alert.resolvedBy).isEqualTo("support")
+    }
+
     @Test
     fun staleOfflineOfForeignConnectionRaisesNothing() = runTest {
         status(StatusReport(d1, PresenceState.ONLINE, 1, "c-new"))

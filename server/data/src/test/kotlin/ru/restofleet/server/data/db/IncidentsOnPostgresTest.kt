@@ -10,6 +10,7 @@ import ru.restofleet.server.data.support.Samples.T0
 import ru.restofleet.server.data.support.TestClock
 import ru.restofleet.server.data.support.TestDatabase
 import ru.restofleet.server.domain.alert.AlertProcessor
+import ru.restofleet.server.domain.alert.AlertState
 import ru.restofleet.server.domain.alert.RuleId
 import ru.restofleet.server.domain.alert.RuleParams
 import ru.restofleet.server.domain.common.PageRequest
@@ -17,10 +18,13 @@ import ru.restofleet.server.domain.common.TimeRange
 import ru.restofleet.server.domain.device.Device
 import ru.restofleet.server.domain.device.DeviceAnnouncement
 import ru.restofleet.server.domain.device.DeviceTransport
+import ru.restofleet.server.domain.incident.Incident
 import ru.restofleet.server.domain.incident.IncidentFilter
 import ru.restofleet.server.domain.incident.IncidentKind
+import ru.restofleet.server.domain.incident.IncidentRepository
 import ru.restofleet.server.domain.incident.IncidentSettings
 import ru.restofleet.server.domain.incident.ResolveReason
+import ru.restofleet.server.domain.incident.usecase.AcknowledgeIncident
 import ru.restofleet.server.domain.incident.usecase.EvaluateIncidents
 import ru.restofleet.server.domain.ingest.DeviceDataBatch
 import ru.restofleet.server.domain.ingest.DeviceEvent
@@ -29,7 +33,10 @@ import ru.restofleet.server.domain.ingest.ProbeReport
 import ru.restofleet.server.domain.ingest.ProbeResult
 import ru.restofleet.server.domain.ingest.usecase.IngestBatch
 import ru.restofleet.server.domain.restaurant.Restaurant
+import ru.restofleet.shared.kernel.Outcome
 import ru.restofleet.shared.kernel.UuidIdGenerator
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 
 /**
  * Сценарии S8 на PostgreSQL (план 3.2): данные проб проходят через `IngestBatch` (события `probe_state` и результаты
@@ -167,6 +174,63 @@ internal class IncidentsOnPostgresTest : PostgresTest() {
         assertThat(tx { incidents.findForUpdate("not-a-uuid") }).isNull()
         assertThat(tx { incidents.suppressedCounts(listOf("not-a-uuid")) }).isEmpty()
         assertThat(acked.evidence.restaurants.single().errorClasses).containsExactly("timeout", 3)
+    }
+
+    /**
+     * RV-5: подтверждение коммитится отдельной транзакцией после того, как тик прочитал открытые инциденты, но до его
+     * записи. Тик пишет только свои столбцы — подтверждение и комментарий остаются, а в WS уходит строка с ними.
+     */
+    @Test
+    fun `acknowledgement committed between the tick read and write survives the tick`() {
+        givenFleet(restaurantCount = 4)
+        tickAt(30_000) { fleet.keys.forEach { report(it, apiDown = it == fleet.keys.first()) } }
+        val incident = open().single()
+        val acknowledge = AcknowledgeIncident(incidents, restaurants, bus, TestDatabase.tx, clock)
+        val racing = object : IncidentRepository by incidents {
+            override suspend fun open(): List<Incident> = incidents.open().also {
+                // Другой поток — другое соединение: чтение тика блокировок не берёт, подтверждение не ждёт
+                val acked = CompletableFuture.supplyAsync {
+                    runBlocking { acknowledge(incident.id, "support", "звоним") }
+                }
+                assertThat(acked.get(30, TimeUnit.SECONDS)).isInstanceOf(Outcome.Success::class.java)
+            }
+        }
+        val racingTick = EvaluateIncidents(
+            ExposedFleetQueries(), probeStates, racing, alerts, ExposedProbeHistoryRepository(), restaurants,
+            PostgresJobLock(), bus, TestDatabase.tx, clock, UuidIdGenerator(), IncidentSettings(),
+        )
+        clock.now += 30_000
+        fleet.keys.forEach { report(it, apiDown = false) }
+        runBlocking { racingTick() }
+
+        val stored = tx { incidents.find(incident.id) }!!
+        assertThat(stored.missedTicks).isEqualTo(1)
+        assertThat(stored.ackBy).isEqualTo("support")
+        assertThat(stored.comment).isEqualTo("звоним")
+    }
+
+    @Test
+    fun `tick write keeps acknowledgement columns and alert auto resolve keeps everything but its own`() {
+        givenFleet(restaurantCount = 4)
+        tickAt(30_000) { fleet.keys.forEach { report(it, apiDown = it == fleet.keys.first()) } }
+        val incident = open().single()
+        tx { incidents.update(incident.copy(ackBy = "support", ackAt = clock.now, comment = "звоним")) }
+
+        tx { incidents.updateEvaluation(incident.copy(missedTicks = 1, resolvedAt = clock.now, ackBy = null)) }
+        val evaluated = tx { incidents.find(incident.id) }!!
+        assertThat(evaluated.missedTicks).isEqualTo(1)
+        assertThat(evaluated.resolvedAt).isEqualTo(clock.now)
+        assertThat(evaluated.ackBy).isEqualTo("support")
+        assertThat(evaluated.comment).isEqualTo("звоним")
+
+        val r05 = tx { alerts.active(fleet.values.flatten().map { it.id }) }.first { it.rule == RuleId.R05 }
+        val acked = r05.copy(state = AlertState.ACKNOWLEDGED, ackBy = "support", ackAt = clock.now, comment = "смотрим")
+        tx { alerts.update(acked) }
+        assertThat(tx { alerts.autoResolve(r05.id, clock.now + 1) }).isTrue()
+        val resolved = tx { alerts.views(listOf(r05.id)) }.single().alert
+        assertThat(resolved).isEqualTo(acked.copy(state = AlertState.RESOLVED, resolvedAt = clock.now + 1, auto = true))
+        assertThat(tx { alerts.autoResolve(r05.id, clock.now + 2) }).isFalse()
+        assertThat(tx { alerts.autoResolve("not-a-uuid", clock.now) }).isFalse()
     }
 
     @Test

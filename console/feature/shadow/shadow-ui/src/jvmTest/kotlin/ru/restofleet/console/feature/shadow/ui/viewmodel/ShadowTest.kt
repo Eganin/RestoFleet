@@ -3,10 +3,13 @@ package ru.restofleet.console.feature.shadow.ui.viewmodel
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import ru.restofleet.console.core.common.ConsoleError
+import ru.restofleet.console.feature.shadow.domain.AwaitShadowApplied
 import ru.restofleet.console.feature.shadow.domain.BuildDesiredPatch
 import ru.restofleet.console.feature.shadow.domain.LoadShadow
 import ru.restofleet.console.feature.shadow.domain.RenderEditableJson
@@ -176,12 +179,33 @@ class ShadowTest {
             }
     }
 
-    private fun vm(repo: Repo): ShadowViewModel {
+    private fun vm(repo: Repo, dispatcher: TestDispatcher = UnconfinedTestDispatcher()): ShadowViewModel {
         val codec = Codec()
         return ShadowViewModel(
             "d1", LoadShadow(repo), SaveShadowForm(repo, BuildDesiredPatch(ValidateShadowForm())), SaveShadowJson(repo, codec),
-            RenderEditableJson(codec), CoroutineScope(SupervisorJob() + UnconfinedTestDispatcher()),
+            RenderEditableJson(codec), AwaitShadowApplied(repo, intervalMs = 2_000, attempts = 5),
+            CoroutineScope(SupervisorJob() + dispatcher),
         )
+    }
+
+    /** V-4: после «Сохранить» экран сам показывает, что агент применил desired, без повторного открытия карточки. */
+    @Test
+    fun `after save the screen follows the shadow until the agent applies it`() = runTest {
+        val repo = Repo()
+        val vm = vm(repo, UnconfinedTestDispatcher(testScheduler))
+        vm.onIntent(ShadowIntent.User.StartEdit)
+        vm.onIntent(ShadowIntent.User.FieldChanged(ShadowFields.INTERVAL, "60"))
+        vm.onIntent(ShadowIntent.User.Save)
+        assertThat(vm.uiState.value.noticeText).contains("Сохранено")
+        val pendingBefore = mapper.map(ShadowSession(state = shadow(pending = true))).header
+
+        repo.loadResult = Outcome.Success(shadow(pending = false, reportedVersion = 13L))
+        advanceTimeBy(2_001)
+
+        assertThat(vm.uiState.value.header).isNotEqualTo(pendingBefore)
+        assertThat(vm.uiState.value.header).isEqualTo(mapper.map(ShadowSession(state = shadow(pending = false, reportedVersion = 13L))).header)
+        assertThat(vm.uiState.value.noticeText).contains("Сохранено")
+        vm.onDestroy()
     }
 
     @Test

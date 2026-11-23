@@ -7,7 +7,9 @@
 
 Сопоставление строки эталона (ресторан, ожидаемый класс, интервал):
   * инцидент считается, если он покрывает ресторан и его интервал [startedAt, resolvedAt или конец данных)
-    пересекается с интервалом эталона, расширенным на допуск (3 мин);
+    пересекается с интервалом эталона, расширенным на допуск (3 мин) **только вперёд**: допуск покрывает задержку
+    обнаружения и закрытия, а увидеть эпизод раньше его начала сервер не может. Расширение назад сопоставляло строку
+    с инцидентом предыдущего раунда (V-5, реш. 537);
   * класс совпал — среди таких инцидентов есть инцидент ожидаемого класса; иначе предсказание — класс первого
     по времени из них; нет ни одного — «none»;
   * «device» — R-01 этого устройства без подавления инцидентом, пересекающаяся с интервалом (инцидента при этом нет);
@@ -47,8 +49,13 @@ def overlaps(start, end, lo, hi):
     return start < hi and end > lo
 
 
+def window(row):
+    """Интервал строки эталона с допуском только вперёд (V-5)."""
+    return row["from"], row["to"] + TOLERANCE_MS
+
+
 def incident_classes(row, incidents, horizon):
-    lo, hi = row["from"] - TOLERANCE_MS, row["to"] + TOLERANCE_MS
+    lo, hi = window(row)
     found = []
     for inc in incidents:
         codes = {r["code"] for r in inc.get("restaurants", [])}
@@ -59,7 +66,7 @@ def incident_classes(row, incidents, horizon):
 
 
 def device_alarmed(row, alerts, horizon):
-    lo, hi = row["from"] - TOLERANCE_MS, row["to"] + TOLERANCE_MS
+    lo, hi = window(row)
     for a in alerts:
         if a.get("ruleId") != "R-01" or a.get("deviceId") != row["device"] or a.get("parentIncidentId"):
             continue
@@ -104,7 +111,8 @@ def render(result, title, sources):
     acc = result["accuracy"]
     acc_text = "—" if acc is None else f"{acc * 100:.1f} %"
     lines += [f"Случаев: {result['total']}, верно: {result['correct']}, точность: **{acc_text}** (цель ≥ 90 %).", ""]
-    lines += ["Допуск по времени — 3 мин; класс `degradation` исключён (R-10 — диплом).", ""]
+    lines += ["Допуск по времени — 3 мин после конца эпизода (только вперёд, реш. 537); класс `degradation` исключён "
+              "(R-10 — диплом).", ""]
     lines += ["| эталон \\\\ результат | " + " | ".join(CLASSES) + " |", "|---|" + "---|" * len(CLASSES)]
     for e in CLASSES:
         cells = [str(result["matrix"].get((e, p), 0)) for p in CLASSES]

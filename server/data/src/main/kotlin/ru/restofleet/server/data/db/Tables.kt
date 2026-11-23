@@ -155,6 +155,7 @@ internal object RefreshTokensTable : Table("refresh_tokens") {
     val revokedAt = timestampWithTimeZone("revoked_at").nullable()
     val familyId = javaUUID("family_id")
     val sessionExpiresAt = timestampWithTimeZone("session_expires_at")
+    val rotatedFrom = javaUUID("rotated_from").nullable()
     override val primaryKey = PrimaryKey(id)
 }
 

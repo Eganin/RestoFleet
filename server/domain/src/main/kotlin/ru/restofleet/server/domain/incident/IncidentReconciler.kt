@@ -7,8 +7,9 @@ data class Reconciliation(val opened: List<Incident>, val changed: List<Incident
 
 /**
  * Сверка открытых инцидентов с классификацией тика (реш. 412) — чистая функция:
- * - совпавший (тот же тип и рестораны; у глобального — любой состав) обновляет рестораны и доказательства, счётчик
- *   промахов обнуляется;
+ * - совпавший (тот же тип и рестораны; у глобального — любой состав) обновляет доказательства, счётчик промахов
+ *   обнуляется. Рестораны — охват за время жизни: у глобального к прежним добавляются новые, восстановившиеся не
+ *   выпадают (V-6, реш. 538); кто затронут сейчас — в доказательствах;
  * - новый — открывается;
  * - открытый без условия закрывается `cleared` на [resolveAfterTicks]-м тике подряд;
  * - «локально ↔ глобально»: прежние закрываются `superseded` сразу, тем же тиком открывается новый (дочерние тревоги
@@ -35,7 +36,8 @@ object IncidentReconciler {
             val existing = open.firstOrNull { it.id !in matched && matches(it, wanted) }
             if (existing != null) {
                 matched += existing.id
-                changed += existing.copy(restaurants = wanted.restaurants, evidence = evidence, missedTicks = 0)
+                val covered = (existing.restaurants + wanted.restaurants).distinct()
+                changed += existing.copy(restaurants = covered, evidence = evidence, missedTicks = 0)
             } else {
                 opened += Incident(newId(), wanted.kind, wanted.target, wanted.restaurants, now, evidence)
             }

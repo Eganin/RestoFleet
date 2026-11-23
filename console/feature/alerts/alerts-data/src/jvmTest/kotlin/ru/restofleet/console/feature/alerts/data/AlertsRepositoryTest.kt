@@ -110,6 +110,10 @@ class AlertsRepositoryTest {
             val pushed = awaitItem() as AlertsEvent.Pushed
             assertThat(pushed.alert.critical).isTrue()
             assertThat(pushed.alert.state).isEqualTo(AlertState.Open)
+            assertThat(pushed.alert.parentIncidentId).isNull()
+            val suppressed = Fixtures.text("ws-alert").replace("\"auto\": false", "\"auto\": false, \"parentIncidentId\": \"i-1\"")
+            session.incoming.send(SocketEvent.Text(suppressed))
+            assertThat((awaitItem() as AlertsEvent.Pushed).alert.parentIncidentId).isEqualTo("i-1")
             session.incoming.send(SocketEvent.Text(Fixtures.text("ws-resync")))
             assertThat(awaitItem()).isEqualTo(AlertsEvent.ReloadNeeded)
             session.incoming.send(SocketEvent.Text(Fixtures.text("ws-incident")))

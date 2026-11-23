@@ -2,7 +2,6 @@ package ru.restofleet.server.domain.device.usecase
 
 import ru.restofleet.server.domain.alert.AlertConditionRepository
 import ru.restofleet.server.domain.alert.AlertRepository
-import ru.restofleet.server.domain.alert.AlertState
 import ru.restofleet.server.domain.command.CommandReasons
 import ru.restofleet.server.domain.command.CommandRepository
 import ru.restofleet.server.domain.common.ServerError
@@ -59,9 +58,7 @@ class DecommissionDevice(
                         devices.decommission(id, now)
                         credentials.revoke(id, now)
                         sessions.closeOpen(id, now, SessionCloseReason.DECOMMISSIONED)
-                        alerts.active(listOf(id)).forEach {
-                            alerts.update(it.copy(state = AlertState.RESOLVED, resolvedAt = now, auto = true))
-                        }
+                        alerts.active(listOf(id)).forEach { alerts.autoResolve(it.id, now) }
                         conditions.active(listOf(id)).forEach { conditions.delete(it.key) }
                         Outcome.Success(device.copy(status = DeviceStatus.DECOMMISSIONED, decommissionedAt = now))
                     }

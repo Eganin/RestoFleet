@@ -42,11 +42,9 @@ class AlertProcessor(
                     }
                     is AlertChange.AutoResolve -> {
                         val index = open.indexOfFirst { it.id == change.alertId }
-                        val resolved =
-                            open[index].copy(state = AlertState.RESOLVED, resolvedAt = change.at, auto = true)
-                        alerts.update(resolved)
-                        open[index] = resolved
-                        changed += resolved.id
+                        // Частичная запись: снимок [open] прочитан без блокировки (RV-5)
+                        if (alerts.autoResolve(change.alertId, change.at)) changed += change.alertId
+                        open[index] = open[index].copy(state = AlertState.RESOLVED, resolvedAt = change.at, auto = true)
                     }
                 }
             }

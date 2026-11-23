@@ -40,6 +40,12 @@ class AlertsDomainTest {
     }
 
     @Test
+    fun `alert with a parent incident is suppressed (RV-1)`() {
+        assertThat(alert.isSuppressed).isFalse()
+        assertThat(alert.copy(parentIncidentId = "i-1").isSuppressed).isTrue()
+    }
+
+    @Test
     fun `load, acknowledge and events are delegated`() = runTest {
         val repo = Repo(alert, lists)
         assertThat(LoadAlerts(repo)()).isEqualTo(Outcome.Success(lists))

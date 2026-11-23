@@ -51,7 +51,8 @@ class RegisterDevicesTest {
 
     @Test
     fun cachedDevicesAreReusedAndOnlyTheRestIsRegistered() = runTest {
-        val store = FakeStore(List(6) { creds(it) })
+        // кэш — полный набор первого ресторана, как его оставила прежняя регистрация
+        val store = FakeStore(RoleMix().pattern().mapIndexed { i, role -> creds(i, role) })
         val report = useCase(store)(RegistrationRequest(devices = 7, mix = RoleMix()))
         assertThat(report.cached).isEqualTo(6)
         assertThat(report.registered).isEqualTo(1)
@@ -61,6 +62,24 @@ class RegisterDevicesTest {
         val again = useCase(store)(RegistrationRequest(devices = 7))
         assertThat(again.registered).isEqualTo(0)
         assertThat(control.issued).hasSize(1)
+    }
+
+    /** V-9: прошлый прогон потерял регистрацию в середине — дорегистрация закрывает именно её, а не следующий слот. */
+    @Test
+    fun registrationAfterAGapFillsTheMissingSlotSoEveryRestaurantGetsItsMix() = runTest {
+        val mix = RoleMix(kitchen = 1, hall = 1, assembly = 0)
+        val store = FakeStore(
+            listOf(
+                DeviceCredentials("d-0", "pw", "r-1", DeviceRole.KITCHEN),
+                DeviceCredentials("d-1", "pw", "r-1", DeviceRole.HALL),
+                DeviceCredentials("d-3", "pw", "r-2", DeviceRole.HALL),
+            ),
+        )
+        val report = useCase(store)(RegistrationRequest(devices = 4, mix = mix))
+
+        assertThat(report.registered).isEqualTo(1)
+        assertThat(control.issued).containsExactly(Triple("r-2", DeviceRole.KITCHEN, 1))
+        assertThat(store.items.groupingBy { it.restaurantId }.eachCount()).containsExactly("r-1", 2, "r-2", 2)
     }
 
     @Test

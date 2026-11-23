@@ -5,6 +5,7 @@ import ru.restofleet.console.core.common.RelativeTime
 import ru.restofleet.console.core.common.RuleTexts
 import ru.restofleet.console.core.designsystem.StatusTone
 import ru.restofleet.console.feature.dashboard.domain.Dashboard
+import ru.restofleet.console.feature.dashboard.domain.ProblemRestaurant
 import ru.restofleet.console.feature.dashboard.ui.viewmodel.CounterUi
 import ru.restofleet.console.feature.dashboard.ui.viewmodel.DashboardUiState
 import ru.restofleet.console.feature.dashboard.ui.viewmodel.ProblemUi
@@ -52,9 +53,15 @@ class DashboardUiStateMapper {
         else -> StatusTone.Crit
     }
 
-    private fun problems(d: Dashboard): List<ProblemUi> = d.summary.problems.map { p ->
-        val text = RuleTexts.line(p.ruleId, p.target, p.details, d.loadedAt)
-        ProblemUi(
+    private fun problems(d: Dashboard): List<ProblemUi> {
+        val keys = uniqueKeys(d.summary.problems.map { "${it.restaurantId}|${it.ruleId}|${it.target}|${it.deviceId}" })
+        return d.summary.problems.zip(keys) { p, key -> problem(p, key, d.loadedAt) }
+    }
+
+    private fun problem(p: ProblemRestaurant, key: String, loadedAt: Long): ProblemUi {
+        val text = RuleTexts.line(p.ruleId, p.target, p.details, loadedAt)
+        return ProblemUi(
+            key = key,
             restaurantId = p.restaurantId,
             restaurantName = p.name,
             line = "$text · ${p.count} из ${p.devicesTotal} устройств",
@@ -64,8 +71,9 @@ class DashboardUiStateMapper {
         )
     }
 
-    private fun recent(d: Dashboard): List<RecentUi> = d.recent.map { a ->
+    private fun recent(d: Dashboard): List<RecentUi> = d.recent.zip(uniqueKeys(d.recent.map { it.id })) { a, key ->
         RecentUi(
+            key = key,
             deviceId = a.deviceId,
             title = RuleTexts.line(a.ruleId, a.target, a.details, d.loadedAt),
             where = listOfNotNull(a.deviceName, a.restaurantName).joinToString(" · "),
@@ -73,6 +81,19 @@ class DashboardUiStateMapper {
             ruleId = a.ruleId,
             tone = if (a.critical) StatusTone.Crit else StatusTone.Warn,
         )
+    }
+
+    /**
+     * Ключи `LazyColumn` обязаны быть уникальными, иначе Compose бросает исключение и обзор падает (V-1). Повтор
+     * (та же тревога из REST и push, две проблемы с одинаковыми полями) получает суффикс с номером.
+     */
+    private fun uniqueKeys(raw: List<String>): List<String> {
+        val seen = mutableMapOf<String, Int>()
+        return raw.map { key ->
+            val n = (seen[key] ?: 0) + 1
+            seen[key] = n
+            if (n == 1) key else "$key#$n"
+        }
     }
 
     private fun errorText(error: ConsoleError): String = when (error) {

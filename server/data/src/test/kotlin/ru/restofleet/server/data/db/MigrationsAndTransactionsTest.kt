@@ -82,6 +82,6 @@ internal class MigrationsAndTransactionsTest : PostgresTest() {
 
     private companion object {
         /** V1 — курсовая, V2 — тревоги (ПМ2), V3 — инциденты и сессии (ПМ3). */
-        const val MIGRATIONS = 3
+        const val MIGRATIONS = 4
     }
 }
